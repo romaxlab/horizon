@@ -1,101 +1,51 @@
-# AGENTS.md
+# Repository Development Rules
 
-Read this file before making changes.
+These rules define the expected implementation style across Horizon.
 
-## 1. Product goal
+## General
 
-Build a polished frontend MVP that demonstrates strong platform engineering without enterprise-style overengineering.
+- Keep changes focused and reviewable.
+- Prefer simple explicit code over speculative abstractions.
+- Do not change unrelated files as part of a feature or fix.
+- Follow the architecture documented in `docs/ARCHITECTURE.md`.
+- Follow the styling rules documented in `docs/DESIGN-SYSTEM.md`.
+- Update documentation when a durable architecture or product decision changes.
 
-The demo must remain understandable to a human reviewer.
+## Vue UI
 
-## 2. Read order before each task
+Vue components should remain presentation-focused.
 
-1. `docs/CURRENT-STATE.md`
-2. relevant product/spec document
-3. `docs/ARCHITECTURE.md`
-4. `docs/DESIGN-SYSTEM.md` for any UI work
-5. `docs/IMPLEMENTATION-PLAN.md`
+A component may:
 
-## 3. Task discipline
+- render data;
+- compose UI primitives;
+- manage truly local presentation state;
+- call actions exposed by its composable.
 
-Implement only the requested task/scope.
+A component should not:
 
-Do not continue to the next implementation-plan task automatically.
+- call `fetch`;
+- create WebSocket connections;
+- parse or validate backend payloads;
+- know backend DTO field names;
+- implement mission-planning algorithms;
+- implement reconnect or stale/offline rules;
+- manipulate simulator state directly.
 
-Do not perform unrelated refactors unless required to make the task correct.
-
-After the task, update `docs/CURRENT-STATE.md`.
-
-## 4. Thin UI — non-negotiable
-
-Vue components render and compose.
-
-Preferred:
+Preferred pattern:
 
 ```ts
 const {
-  data,
-  state,
-  action,
-} = useFeatureThing()
+  uavs,
+  selectedUav,
+  warningCount,
+  selectUav,
+} = useFleetPanel()
 ```
 
-Vue components must not:
+## Module boundaries
 
-- call `fetch`;
-- create WebSockets;
-- validate/parse DTOs;
-- map backend payloads;
-- implement mission/reconnect/telemetry business rules;
-- mutate simulator state;
-- depend on concrete infrastructure implementations.
-
-## 5. State ownership
-
-```text
-REST/server request lifecycle → TanStack Vue Query
-shared live/current state      → Pinia
-local presentation state      → composable/component
-```
-
-For realtime domains, Query may fetch the snapshot, but Pinia is the source of truth for current live rendering after hydration/reconciliation.
-
-Do not create duplicate independent live state.
-
-## 6. Infrastructure boundaries
-
-Use small contracts for external systems:
-
-- `FleetRepository`
-- `RealtimeTransport`
-- `MissionPlanner`
-- `VideoProvider`
-
-Mock and remote implementations must be substitutable.
-
-No abstraction is required for a trivial helper simply to satisfy a pattern.
-
-## 7. Monorepo boundaries
-
-Initial workspace:
-
-```text
-apps/control-center
-packages/domain
-packages/realtime
-packages/simulator
-packages/ui
-```
-
-Packages must not import from `apps/control-center`.
-
-Do not add a new workspace package without a concrete reuse/boundary reason.
-
-## 8. Module boundaries
-
-Modules expose public APIs through `index.ts`.
-
-Do not deep-import another module.
+Feature modules expose their public API through `index.ts`.
 
 Good:
 
@@ -103,61 +53,87 @@ Good:
 import { FleetPanel } from '@/modules/fleet'
 ```
 
-Bad:
+Avoid deep imports into another module's internals.
 
-```ts
-import { x } from '@/modules/fleet/model/internal/x'
+Default feature structure:
+
+```text
+module/
+├── ui/
+├── model/
+├── api/        # only when needed
+└── index.ts
 ```
 
-## 9. Naming
+Do not pre-create empty architectural folders.
+
+## Naming
 
 ```text
 /control-center
-modules/control-center
+modules/control-center/
 ControlCenterView.vue
 useControlCenter.ts
 ```
 
-General conventions:
+Conventions:
 
 ```text
 *View.vue          route-level screen
-*Panel.vue         major panel
-*Inspector.vue     details/inspection
-*Card.vue          domain-composed card
-Base*.vue          UI primitive
+*Panel.vue         major module surface
+*Inspector.vue     detail/inspection surface
+Base*.vue          design-system primitive
 use*.ts            composable
 *.store.ts         Pinia store
 *.repository.ts    repository
-*.mapper.ts        DTO/domain mapper
+*.mapper.ts        DTO/domain mapping
 *.schema.ts        external payload validation
 ```
 
-## 10. Styling
+## State ownership
 
-`docs/DESIGN-SYSTEM.md` is authoritative.
+Use:
 
-Key rules:
+```text
+TanStack Vue Query
+→ REST/server request lifecycle and cache
 
-- TailwindCSS only for styling/composition;
-- first-party primitives for visual surfaces/controls/typography;
-- raw design values only in token source files;
-- semantic CSS variables everywhere else;
-- both light and dark theme must work;
-- wrappers/cards/panels are primitives;
-- no ad-hoc card/panel styling in feature modules;
-- dynamic inline styles only for actual runtime values.
+Pinia
+→ shared realtime/current client state
 
-## 11. TypeScript
+Composable/component state
+→ local transient UI state
+```
 
-- strict mode;
-- no `any` as a shortcut;
-- external payloads enter as `unknown`;
-- validate external payloads;
-- map DTOs into domain models;
-- domain package stays framework-independent.
+Do not maintain two independent sources of truth for the same live entity.
 
-## 12. HTTP
+For realtime fleet state:
+
+```text
+snapshot query
+→ hydrate/reconcile Pinia
+→ Pinia becomes current live state
+← realtime updates
+```
+
+## Infrastructure boundaries
+
+External systems should be hidden behind small contracts where replacement is meaningful.
+
+Core boundaries:
+
+```text
+FleetRepository
+RealtimeTransport
+MissionPlanner
+VideoProvider
+```
+
+Mock and remote implementations must enter the application through the same contracts.
+
+Do not add interfaces for trivial helpers purely for architectural symmetry.
+
+## HTTP
 
 Preferred chain:
 
@@ -165,60 +141,108 @@ Preferred chain:
 UI
 → composable
 → TanStack Query
-→ Repository
-→ HttpClient
+→ repository
+→ small HttpClient
 → native fetch
 ```
 
-No `fetch` in `.vue` files.
+No Axios unless a concrete requirement appears.
 
-## 13. Realtime
+## Realtime
 
-Preferred chain:
+Realtime ingestion and UI rendering cadence must be decoupled.
+
+Preferred pipeline:
 
 ```text
 Simulator / WebSocket
 → RealtimeTransport
-→ validate/order
+→ validate
+→ normalize
 → latest-state buffer
-→ batch flush
+→ batched state flush
 → Pinia
 → Vue / Cesium
 ```
 
-Do not patch Pinia for every incoming packet.
+Do not patch Pinia for every incoming telemetry packet.
 
-## 14. Cesium
+Invalid or out-of-order events should be ignored safely and logged where useful.
 
-Cesium is rendering infrastructure.
+## Cesium
 
-It must not become domain state.
+Cesium is rendering infrastructure, not domain state.
 
-Authoritative UAV position comes from telemetry/simulator/backend; Cesium interpolates presentation between samples.
+- authoritative position comes from telemetry;
+- update existing map entities instead of recreating them;
+- smooth motion through interpolation;
+- keep last known positions during telemetry loss;
+- avoid rendering labels/models at unnecessary detail levels.
 
-## 15. Demo mode
+## Design system
 
-Demo controls manipulate simulator commands.
+Application UI must use semantic tokens and first-party primitives from `@horizon/ui`.
 
-Never bypass normal application contracts by directly editing stores for a demo effect.
+Do not introduce:
 
-## 16. Quality gate
+- raw hex/rgb colors;
+- arbitrary visual values where a token exists;
+- duplicated card/panel/button styling;
+- separate light/dark component branches for colors.
 
-During a task, run the relevant package/app checks.
+Direct Tailwind usage in feature modules is mainly for layout and composition.
 
-Before a milestone is complete:
+## TypeScript
+
+- strict mode is required;
+- avoid `any`;
+- external payloads enter as `unknown`;
+- validate external data before application use;
+- map DTOs to domain models before they reach UI.
+
+## Tests
+
+Prioritize behavior and boundaries.
+
+Important coverage includes:
+
+- DTO/domain mapping;
+- telemetry ordering;
+- stale/offline transitions;
+- reconnect state;
+- mission progress;
+- simulator determinism;
+- important composables;
+- primary Playwright workflows.
+
+Do not write tests solely to increase a coverage number.
+
+## Quality gate
+
+During development, run checks relevant to the touched area.
+
+Before a substantial change is complete:
 
 ```bash
-pnpm check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
-Do not claim completion with failing checks.
+The root project should expose a `pnpm check` command that aggregates the standard quality gate.
 
-## 17. Documentation drift
+## Git
 
-If implementation requires a meaningful deviation from the agreed architecture/spec:
+Use focused Conventional Commit-style messages:
 
-1. do not silently diverge;
-2. explain the reason;
-3. update the relevant doc/decision;
-4. record it in `CURRENT-STATE.md`.
+```text
+feat: add control center shell
+fix: preserve last known UAV position
+refactor: isolate Cesium camera controller
+test: cover telemetry ordering
+chore: configure workspace tooling
+docs: update architecture
+```
+
+Refactor before committing when a change introduced unclear responsibilities, duplicate state or unnecessary coupling.

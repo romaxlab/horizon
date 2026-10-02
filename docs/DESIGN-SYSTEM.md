@@ -1,32 +1,34 @@
-# Design System & Styling Rules
+# Design System
 
-## 1. Visual direction
+## 1. Direction
 
-The interface should feel:
+Horizon should feel:
 
 - professional;
-- minimal;
-- premium;
 - calm;
 - precise;
-- highly legible;
+- modern;
+- minimal;
 - operational rather than decorative.
 
-Direction:
+The interface is map-first. UI panels should support situational awareness without competing with the map.
 
-> **Apple-like product polish applied to a modern UAV operations interface.**
+Avoid:
 
-Avoid sci-fi cosplay, excessive neon, dense HUD decoration and decorative information that does not help the operator.
+- excessive neon;
+- sci-fi HUD decoration;
+- dense admin-dashboard chrome;
+- unnecessary borders and cards;
+- status colors used decoratively;
+- visual noise.
 
-Reference image:
+The visual target is a polished professional control application with restrained motion and strong information hierarchy.
 
-`docs/media/control-center-concept.png`
-
-The reference defines direction, not pixel-perfect implementation.
+---
 
 ## 2. Styling stack
 
-Use only:
+Use:
 
 ```text
 TailwindCSS
@@ -36,81 +38,43 @@ CSS-variable design tokens
 first-party UI primitives
 ```
 
-Do not add a general-purpose UI component library.
+Do not introduce a full component library.
 
-Do not add:
+The application owns its visual language.
 
-- MUI;
-- Vuetify;
-- PrimeVue;
-- Bootstrap;
-- SCSS as a parallel design system;
-- component-local CSS systems that bypass tokens.
+---
 
-## 3. The one rule
-
-> **Raw design values exist only in the token source. Application code consumes variables, semantic utilities and primitives.**
-
-In application and UI component code, do not hardcode:
-
-- `#hex`;
-- `rgb()/rgba()`;
-- spacing values;
-- radii;
-- font sizes;
-- font weights;
-- line heights;
-- shadows;
-- blur values;
-- fixed design widths/heights when they belong to the design scale.
-
-The exception is a genuinely dynamic runtime value such as a computed Cesium position, transform or measured element size.
-
-## 4. Token architecture
+## 3. Token architecture
 
 ```text
-raw values
-  ↓
-primitive CSS vars
-  ↓
-semantic CSS vars
-  ↓
+primitive tokens
+      ↓
+semantic tokens
+      ↓
 Tailwind semantic utilities
-  ↓
-UI primitive variants
-  ↓
-application modules
+      ↓
+UI primitives
+      ↓
+feature/application UI
 ```
 
-### primitives.css
+### Primitive tokens
 
-This is the only place allowed to contain the actual raw design values.
+Raw design scales such as:
 
-Examples:
+- color ramps;
+- spacing;
+- radii;
+- shadows;
+- type sizes;
+- type weights;
+- control sizes.
 
-```text
---color-neutral-0
---color-neutral-50
---color-neutral-100
-...
---space-2
---space-4
---space-8
-...
---radius-sm
---radius-md
---radius-lg
---font-size-body-sm
---font-weight-medium
---shadow-surface
---size-panel
-```
+Feature code should not normally consume primitive values directly.
 
-Feature/application code must not use primitive color ramps directly unless there is no semantic role and the design-system documentation explicitly allows it.
+### Semantic tokens
 
-### semantic.css
-
-Semantic roles reference primitives.
+Meaning-based roles.
 
 Examples:
 
@@ -118,24 +82,18 @@ Examples:
 --bg-canvas
 --bg-surface
 --bg-surface-raised
---bg-overlay
+--bg-surface-hover
 
 --text-primary
 --text-secondary
---text-tertiary
---text-inverse
+--text-muted
 
 --border-default
 --border-subtle
---border-strong
 --border-focus
 
---fill-primary
---fill-primary-hover
---fill-neutral
---fill-neutral-hover
---fill-danger
---fill-warning
+--action-primary
+--action-primary-hover
 
 --status-success
 --status-warning
@@ -143,110 +101,79 @@ Examples:
 --status-info
 ```
 
-Application code should think in semantic meaning, not palette values.
+Application code should express semantic intent rather than raw visual values.
 
-## 5. Light and dark themes
+---
 
-Both themes are implemented from the first design-system task.
+## 4. Light and dark themes
+
+Both themes are first-class from the start.
+
+Theme switching happens at the semantic-token layer:
 
 ```css
 :root {
-  /* light semantic aliases */
+  /* light semantic values */
 }
 
 :root[data-theme='dark'] {
-  /* dark semantic aliases */
+  /* dark semantic overrides */
 }
 ```
 
-Theme switching changes semantic token values.
-
-Components must not branch on the theme to choose design values.
+Components do not branch on theme to choose colors.
 
 Bad:
 
 ```ts
-const color = isDark ? '#fff' : '#111'
-```
-
-Good:
-
-```text
-text-primary
-bg-surface
-border-default
-```
-
-## 6. Tailwind is a semantic API
-
-Tailwind must expose our CSS variables rather than encourage arbitrary values.
-
-Application-facing utilities should look like:
-
-```text
-bg-canvas
-bg-surface
-bg-surface-raised
-text-primary
-text-secondary
-border-default
-border-subtle
-
-p-space-md
-gap-space-sm
-gap-space-md
-rounded-control
-rounded-surface
-shadow-surface
-w-panel
-```
-
-Avoid default/arbitrary visual values in feature code when a token should exist.
-
-Bad:
-
-```html
-<div class="bg-[#121212] rounded-[14px] p-[18px] shadow-[...]">
-```
-
-Bad for design spacing:
-
-```html
-<div class="p-4 gap-3 rounded-xl">
+isDark ? '#ffffff' : '#111111'
 ```
 
 Preferred:
 
-```html
-<div class="p-space-md gap-space-sm">
-```
-
-or, for a visual surface:
-
-```vue
-<BasePanel>
-```
-
-Structural classes remain fine:
-
 ```text
-flex
-grid
-grid-cols-2
-items-center
-justify-between
-absolute
-inset-0
-w-full
-h-full
-overflow-hidden
+text-primary
+bg-surface
+border-default
 ```
 
-## 7. First-party primitives
+---
 
-Visual chrome is implemented once in `@swarm/ui`.
+## 5. Tailwind usage
 
-Expected primitives may include:
+Tailwind exposes semantic tokens through named utilities.
+
+Preferred:
+
+```html
+<div class="bg-surface text-text-primary border-border-default">
+```
+
+Avoid:
+
+```html
+<div class="bg-[#121212] text-[#f4f4f4] border-[#333333]">
+```
+
+Feature components may use Tailwind directly for layout/composition:
+
+- flex/grid;
+- gap;
+- position;
+- alignment;
+- overflow;
+- responsive layout;
+- sizing tied to approved scales.
+
+Reusable visual chrome should come from UI primitives.
+
+---
+
+## 6. First-party primitives
+
+Initial primitives should be added only when required by real product UI.
+
+Expected core set:
 
 ```text
 BaseText
@@ -254,66 +181,34 @@ BaseButton
 BaseIconButton
 BaseInput
 BaseSelect
-BaseMenu
-BaseTooltip
 
 BaseSurface
 BasePanel
-BaseCard
-BaseSection
 BaseDivider
 
 BaseBadge
 BaseMetric
 BaseProgress
 BaseAlert
+BaseMenu
+BaseTooltip
 ```
 
-Do not prebuild every possible component. Add a primitive when it has a clear reusable purpose.
+Avoid creating several primitives with the same responsibility.
 
-## 8. Wrappers/cards/surfaces are primitives too
+For example, prefer a flexible surface primitive with meaningful variants rather than separate nearly-identical container components.
 
-Do not repeatedly hand-build card/panel wrappers in feature modules.
+---
 
-Bad:
+## 7. Variants
 
-```html
-<div class="bg-surface border-border-default rounded-surface shadow-surface ...">
-```
+Primitive appearance is controlled through typed semantic variants.
 
-when the element is clearly a reusable panel/card.
-
-Preferred:
-
-```vue
-<BasePanel>
-  ...
-</BasePanel>
-```
-
-or:
-
-```vue
-<BaseCard>
-  ...
-</BaseCard>
-```
-
-The design system decides the visual treatment in one place.
-
-## 9. Variants express intent
-
-Call sites select meaning/behavior, not raw appearance.
+Example:
 
 ```vue
 <BaseButton variant="primary" size="md">
   Launch Mission
-</BaseButton>
-```
-
-```vue
-<BaseButton variant="danger" size="md">
-  Abort Mission
 </BaseButton>
 ```
 
@@ -323,57 +218,29 @@ Call sites select meaning/behavior, not raw appearance.
 </BaseBadge>
 ```
 
-Do not copy variant names from unrelated legacy projects.
+```vue
+<BaseSurface variant="panel">
+  ...
+</BaseSurface>
+```
 
-A variant such as `glass` should exist only if this project's design system explicitly defines and needs it.
+Variant names describe intent, not implementation detail.
 
-## 10. Variant implementation
+Use a lightweight variant composition utility such as `class-variance-authority`.
 
-Use `class-variance-authority` (CVA) or an equivalent lightweight typed pattern.
+Do not copy variant names from unrelated projects.
 
-A primitive owns:
+---
 
-- base classes;
-- variants;
-- sizes;
-- states;
-- focus behavior;
-- disabled behavior.
+## 8. Typography
 
-Feature modules should not restyle a primitive with long class strings.
+Typography uses named variants rather than ad-hoc font classes in feature code.
 
-## 11. Feature/module styling rules
-
-Feature modules may use Tailwind directly for layout/composition:
-
-- flex/grid;
-- positioning;
-- alignment;
-- responsive rules;
-- overflow;
-- semantic spacing utilities;
-- structural sizing.
-
-Feature modules should use primitives for:
-
-- cards/panels/surfaces;
-- controls;
-- buttons;
-- typography;
-- status badges;
-- alerts;
-- progress;
-- menus/popovers;
-- inputs.
-
-## 12. Typography
-
-Typography is variant-based.
-
-Example scale:
+Suggested hierarchy:
 
 ```text
 display
+
 heading-lg
 heading-md
 heading-sm
@@ -389,15 +256,7 @@ label-sm
 caption
 ```
 
-Each variant owns:
-
-- font family;
-- size;
-- weight;
-- line height;
-- letter spacing where needed.
-
-Usage:
+Example:
 
 ```vue
 <BaseText variant="heading-md">
@@ -405,110 +264,240 @@ Usage:
 </BaseText>
 ```
 
-Do not override size/weight manually at call sites.
+Typography variants own:
 
-## 13. Status semantics
+- font size;
+- line height;
+- weight;
+- optional letter spacing.
 
-Brand/accent colors and operational status colors are separate concerns.
+---
 
-Use semantic status roles:
+## 9. Surfaces and panels
+
+The map is the dominant surface.
+
+Panels should feel lightweight and integrated rather than like a grid of independent SaaS cards.
+
+Common surface intents may include:
+
+```text
+panel
+floating
+subtle
+raised
+```
+
+Exact variants should follow actual product needs.
+
+Feature modules should not hand-build repeated panel chrome using long Tailwind class strings.
+
+If the same visual pattern repeats, it belongs in the design system.
+
+---
+
+## 10. Status semantics
+
+Operational colors are reserved for meaning.
+
+Use consistent semantics:
 
 ```text
 success
 warning
 danger
 info
+neutral
 ```
-
-A status must look consistent in Fleet, Map labels, Inspector and Alerts.
-
-## 14. Theme toggle
-
-The app supports explicit light/dark selection.
-
-The selection should set `data-theme` on the root document element and may persist in local storage.
-
-The theme mechanism must not leak into every component.
-
-## 15. Accessibility
-
-Required:
-
-- native interactive elements;
-- visible `:focus-visible` state;
-- sufficient contrast in both themes;
-- keyboard-accessible controls;
-- labels/aria-labels for icon-only controls;
-- `prefers-reduced-motion` support;
-- no critical status communicated by color alone.
-
-## 16. Motion
-
-Application UI motion should be subtle and fast.
-
-Cesium camera motion may be longer and cinematic.
-
-Reduced-motion mode must disable or simplify non-essential animation.
-
-## 17. Package boundary
-
-`@swarm/ui` is domain-agnostic.
-
-It must not import or know about:
-
-- UAV;
-- Mission;
-- Telemetry;
-- Cesium;
-- Incident.
-
-Domain-composed components such as `FleetPanel`, `MissionStatusBar` or `UavInspector` live in application modules.
-
-## 18. New visual pattern rule
-
-When a feature needs a new visual pattern:
-
-1. check existing primitives and variants;
-2. extend an existing primitive if semantics match;
-3. add a new primitive only if the concept is reusable;
-4. do not solve it with one-off raw values in the feature.
-
-## 19. Dynamic inline styles
-
-Inline styles are allowed only for runtime-computed values.
 
 Examples:
 
+- healthy/live → success;
+- degraded/low battery → warning;
+- lost/critical → danger;
+- informational event → info.
+
+Do not use warning/danger colors as decorative accents.
+
+---
+
+## 11. Control Center UI hierarchy
+
+### Header
+
+Keep minimal:
+
+- Horizon identity;
+- current mission;
+- connection state;
+- time;
+- New Mission;
+- theme control if exposed.
+
+Avoid generic top-level navigation that has no real feature behind it.
+
+### Fleet Panel
+
+Compact and scan-friendly.
+
+Emphasize:
+
+- UAV identity;
+- status;
+- battery;
+- mission assignment when useful.
+
+### Map
+
+Show only operationally relevant overlays:
+
+- UAV positions;
+- selected/warning UAV labels;
+- mission polygon;
+- planned route;
+- completed trail;
+- waypoints.
+
+Do not display a permanent label for every UAV at all zoom levels.
+
+### UAV Inspector
+
+Default closed.
+
+When a UAV is selected, show:
+
+- identity/state;
+- simulated video;
+- battery;
+- altitude;
+- speed;
+- heading;
+- signal;
+- GPS;
+- last update;
+- mission/waypoint progress;
+- Follow action.
+
+### Mission status
+
+Compact and secondary to the map.
+
+Show:
+
+- state;
+- progress;
+- coverage;
+- active UAV count;
+- ETA.
+
+### Incidents
+
+Critical/warning events appear with clear action.
+
+Example:
+
 ```text
-transform based on runtime coordinates
-measured width
-Cesium-derived position
-progress width when not expressible otherwise
+LOW BATTERY
+UAV-03 · 18%
+
+[ Inspect ]
 ```
 
-They are not allowed for static design values.
+`Inspect` focuses the real UAV state and opens the inspector.
 
-## 20. Style guard
+---
 
-The repo should include a simple automated check that rejects common violations outside token source files, such as:
+## 12. Motion
 
-- raw hex colors;
-- `rgb()`/`rgba()`;
-- arbitrary Tailwind color classes;
-- obvious arbitrary spacing/radius/shadow values.
+Motion supports orientation, not decoration.
 
-The guard should be practical and avoid blocking legitimate runtime calculations.
+Use:
 
-## 21. Review checklist
+- subtle panel transitions;
+- restrained state transitions;
+- smooth Cesium camera fly-to;
+- smooth UAV interpolation.
 
-Before a UI task is complete:
+Avoid animating static information unnecessarily.
 
-- both themes work;
-- no raw design values in feature code;
-- text uses typography primitives/variants;
-- cards/panels/wrappers use primitives;
-- controls use primitive variants;
-- semantic Tailwind utilities use CSS vars;
-- focus-visible works;
-- reduced motion is respected;
-- no duplicate visual pattern was created ad hoc.
+Respect `prefers-reduced-motion`.
+
+---
+
+## 13. Accessibility
+
+Required:
+
+- visible keyboard focus;
+- native controls where appropriate;
+- labels for icon-only actions;
+- sufficient contrast in both themes;
+- keyboard-accessible menus and dialogs;
+- reduced-motion support.
+
+Operational status should not rely on color alone.
+
+---
+
+## 14. Hardcoded value rule
+
+Application components must not contain raw design values when a token can represent them.
+
+Avoid outside token sources:
+
+- raw hex/rgb colors;
+- arbitrary shadows;
+- arbitrary radii;
+- arbitrary font sizes;
+- arbitrary visual spacing.
+
+Runtime values are allowed where genuinely dynamic:
+
+- map coordinates;
+- calculated transforms;
+- progress widths;
+- Cesium positioning;
+- dynamic canvas/layout measurements.
+
+---
+
+## 15. UI package boundary
+
+`@horizon/ui` contains generic design-system concerns only.
+
+It must not know about:
+
+- UAV;
+- missions;
+- telemetry;
+- incidents;
+- Cesium.
+
+Feature components compose generic primitives into domain-specific UI.
+
+Example:
+
+```text
+BaseSurface
++ BaseText
++ BaseBadge
++ BaseMetric
+        ↓
+UavInspector.vue
+```
+
+---
+
+## 16. Review checklist
+
+Before considering UI work complete:
+
+- semantic tokens are used;
+- both themes remain coherent;
+- typography uses defined variants;
+- repeated chrome uses a primitive;
+- status colors carry real meaning;
+- no unnecessary visual noise was added;
+- keyboard focus is visible;
+- map remains visually dominant;
+- feature code contains no avoidable raw design values.

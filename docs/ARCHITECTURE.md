@@ -1,30 +1,70 @@
 # Architecture
 
-## 1. Architecture direction
+## 1. Direction
 
-The MVP uses:
+Horizon uses:
 
 > **pnpm monorepo + modular vertical slices + thin Vue UI + explicit infrastructure boundaries**
 
-The goal is strong separation without enterprise-style ceremony.
+The architecture is intentionally practical.
 
-This is **not** strict FSD and **not** full Clean Architecture. We borrow the parts that keep the code understandable and replaceable.
+It is not strict Feature-Sliced Design and not full Clean Architecture. The codebase uses the parts that improve ownership, testability and replaceability without creating unnecessary layers.
 
-## 2. Core architectural principles
+Core principles:
 
 1. UI is thin.
 2. Business/application logic lives outside `.vue` files.
-3. External systems are hidden behind small contracts.
+3. External systems are isolated behind small contracts.
 4. Mock and remote infrastructure use the same contracts.
-5. Realtime data and server state have explicit ownership.
-6. Cross-module workflows are orchestrated in the route-level module.
-7. Abstractions exist only when they protect a boundary or have multiple implementations.
-8. Modules expose public APIs through `index.ts`.
+5. Server state and realtime state have explicit ownership.
+6. Cross-module workflows are coordinated at the route-level composition layer.
+7. Modules expose public APIs through `index.ts`.
+8. Abstractions are introduced only for real boundaries or multiple implementations.
+
+---
+
+## 2. Product architecture
+
+The MVP is primarily one map-first operational workspace:
+
+```text
+/control-center
+```
+
+The map remains visible during the main workflows.
+
+Primary interface regions:
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│ Header                                                     │
+├───────────────┬───────────────────────────┬────────────────┤
+│ Fleet Panel   │                           │ UAV Inspector  │
+│               │       3D Cesium Map       │                │
+│               │                           │                │
+├───────────────┴───────────────────────────┴────────────────┤
+│ Mission Status / contextual operational surface           │
+└────────────────────────────────────────────────────────────┘
+```
+
+Main capabilities:
+
+- fleet monitoring;
+- 3D situational awareness;
+- Area Scan mission planning;
+- mission execution monitoring;
+- UAV inspection;
+- simulated video;
+- incidents and connection recovery.
+
+Application modes such as mission planning or incident focus remain internal state, not separate routes.
+
+---
 
 ## 3. Workspace
 
 ```text
-swarm-control/
+horizon/
 ├── apps/
 │   └── control-center/
 ├── packages/
@@ -34,13 +74,16 @@ swarm-control/
 │   └── ui/
 ├── docs/
 ├── AGENTS.md
+├── README.md
 ├── pnpm-workspace.yaml
 └── package.json
 ```
 
-Initial workspace deliberately contains only one application and four reusable packages.
+Initial workspace deliberately contains one application and four reusable packages.
 
-Do not create more packages until reuse or boundary protection clearly justifies it.
+Do not create additional packages until reuse or dependency isolation clearly justifies them.
+
+---
 
 ## 4. Application structure
 
@@ -69,9 +112,9 @@ apps/control-center/src/
 └── main.ts
 ```
 
-## 5. Naming consistency
+### Naming consistency
 
-The route-level feature must be easy to find by name.
+The primary screen should be easy to locate by name:
 
 ```text
 URL              /control-center
@@ -81,24 +124,11 @@ Root view        ControlCenterView.vue
 Composable       useControlCenter.ts
 ```
 
-Conventions:
+---
 
-```text
-*View.vue          route-level screen
-*Panel.vue         major module panel
-*Inspector.vue     detail/inspection surface
-*Card.vue          domain-specific composed card
-Base*.vue          design-system primitive
-use*.ts            composable / UI application API
-*.store.ts         Pinia store
-*.repository.ts    repository contract/implementation
-*.mapper.ts        DTO ↔ domain mapping
-*.schema.ts        external payload validation
-```
+## 5. Control Center composition
 
-## 6. Route-level composition module
-
-`modules/control-center` is the UI composition and orchestration module.
+`modules/control-center` is the route-level composition and orchestration module.
 
 ```text
 modules/control-center/
@@ -112,88 +142,62 @@ modules/control-center/
 
 `ControlCenterView.vue` composes:
 
-- Map
-- Fleet Panel
-- UAV Inspector
-- Mission Status
-- Incidents
-- Demo controls when enabled
+- map;
+- fleet panel;
+- UAV inspector;
+- mission status;
+- incidents;
+- demo controls when enabled.
 
-It does **not** contain fleet, mission, reconnect, video or Cesium business logic.
+It does not own fleet, mission, video, realtime or Cesium business logic.
 
-Cross-module coordination belongs in `useControlCenter()` or a small orchestration helper owned by this module.
+Cross-module coordination belongs in `useControlCenter()` or a small helper owned by the module.
 
 Example:
 
 ```text
 Incident → Inspect UAV
-      ↓
+        ↓
 useControlCenter()
-      ↓
+        ↓
 select UAV
 focus map
 open inspector
-video module reacts to selected UAV
+video module reacts
 ```
 
-## 7. Feature modules
+---
 
-Use a small default module shape:
+## 6. Feature modules
+
+Default shape:
 
 ```text
 modules/fleet/
 ├── ui/
 ├── model/
-├── api/        # only when the module owns API concerns
+├── api/        # only when needed
 └── index.ts
 ```
 
-Optional `lib/` is allowed only when the module has substantial pure helpers that do not belong in `model/`.
+### `ui/`
 
-Do not pre-create empty architectural folders.
+Vue components.
 
-### ui/
+They consume dedicated composables/view-model APIs.
 
-Vue components only.
+### `model/`
 
-A component consumes a dedicated composable/view-model API.
-
-Preferred:
-
-```ts
-const {
-  uavs,
-  selectedUav,
-  warningCount,
-  selectUav,
-} = useFleetPanel()
-```
-
-A `.vue` file must not:
-
-- call `fetch`;
-- create WebSockets;
-- parse or validate DTOs;
-- know backend field names;
-- implement stale/offline rules;
-- implement reconnect logic;
-- manipulate simulator state directly;
-- contain mission planning algorithms.
-
-### model/
-
-Owns module application logic.
-
-May contain:
+Owns module application logic:
 
 - composables;
-- Pinia store;
+- Pinia store when shared state is required;
 - derived selectors;
 - state transitions;
 - small business rules;
-- TanStack Query wrappers when the module owns server data.
+- Query wrappers when the module owns server data.
 
-Do not create one giant `useModule()` composable. Prefer UI/use-case-oriented composables such as:
+Prefer focused composables:
 
 ```text
 useFleetPanel()
@@ -203,51 +207,40 @@ useMissionStatus()
 useIncidentCenter()
 ```
 
-### api/
+Avoid one oversized `useModule()` file.
 
-Owns the boundary to module-specific remote data.
+### `api/`
+
+Used only when the module owns remote/server concerns.
 
 May contain:
 
-- repository contract/implementation;
+- repositories;
 - DTO types;
 - Zod schemas;
-- mapper;
-- query keys/query functions if they are module-specific.
+- mappers;
+- Query keys/functions.
 
-Application UI never imports DTOs.
+UI never imports DTOs.
 
-### index.ts
+### `index.ts`
 
 Public module API.
 
-Other modules must not deep-import internals.
+Modules should not deep-import another module's implementation files.
 
-Good:
+---
 
-```ts
-import { FleetPanel } from '@/modules/fleet'
-```
+## 7. Map module
 
-Bad:
-
-```ts
-import { x } from '@/modules/fleet/model/internal/x'
-```
-
-## 8. Map module
-
-Cesium is large enough to be an application capability, but not yet a reusable workspace package.
-
-Initial location:
+Cesium is a significant application capability but does not need to be a workspace package yet.
 
 ```text
 modules/map/
 ├── ui/
 │   └── MapCanvas.vue
 ├── model/
-│   ├── useMap.ts
-│   └── map.store.ts       # only if shared map UI state is actually needed
+│   └── useMap.ts
 ├── lib/
 │   └── cesium/
 │       ├── viewer.ts
@@ -258,176 +251,368 @@ modules/map/
 └── index.ts
 ```
 
-Do not extract `@swarm/map` in the MVP unless a second application genuinely needs it.
+Cesium is presentation infrastructure.
 
-Cesium is a rendering adapter, never the source of truth.
+Authoritative state remains in application/domain state.
 
-## 9. Workspace packages
+Map behavior:
 
-### @swarm/domain
+- UAV position uses telemetry;
+- altitude is real 3D altitude;
+- heading follows telemetry/course;
+- movement is interpolated between samples;
+- existing entities are updated rather than recreated;
+- selected/warning UAVs receive stronger visual emphasis;
+- labels are not shown for every UAV at every zoom level;
+- explicit Follow mode is separate from normal inspection/fly-to.
 
-Pure TypeScript domain contracts and shared entities:
+---
 
-- UAV
-- telemetry
-- missions
-- routes/waypoints
-- geo types
-- operational events
+## 8. Workspace packages
+
+### `@horizon/domain`
+
+Pure TypeScript models shared across boundaries:
+
+- UAV;
+- telemetry;
+- mission;
+- mission routes and waypoints;
+- geo types;
+- operational events.
 
 Must not depend on Vue, Pinia, Tailwind, Cesium or concrete network implementations.
 
-### @swarm/realtime
+### `@horizon/realtime`
 
 Owns transport-level realtime concerns:
 
-- `RealtimeTransport` contract;
+- `RealtimeTransport`;
 - WebSocket implementation;
-- validation hooks;
-- latest-state buffer;
-- batching/flushing;
+- message validation hooks;
+- latest-state buffering;
+- batched flushing;
 - transport connection state.
 
-It must not render UI.
+No UI.
 
-### @swarm/simulator
+### `@horizon/simulator`
 
 Deterministic fake backend:
 
 - fleet generation;
-- telemetry generation;
 - mission execution;
+- telemetry generation;
 - incident scheduling;
 - simulator commands;
 - demo presets.
 
 It must not import application modules.
 
-### @swarm/ui
+### `@horizon/ui`
 
-First-party design-system primitives and tokens.
+First-party design system:
 
-It must not know about UAVs, missions, telemetry, Cesium or incidents.
+- semantic tokens;
+- themes;
+- reusable primitives;
+- variants.
 
-## 10. Dependency direction
+It must not know about UAVs, missions, Cesium or incidents.
 
-```text
-Vue UI
-  ↓
-module composable / model
-  ↓
-domain contracts + injected services
-  ↓
-repository / transport / provider
-  ↓
-external infrastructure
+---
+
+## 9. Core data model
+
+### UAV
+
+```ts
+interface Uav {
+  id: string
+  name: string
+  model: string
+  callsign: string
+
+  capabilities: {
+    camera: boolean
+    thermalCamera: boolean
+  }
+}
 ```
 
-Lower layers do not import higher layers.
+### Telemetry
 
-## 11. State ownership
+```ts
+interface UavTelemetry {
+  uavId: string
+  timestamp: number
 
-### Server state
+  position: {
+    latitude: number
+    longitude: number
+    altitude: number
+  }
 
-Use TanStack Vue Query for REST/server lifecycle:
+  speed: number
+  heading: number
+  battery: number
+  signal: number
+  gpsSatellites: number
 
-- fetching;
-- caching;
+  missionId: string | null
+  currentWaypoint: number | null
+}
+```
+
+### UAV state
+
+```ts
+type UavStatus =
+  | 'standby'
+  | 'active'
+  | 'warning'
+  | 'stale'
+  | 'offline'
+
+type MissionExecutionState =
+  | 'idle'
+  | 'assigned'
+  | 'executing'
+  | 'completed'
+
+interface UavState {
+  uav: Uav
+  telemetry: UavTelemetry | null
+  status: UavStatus
+  missionState: MissionExecutionState
+  lastUpdatedAt: number | null
+}
+```
+
+Fleet state is normalized by UAV ID.
+
+The selected UAV is stored by ID, not as a duplicated object.
+
+### Mission
+
+```ts
+type MissionStatus =
+  | 'draft'
+  | 'planned'
+  | 'active'
+  | 'completed'
+  | 'aborted'
+
+interface GeoPoint {
+  latitude: number
+  longitude: number
+}
+
+interface MissionArea {
+  polygon: GeoPoint[]
+}
+
+interface Waypoint {
+  id: string
+  latitude: number
+  longitude: number
+  altitude: number
+  order: number
+}
+
+interface UavRoute {
+  uavId: string
+  waypoints: Waypoint[]
+  distanceMeters: number
+  estimatedDurationSec: number
+}
+
+interface Mission {
+  id: string
+  name: string
+  type: 'area_scan'
+  status: MissionStatus
+  area: MissionArea
+  altitude: number
+  assignedUavIds: string[]
+  routes: UavRoute[]
+  createdAt: number
+  startedAt: number | null
+  completedAt: number | null
+}
+```
+
+Mission progress should derive from route/waypoint execution where practical rather than from arbitrary percentages.
+
+---
+
+## 10. State ownership
+
+### TanStack Vue Query
+
+Owns REST/server lifecycle:
+
+- fetch state;
+- cache;
 - retry;
+- refetch;
 - invalidation;
-- mutation state;
-- request cancellation.
+- mutations;
+- cancellation.
 
-### Realtime application state
+### Pinia
 
-Use Pinia for current shared realtime state consumed by multiple modules.
+Owns shared current realtime/client state:
 
-Examples:
+- normalized current fleet;
+- shared selected UAV ID;
+- active mission execution state;
+- realtime connection state;
+- current operational incident/event state.
 
-- current fleet state;
-- selected UAV ID when shared across modules;
-- current active mission execution state;
-- connection state;
-- incident feed when driven by realtime events.
+### Local state
 
-### Local UI state
-
-Keep transient presentation state local to a composable/component when it is not cross-module state.
-
-Examples:
+Transient presentation state remains local when it is not shared:
 
 - open menu;
 - current mission-builder step;
-- temporary form input;
 - hovered row;
-- local panel expansion.
+- local panel expansion;
+- temporary form input.
 
-## 12. Query + Pinia source-of-truth rule
+### Query + Pinia rule
 
-Do not let Query cache and Pinia become two independent truths for the same live entity.
+Query cache and Pinia must not become competing truths for the same live entity.
 
-For a realtime domain such as fleet state:
+For realtime fleet state:
 
 ```text
-TanStack Query fetches snapshot
+TanStack Query loads snapshot
         ↓
-explicitly hydrate/reconcile Pinia
+hydrate/reconcile Pinia
         ↓
-Pinia becomes the UI source of truth for current live state
+Pinia becomes current live UI state
         ↑
 realtime updates
 ```
 
-Query remains responsible for request lifecycle, not live rendering state.
+For non-realtime server data, Query cache may remain the sole source of truth.
 
-For non-realtime server data, Query cache may remain the source of truth without copying into Pinia.
+---
 
-## 13. HTTP boundary
+## 11. HTTP boundary
 
-Preferred chain:
+TanStack Query is not an HTTP client.
+
+Preferred flow:
 
 ```text
 UI
-→ module composable
+→ composable
 → TanStack Query
 → Repository
 → HttpClient
 → native fetch
 ```
 
-`HttpClient` should stay small and may centralize:
+The small HTTP client may centralize:
 
 - base URL;
-- default headers;
+- headers;
 - JSON parsing;
 - standard error mapping;
-- `AbortSignal` forwarding.
+- `AbortSignal`.
 
-No Axios unless a concrete requirement appears.
+Do not add Axios without a real need.
 
-## 14. Realtime boundary
+---
+
+## 12. Realtime architecture
+
+Transport contract:
+
+```ts
+interface RealtimeTransport {
+  connect(): Promise<void>
+  disconnect(): void
+  subscribe(handler: (event: RealtimeEvent) => void): () => void
+}
+```
+
+Implementations:
+
+```text
+MockRealtimeTransport
+WebSocketRealtimeTransport
+```
+
+Pipeline:
 
 ```text
 Simulator / WebSocket
-      ↓
-RealtimeTransport
-      ↓
-validate
-      ↓
-latest-state buffer
-      ↓
-batch flush
-      ↓
-Pinia
-      ↓
-Vue + Cesium
+→ RealtimeTransport
+→ validate
+→ normalize
+→ latest state by UAV
+→ batch flush
+→ Pinia
+→ Vue / Cesium
 ```
 
-UI update cadence must be decoupled from incoming packet frequency.
+Incoming telemetry frequency and rendering frequency are separate concerns.
 
-## 15. Dependency injection / composition root
+Example target:
 
-Concrete infrastructure is selected once during app bootstrap.
+```text
+hundreds of events/sec incoming
+→ keep latest event per UAV
+→ flush application state around every 100 ms
+```
+
+Exact values are measured/configurable rather than hardcoded as architectural truth.
+
+### Ordering
+
+Out-of-order telemetry is ignored using timestamp or sequence information.
+
+### Stale/offline
+
+Each UAV tracks `lastUpdatedAt`.
+
+Conceptually:
+
+```text
+fresh telemetry
+→ active
+
+short telemetry gap
+→ stale
+
+longer gap
+→ offline
+```
+
+Last known position remains visible.
+
+### Reconnect
+
+```text
+LIVE
+→ RECONNECTING
+→ reconnect transport
+→ fetch fresh snapshot
+→ reconcile current state
+→ resume realtime
+→ LIVE
+```
+
+The application does not assume every event was received while disconnected.
+
+---
+
+## 13. Infrastructure composition
+
+Concrete infrastructure is selected once during bootstrap.
 
 ```ts
 interface AppServices {
@@ -438,7 +623,7 @@ interface AppServices {
 }
 ```
 
-Demo composition:
+Mock composition:
 
 ```text
 MockFleetRepository
@@ -447,7 +632,7 @@ MockMissionPlanner
 MockVideoProvider
 ```
 
-Remote composition:
+Future remote composition:
 
 ```text
 RestFleetRepository
@@ -456,53 +641,236 @@ RemoteMissionPlanner
 RemoteVideoProvider
 ```
 
-Use typed Vue provide/inject or equivalent app context.
+Modules consume contracts, not concrete implementations.
 
-Do not implement an untyped global service locator.
-
-## 16. Configuration
-
-Only the config layer reads `import.meta.env`.
+Configuration is validated centrally:
 
 ```text
 .env
-→ validate
+→ config validation
 → appConfig
 → bootstrap
 → concrete services
 ```
 
-Modules consume config/services, not raw environment variables.
+Only the config layer reads raw environment variables.
 
-## 17. SOLID without overengineering
+---
 
-SOLID is a responsibility/dependency guideline, not a class-count target.
+## 14. Simulator
 
-Create an abstraction when:
+The simulator behaves as a fake backend rather than a UI shortcut.
 
-1. there are multiple implementations now or immediately planned; or
-2. it isolates application logic from an external dependency.
+Baseline:
 
-Good abstractions in this MVP:
+```text
+24 total UAVs
+6 active mission UAVs
+18 standby UAVs
+```
 
-- RealtimeTransport
-- FleetRepository
-- MissionPlanner
-- VideoProvider
+Primary deterministic mission:
 
-Avoid abstractions like `UavFormatterInterface` unless a real need appears.
+```text
+Area Scan
+6 UAVs
+~120 m altitude
+Abu Dhabi region
+```
 
-## 18. Architecture smells
+Modes:
+
+```text
+deterministic
+random
+```
+
+Demo presets:
+
+```text
+NORMAL
+INCIDENT
+STRESS
+```
+
+Demo controls send commands to the simulator. They never patch application stores directly.
+
+Example incident sequence:
+
+```text
+signal degraded
+→ telemetry stale
+→ connection lost
+→ reconnect
+→ snapshot sync
+→ telemetry restored
+```
+
+A stress preset may later simulate hundreds of UAVs for performance profiling, but it is not part of the default user experience.
+
+---
+
+## 15. Video
+
+Video is isolated behind:
+
+```ts
+interface VideoProvider {
+  getSource(uavId: string): Promise<VideoSource | null>
+}
+```
+
+Initial implementation uses prerecorded aerial footage and clearly labels it as simulated.
+
+States:
+
+```text
+loading
+live
+unavailable
+error
+```
+
+Video failure must not break telemetry, map state or the rest of the inspector.
+
+Future HLS/WebRTC implementations should fit behind the same provider boundary.
+
+---
+
+## 16. Operational events
+
+Severity:
+
+```text
+info
+warning
+critical
+```
+
+Initial event types:
+
+```text
+MISSION_STARTED
+WAYPOINT_REACHED
+LOW_BATTERY
+SIGNAL_DEGRADED
+TELEMETRY_STALE
+CONNECTION_LOST
+CONNECTION_RESTORED
+MISSION_COMPLETED
+```
+
+Event behavior:
+
+- info → event history/feed;
+- warning → subtle alert + history;
+- critical → prominent alert with an action.
+
+Incident actions should update/focus the real application state rather than remain disconnected log entries.
+
+---
+
+## 17. Testing
+
+Testing focuses on behavior and boundaries.
+
+Tooling:
+
+```text
+Vitest
+Vue Test Utils
+Playwright
+```
+
+Priority unit/integration coverage:
+
+- telemetry validation and normalization;
+- out-of-order message handling;
+- stale/offline rules;
+- reconnect transitions;
+- mission progress;
+- DTO/domain mappers;
+- deterministic mission planner;
+- simulator determinism.
+
+Primary E2E flows:
+
+```text
+Create mission
+→ generate plan
+→ launch
+→ observe execution
+```
+
+```text
+Select UAV
+→ inspector opens
+→ telemetry/video shown
+```
+
+```text
+simulate connection loss
+→ stale/offline
+→ reconnect
+→ state restored
+```
+
+---
+
+## 18. Technology choices
+
+Initial runtime dependencies:
+
+```text
+Vue 3
+TypeScript
+Vite
+Vue Router
+Pinia
+@tanstack/vue-query
+CesiumJS
+Zod
+class-variance-authority
+```
+
+Styling:
+
+```text
+TailwindCSS
+CSS-variable design tokens
+first-party UI primitives
+```
+
+Deliberately not required initially:
+
+```text
+Nuxt
+Turborepo
+Nx
+Axios
+RxJS
+Storybook
+Husky
+general-purpose UI libraries
+SCSS architecture
+```
+
+Introduce additional tooling only when a concrete requirement appears.
+
+---
+
+## 19. Architecture smells
 
 Avoid:
 
 - direct API calls from `.vue`;
 - direct WebSocket use from `.vue`;
-- store mutation scattered across UI components;
+- domain/business rules embedded in templates/components;
 - DTOs leaking into UI;
+- duplicate live state in Query and Pinia;
 - circular module imports;
 - module deep imports;
-- duplicate live state in Query + Pinia;
-- Cesium entity state treated as domain state;
-- simulator-only code paths that bypass normal contracts;
-- extracting packages only to make the monorepo look larger.
+- Cesium entities treated as domain state;
+- simulator-only paths that bypass normal contracts;
+- one giant composable per feature;
+- workspace packages created only to make the monorepo look larger.

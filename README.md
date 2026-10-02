@@ -1,68 +1,103 @@
-# Swarm Control — MVP Documentation
+# Horizon
 
-Swarm Control is a browser-based 3D mission-control prototype for planning and monitoring autonomous UAV missions.
+Horizon is a browser-based 3D mission-control interface for planning and monitoring autonomous UAV operations.
 
-The MVP is designed as a frontend-focused demonstration of Vue 3, TypeScript, realtime UI, mapping, shared packages, modular architecture and reusable design-system work.
+The product combines mission planning, realtime fleet telemetry, 3D situational awareness, UAV inspection, simulated video and incident handling in a single operator workspace.
 
-## Core demo
+The initial implementation uses deterministic simulated data. Application boundaries are designed so REST, WebSocket and media providers can be introduced without rewriting feature UI.
+
+## Core workflow
 
 ```text
 Open Control Center
 → Create Area Scan mission
-→ Draw mission area
+→ Define mission area
 → Generate UAV-specific routes
 → Launch mission
-→ Watch realtime UAV movement
-→ Inspect UAV telemetry + simulated video
-→ Trigger incident
-→ Recover connection/state
+→ Monitor realtime execution
+→ Inspect UAV telemetry and video
+→ Handle an operational incident
+→ Recover connection and state
 ```
 
-The demo uses simulated data, but the simulator enters the application through the same contracts intended for future REST/WebSocket infrastructure.
+## Technology
 
-## Architecture summary
+- Vue 3
+- TypeScript
+- Vite
+- pnpm workspaces
+- Vue Router
+- Pinia
+- TanStack Vue Query
+- TailwindCSS
+- CesiumJS
+- Zod
+- Vitest
+- Vue Test Utils
+- Playwright
 
-- Vue 3 + TypeScript + Vite
-- pnpm monorepo
-- modular vertical slices inside `apps/control-center`
-- thin Vue UI through dedicated composables
-- Pinia for shared realtime/client state
-- TanStack Vue Query for REST/server-state lifecycle
-- native fetch behind repositories and a small HttpClient
-- CesiumJS via a dedicated application map module
-- TailwindCSS + first-party UI primitives
-- semantic CSS-variable design tokens
-- light + dark theme from day one
-- deterministic simulator
-- Vitest + Vue Test Utils + Playwright
+HTTP requests use native `fetch` behind a small repository/HTTP boundary. Realtime telemetry uses a transport abstraction so simulated and remote implementations share the same application pipeline.
+
+## Repository structure
+
+```text
+horizon/
+├── apps/
+│   └── control-center/
+├── packages/
+│   ├── domain/
+│   ├── realtime/
+│   ├── simulator/
+│   └── ui/
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── DESIGN-SYSTEM.md
+│   └── ROADMAP.md
+├── AGENTS.md
+├── README.md
+├── pnpm-workspace.yaml
+└── package.json
+```
+
+The workspace is intentionally small. New packages or architectural layers should be introduced only when they protect a real boundary or provide real reuse.
+
+## Product scope
+
+The MVP centers on one operational route:
+
+```text
+/control-center
+```
+
+The 3D map remains the primary workspace. Mission planning, UAV inspection and incident handling are contextual modes and overlays rather than separate CRUD-style pages.
+
+Primary mission type:
+
+```text
+Area Scan
+```
+
+The operator defines a polygon, altitude and UAV count. The planner generates deterministic UAV-specific routes that can be reviewed and launched.
+
+Standard demo dataset:
+
+- 24 UAVs in the fleet;
+- 6 UAVs assigned to an active mission;
+- realtime simulated telemetry;
+- deterministic incidents;
+- simulated UAV video feeds.
 
 ## Documentation
 
-Start with:
-
-1. `AGENTS.md`
-2. `docs/CURRENT-STATE.md`
-3. `docs/PRD.md`
-4. `docs/UI-SPEC.md`
-5. `docs/ARCHITECTURE.md`
-6. `docs/DESIGN-SYSTEM.md`
-7. `docs/IMPLEMENTATION-PLAN.md`
-
-Additional references:
-
-- `docs/DATA-MODEL.md`
-- `docs/REALTIME.md`
-- `docs/SIMULATOR.md`
-- `docs/TESTING.md`
-- `docs/TECH-STACK.md`
-- `docs/DEMO-SCRIPT.md`
-- `docs/DECISIONS.md`
-- `docs/media/control-center-concept.png`
+- `AGENTS.md` — repository implementation rules and quality expectations
+- `docs/ARCHITECTURE.md` — product structure, data ownership and infrastructure boundaries
+- `docs/DESIGN-SYSTEM.md` — Tailwind, tokens, themes and UI primitive rules
+- `docs/ROADMAP.md` — implementation milestones
 
 ## Status
 
-Documentation baseline: **v0.2**
+Horizon is currently in the foundation stage.
 
-Implementation has not started yet.
+## Disclaimer
 
-Next task: `IMPLEMENTATION-PLAN.md` → **Task 0.1 — Workspace scaffold**.
+Horizon is a software prototype. It does not provide real aircraft control, safety-critical flight planning or production autonomy functionality.
