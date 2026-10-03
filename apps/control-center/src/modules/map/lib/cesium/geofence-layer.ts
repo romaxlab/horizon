@@ -70,7 +70,7 @@ export function createGeofenceLayer(viewer: Viewer, initialPalette: MapPalette):
         longitude: zone.polygon.reduce((sum, p) => sum + p.longitude, 0) / zone.polygon.length,
       }
       const pill = getLabelPill(`No-fly · ${zone.name}`, {
-        surface: palette.surface,
+        surface: palette.surfaceRaised,
         text: color,
         shadow: palette.shadow,
       })

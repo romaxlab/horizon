@@ -24,6 +24,7 @@ import {
 import {
   getLabelPill,
   getSelectionRing,
+  LABEL_MARGIN,
   MARKER_SIZE,
   RING_SIZE,
   uavMarkerUrl,
@@ -163,7 +164,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       billboard: {
         horizontalOrigin: HorizontalOrigin.CENTER,
         verticalOrigin: VerticalOrigin.BOTTOM,
-        pixelOffset: new Cartesian2(0, -(MARKER_SIZE / 2 + LABEL_GAP_PX)),
+        pixelOffset: new Cartesian2(0, -(MARKER_SIZE / 2 + LABEL_GAP_PX - LABEL_MARGIN)),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     })
@@ -176,7 +177,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
         entity.show = entry !== undefined
         if (!entry || !entity.billboard) return
         const pill = getLabelPill(entry.name, {
-          surface: palette.surface,
+          surface: palette.surfaceRaised,
           text: palette.textPrimary,
           shadow: palette.shadow,
         })

@@ -4,6 +4,8 @@ import { Color } from 'cesium'
 export interface MapPalette {
   canvas: Color
   surface: Color
+  /** Raised surface (tooltips, map labels). */
+  surfaceRaised: Color
   textPrimary: Color
   standby: Color
   active: Color
@@ -29,6 +31,7 @@ export function readMapPalette(root: HTMLElement = document.documentElement): Ma
   return {
     canvas: token('--bg-canvas'),
     surface: token('--bg-surface'),
+    surfaceRaised: token('--bg-surface-raised'),
     textPrimary: token('--text-primary'),
     standby: token('--status-neutral'),
     active: token('--status-info'),
