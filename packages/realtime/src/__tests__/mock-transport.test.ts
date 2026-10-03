@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createMockRealtimeTransport, type MessageSource } from './mock-transport'
-import type { RealtimeEvent } from './transport'
+import { createMockRealtimeTransport, type MessageSource } from '../mock-transport'
+import type { RealtimeEvent } from '../transport'
 
 function createSource() {
   const listeners = new Set<(message: unknown) => void>()

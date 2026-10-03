@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bearingDegrees, destinationPoint, distanceMeters } from './geo'
+import { bearingDegrees, destinationPoint, distanceMeters } from '../geo'
 
 const abuDhabi = { latitude: 24.4539, longitude: 54.3773 }
 

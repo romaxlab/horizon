@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
-import { shallowEqual, stableComputed } from './stable-computed'
+import { shallowEqual, stableComputed } from '../stable-computed'
 
 describe('stableComputed', () => {
   it('keeps the previous object while the value is equal', () => {

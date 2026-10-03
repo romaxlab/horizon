@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nadirView, visibleTiles, worldPixel } from './nadir-camera'
+import { nadirView, visibleTiles, worldPixel } from '../nadir-camera'
 
 describe('nadir camera', () => {
   it('projects to Web Mercator tile pixels', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RealtimeEvent } from './transport'
-import { createWebSocketRealtimeTransport, type WebSocketLike } from './websocket-transport'
+import type { RealtimeEvent } from '../transport'
+import { createWebSocketRealtimeTransport, type WebSocketLike } from '../websocket-transport'
 
 class FakeSocket implements WebSocketLike {
   readyState = 0

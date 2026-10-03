@@ -1,9 +1,9 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { ref } from 'vue'
-import { telemetry, uav } from './fleet.fixtures.test-utils'
-import { useFleetStore } from './fleet.store'
-import { useFleetPanel } from './useFleetPanel'
+import { telemetry, uav } from '../fleet.fixtures.test-utils'
+import { useFleetStore } from '../fleet.store'
+import { useFleetPanel } from '../useFleetPanel'
 
 describe('useFleetPanel', () => {
   beforeEach(() => {

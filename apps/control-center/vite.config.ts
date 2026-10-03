@@ -29,7 +29,7 @@ export default defineConfig({
   define: {
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
   },
-  // Unit tests live next to the code; Playwright specs in e2e/ run separately (`pnpm e2e`).
+  // Unit tests live in __tests__/ next to the code they cover; Playwright specs in e2e/ run separately (`pnpm e2e`).
   test: {
     include: ['src/**/*.test.ts'],
   },

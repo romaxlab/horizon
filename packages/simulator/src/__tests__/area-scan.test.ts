@@ -1,7 +1,7 @@
 import { distanceMeters } from '@horizon/domain'
 import { describe, expect, it } from 'vitest'
-import { AreaScanError, planAreaScan, type AreaScanRequest } from './area-scan'
-import { DEMO_BASE, DEMO_MISSION } from './demo'
+import { AreaScanError, planAreaScan, type AreaScanRequest } from '../area-scan'
+import { DEMO_BASE, DEMO_MISSION } from '../demo'
 
 const uavs = Array.from({ length: 6 }, (_, i) => ({ id: `uav-0${i + 1}`, home: DEMO_BASE }))
 

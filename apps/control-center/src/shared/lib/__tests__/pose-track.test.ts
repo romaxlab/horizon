@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPoseTrack, lerpHeading, type Pose } from './pose-track'
+import { createPoseTrack, lerpHeading, type Pose } from '../pose-track'
 
 const pose = (latitude: number, heading = 0, altitude = 100): Pose => ({
   latitude,

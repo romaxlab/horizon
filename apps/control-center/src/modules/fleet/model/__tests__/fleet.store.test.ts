@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { telemetry, uav } from './fleet.fixtures.test-utils'
-import { useFleetStore } from './fleet.store'
+import { telemetry, uav } from '../fleet.fixtures.test-utils'
+import { useFleetStore } from '../fleet.store'
 
 describe('useFleetStore', () => {
   beforeEach(() => {

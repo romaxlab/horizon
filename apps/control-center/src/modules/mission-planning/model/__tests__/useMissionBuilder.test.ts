@@ -3,8 +3,8 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, ref } from 'vue'
 import { provideAppServices, type AppServices } from '@/app/providers/services'
-import { MissionPlanningError, type MissionPlanner } from './mission.types'
-import { useMissionBuilder } from './useMissionBuilder'
+import { MissionPlanningError, type MissionPlanner } from '../mission.types'
+import { useMissionBuilder } from '../useMissionBuilder'
 
 const plannedMission: Mission = {
   id: 'mission-001',

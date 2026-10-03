@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveFeedState } from './feed-state'
+import { deriveFeedState } from '../feed-state'
 
 describe('deriveFeedState', () => {
   it('maps source and link to feed states', () => {

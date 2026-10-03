@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clusterScreenPoints, type ScreenPoint } from './declutter'
+import { clusterScreenPoints, type ScreenPoint } from '../declutter'
 
 const point = (id: string, x: number, y = 0): ScreenPoint => ({ id, x, y })
 const sizes = (clusters: { memberIds: string[] }[]) =>

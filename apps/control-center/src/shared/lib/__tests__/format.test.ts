@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAge, formatCardinal, formatDuration } from './format'
+import { formatAge, formatCardinal, formatDuration } from '../format'
 
 describe('formatAge', () => {
   it('formats compact relative ages', () => {

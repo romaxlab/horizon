@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createLatestStateBuffer } from './latest-state-buffer'
+import { createLatestStateBuffer } from '../latest-state-buffer'
 
 interface Sample {
   id: string

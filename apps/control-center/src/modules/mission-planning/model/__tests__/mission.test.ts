@@ -1,9 +1,9 @@
 import type { Mission, UavTelemetry } from '@horizon/domain'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { parseMission, parseMissionMessage } from '../api/mission.parsers'
-import { computeMissionProgress } from './mission-progress'
-import { useMissionStore } from './mission.store'
+import { parseMission, parseMissionMessage } from '../../api/mission.parsers'
+import { computeMissionProgress } from '../mission-progress'
+import { useMissionStore } from '../mission.store'
 
 const missionDto = {
   id: 'm-1',

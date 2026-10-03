@@ -204,6 +204,17 @@ Direct Tailwind usage in feature modules is mainly for layout and composition.
 
 Prioritize behavior and boundaries.
 
+Unit tests live in a `__tests__/` folder next to the code they cover:
+
+```text
+model/
+├── fleet-sync.ts
+└── __tests__/
+    └── fleet-sync.test.ts
+```
+
+Playwright specs live in `apps/control-center/e2e/`.
+
 Important coverage includes:
 
 - DTO/domain mapping;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { distanceMeters } from '@horizon/domain'
-import { DEMO_BASE, DEMO_MISSION, DEMO_PARKING, STRESS_FLEET_SIZE } from './demo'
-import type { MissionDto, SimulatorMessage, TelemetryDto } from './protocol'
-import { createSimulator, type SimulatorOptions } from './simulator'
+import { DEMO_BASE, DEMO_MISSION, DEMO_PARKING, STRESS_FLEET_SIZE } from '../demo'
+import type { MissionDto, SimulatorMessage, TelemetryDto } from '../protocol'
+import { createSimulator, type SimulatorOptions } from '../simulator'
 
 const START = Date.UTC(2026, 0, 1)
 

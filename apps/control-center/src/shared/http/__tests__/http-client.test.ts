@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createHttpClient, HttpError } from './http-client'
+import { createHttpClient, HttpError } from '../http-client'
 
 function respond(body: string, status = 200) {
   return vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status }))

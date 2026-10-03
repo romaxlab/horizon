@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseFleetSnapshot, parseTelemetryMessage, FleetPayloadError } from './fleet.parsers'
+import { parseFleetSnapshot, parseTelemetryMessage, FleetPayloadError } from '../fleet.parsers'
 
 const telemetryDto = {
   uav_id: 'uav-01',
