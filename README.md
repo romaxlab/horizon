@@ -42,7 +42,9 @@ Optional configuration (`apps/control-center/.env.local`, see `.env.example`):
 
 | Variable | Default | |
 | --- | --- | --- |
-| `VITE_DEMO_CONTROLS` | on in dev | show the Demo panel |
+| `VITE_DATA_SOURCE` | `mock` | `remote` uses a REST + WebSocket backend |
+| `VITE_API_URL` / `VITE_WS_URL` | — | backend endpoints (required for `remote`) |
+| `VITE_DEMO_CONTROLS` | on in dev | show the Demo panel (mock only) |
 | `VITE_DEMO_AUTOSTART` | `false` | start the demo Area Scan on load |
 | `VITE_SIMULATOR_MODE` | `deterministic` | or `random` |
 | `VITE_TELEMETRY_FLUSH_MS` | `100` | telemetry → state flush interval |

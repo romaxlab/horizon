@@ -10,6 +10,8 @@ const props = defineProps<{
   /** Shows the Stop action. */
   canStop: boolean
   stopping: boolean
+  /** Last failed stop attempt; cleared by the next one. */
+  stopError: string | null
 }>()
 
 const emit = defineEmits<{ stop: [] }>()
@@ -54,6 +56,16 @@ function confirmStop() {
       </div>
       <BaseText variant="body-md" tone="muted" numeric class="whitespace-nowrap">
         {{ detail }}
+      </BaseText>
+      <BaseText
+        v-if="stopError && !stopping"
+        variant="label-md"
+        tone="danger"
+        role="alert"
+        :title="stopError"
+        class="whitespace-nowrap"
+      >
+        Stop failed
       </BaseText>
       <BaseButton
         v-if="canStop"

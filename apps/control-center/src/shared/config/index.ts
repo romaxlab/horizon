@@ -1,1 +1,7 @@
-export { appConfig, parseAppConfig, AppConfigError, type AppConfig } from './app-config'
+export {
+  appConfig,
+  parseAppConfig,
+  AppConfigError,
+  type AppConfig,
+  type DataSourceConfig,
+} from './app-config'

@@ -217,6 +217,7 @@ export function useControlCenter() {
     missionActive,
     stopMission,
     stoppingMission: computed(() => abortMutation.isPending.value),
+    stopError: computed(() => abortMutation.error.value?.message ?? null),
     missionOverlay,
     selectUav,
     focusSelected,

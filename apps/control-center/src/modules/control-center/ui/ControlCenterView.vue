@@ -32,6 +32,7 @@ const {
   missionActive,
   stopMission,
   stoppingMission,
+  stopError,
 } = useControlCenter()
 
 /** Local presentation state: fleet panel expansion and the large video focus view. */
@@ -207,6 +208,7 @@ watch(selectedUavId, (id) => {
           :progress="mission.progress"
           :can-stop="missionActive"
           :stopping="stoppingMission"
+          :stop-error="stopError"
           @stop="stopMission"
         />
       </div>

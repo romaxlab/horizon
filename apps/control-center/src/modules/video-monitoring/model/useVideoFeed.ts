@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
 import { useAppServices } from '@/app/providers/services'
+import { videoQueryKeys } from '../api/video.queries'
 import { deriveFeedState } from './feed-state'
 import type { LinkState } from './video.types'
 
@@ -9,7 +10,7 @@ export function useVideoFeed(uavId: Readonly<Ref<string>>, link: Readonly<Ref<Li
   const { videoProvider } = useAppServices()
 
   const query = useQuery({
-    queryKey: computed(() => ['video-source', uavId.value] as const),
+    queryKey: computed(() => videoQueryKeys.source(uavId.value)),
     queryFn: () => videoProvider.getSource(uavId.value),
     staleTime: Infinity,
     retry: 1,

@@ -1,5 +1,7 @@
 import { onBeforeUnmount, onMounted } from 'vue'
+import { useQueryClient } from '@tanstack/vue-query'
 import { useAppServices } from '@/app/providers/services'
+import { missionQueryKeys } from '../api/mission.queries'
 import { parseMissionMessage } from '../api/mission.parsers'
 import { useMissionStore } from './mission.store'
 
@@ -9,16 +11,26 @@ import { useMissionStore } from './mission.store'
  */
 export function useMissionSync() {
   const { missionPlanner, realtimeTransport } = useAppServices()
+  const queryClient = useQueryClient()
   const store = useMissionStore()
   let unsubscribe: (() => void) | null = null
-  const controller = new AbortController()
+  let active = true
 
-  /** Loads the current mission; after a backend reset there may be none. */
+  /**
+   * Loads the current mission through Query (retry, cancellation) like the fleet snapshot; the
+   * result only seeds the store, which realtime mission messages keep current.
+   */
   async function reload() {
     try {
-      store.replace(await missionPlanner.getActiveMission(controller.signal))
+      const mission = await queryClient.query({
+        queryKey: missionQueryKeys.current,
+        queryFn: ({ signal }) => missionPlanner.getActiveMission(signal),
+        staleTime: 0,
+        gcTime: 0,
+      })
+      if (active) store.replace(mission)
     } catch (error) {
-      if (!controller.signal.aborted) console.warn('[mission-sync] failed to load mission', error)
+      if (active) console.warn('[mission-sync] failed to load mission', error)
     }
   }
 
@@ -32,7 +44,8 @@ export function useMissionSync() {
   })
 
   onBeforeUnmount(() => {
-    controller.abort()
+    active = false
+    void queryClient.cancelQueries({ queryKey: missionQueryKeys.current })
     unsubscribe?.()
   })
 

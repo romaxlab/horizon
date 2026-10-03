@@ -4,6 +4,7 @@ import { AppConfigError, parseAppConfig } from './app-config'
 describe('parseAppConfig', () => {
   it('applies defaults', () => {
     expect(parseAppConfig({}, true)).toEqual({
+      dataSource: { kind: 'mock' },
       demoControls: true,
       demoAutostart: false,
       simulatorMode: 'deterministic',
@@ -26,5 +27,35 @@ describe('parseAppConfig', () => {
     expect(() => parseAppConfig({ VITE_DEMO_CONTROLS: 'maybe' }, true)).toThrow(AppConfigError)
     expect(() => parseAppConfig({ VITE_SIMULATOR_MODE: 'chaos' }, true)).toThrow(AppConfigError)
     expect(() => parseAppConfig({ VITE_TELEMETRY_FLUSH_MS: '5' }, true)).toThrow(AppConfigError)
+  })
+
+  it('selects the remote data source with validated endpoints', () => {
+    const remote = parseAppConfig(
+      {
+        VITE_DATA_SOURCE: 'remote',
+        VITE_API_URL: 'https://api.horizon.test/v1',
+        VITE_WS_URL: 'wss://api.horizon.test/realtime',
+        VITE_DEMO_CONTROLS: 'true',
+      },
+      true,
+    )
+    expect(remote.dataSource).toEqual({
+      kind: 'remote',
+      apiUrl: 'https://api.horizon.test/v1',
+      wsUrl: 'wss://api.horizon.test/realtime',
+    })
+    expect(remote.demoControls).toBe(false)
+
+    expect(() => parseAppConfig({ VITE_DATA_SOURCE: 'remote' }, true)).toThrow(AppConfigError)
+    expect(() =>
+      parseAppConfig(
+        {
+          VITE_DATA_SOURCE: 'remote',
+          VITE_API_URL: 'https://x.test',
+          VITE_WS_URL: 'https://x.test',
+        },
+        true,
+      ),
+    ).toThrow(AppConfigError)
   })
 })

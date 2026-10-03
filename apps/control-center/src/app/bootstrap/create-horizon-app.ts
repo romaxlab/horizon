@@ -8,6 +8,7 @@ import { provideAppServices } from '@/app/providers/services'
 import { router } from '@/app/router'
 import type { AppConfig } from '@/shared/config'
 import { createMockServices } from './mock-services'
+import { createRemoteServices } from './remote-services'
 
 /** Composes the application once, before mounting. Concrete infrastructure is chosen here. */
 export function createHorizonApp(config: AppConfig): VueApp {
@@ -17,6 +18,11 @@ export function createHorizonApp(config: AppConfig): VueApp {
   app.use(createPinia())
   app.use(router)
   app.use(VueQueryPlugin, { queryClient: createQueryClient() })
-  provideAppServices(app, createMockServices(config))
+  provideAppServices(
+    app,
+    config.dataSource.kind === 'remote'
+      ? createRemoteServices(config.dataSource)
+      : createMockServices(config),
+  )
   return app
 }

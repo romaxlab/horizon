@@ -752,6 +752,23 @@ RemoteVideoProvider
 
 Modules consume contracts, not concrete implementations.
 
+Selection: `VITE_DATA_SOURCE=mock` (default) or `remote` with `VITE_API_URL` and `VITE_WS_URL`
+(validated; required in remote mode). Remote implementations:
+
+```text
+RestFleetRepository        GET  {api}/fleet/snapshot              → FleetSnapshotDto
+RemoteMissionPlanner       POST {api}/missions/plan               → MissionDto (409/422 + {message} = planning error)
+                           POST {api}/missions/{id}/launch | abort → 204
+                           GET  {api}/missions/current            → MissionDto | empty
+RemoteVideoProvider        GET  {api}/uavs/{id}/video             → VideoSourceDto | 404
+WebSocketRealtimeTransport {ws}  JSON envelopes {type: 'telemetry' | 'mission', data}
+```
+
+Wire DTOs are the same snake_case formats the simulator produces. The WebSocket transport does
+not reconnect itself: an unexpected close reaches the fleet sync, which reconnects with backoff
+and reconciles from a fresh REST snapshot — the same flow as in mock mode. Demo controls exist
+only in mock mode.
+
 Placement:
 
 ```text

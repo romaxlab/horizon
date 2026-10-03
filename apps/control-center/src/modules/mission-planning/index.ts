@@ -15,3 +15,4 @@ export {
   type MissionBuilder,
 } from './model/useMissionBuilder'
 export { default as MissionBuilderPanel } from './ui/MissionBuilderPanel.vue'
+export { createRemoteMissionPlanner } from './api/mission.repository'
