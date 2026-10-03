@@ -17,21 +17,18 @@ const {
 }>()
 
 const button = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-md border whitespace-nowrap transition-colors select-none disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full whitespace-nowrap transition-colors select-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4',
   {
     variants: {
       variant: {
-        primary:
-          'border-transparent bg-action-primary text-action-primary-text hover:bg-action-primary-hover',
-        secondary:
-          'border-border-default bg-surface-raised text-text-primary hover:bg-surface-hover',
-        ghost:
-          'border-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary',
-        danger: 'border-transparent bg-status-danger text-text-inverse hover:opacity-90',
+        primary: 'bg-action-primary text-action-primary-text hover:bg-action-primary-hover',
+        secondary: 'bg-fill text-text-primary hover:bg-fill-strong',
+        ghost: 'text-text-secondary hover:bg-fill hover:text-text-primary',
+        danger: 'bg-status-danger text-text-inverse hover:opacity-90',
       },
       size: {
-        sm: 'h-control-sm px-2.5 text-label-md',
-        md: 'h-control-md px-3.5 text-label-lg',
+        sm: 'h-control-sm px-3 text-label-md',
+        md: 'h-control-md px-4 text-label-lg',
       },
       block: { true: 'w-full' },
     },

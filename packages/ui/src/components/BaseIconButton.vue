@@ -19,21 +19,19 @@ const {
 }>()
 
 const iconButton = cva(
-  'inline-flex shrink-0 items-center justify-center rounded-md border transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4',
+  'inline-flex shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4',
   {
     variants: {
       variant: {
-        ghost:
-          'border-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary',
-        secondary:
-          'border-border-default bg-surface-raised text-text-primary hover:bg-surface-hover',
+        ghost: 'text-text-secondary hover:bg-fill hover:text-text-primary',
+        secondary: 'bg-fill text-text-primary hover:bg-fill-strong',
       },
       size: {
         sm: 'size-control-sm',
         md: 'size-control-md',
       },
       pressed: {
-        true: 'border-border-focus bg-surface-hover text-action-primary',
+        true: 'bg-fill-strong text-text-primary',
       },
     },
   },

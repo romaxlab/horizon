@@ -39,7 +39,7 @@ const fill = cva('h-full rounded-full transition-[width] duration-300', {
     :aria-valuenow="Math.round(ratio * 100)"
     aria-valuemin="0"
     aria-valuemax="100"
-    class="h-1.5 w-full overflow-hidden rounded-full bg-surface-hover"
+    class="h-1 w-full overflow-hidden rounded-full bg-fill-strong"
   >
     <div :class="fill({ tone })" :style="{ width: `${ratio * 100}%` }" />
   </div>

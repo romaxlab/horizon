@@ -10,10 +10,10 @@ export { default as BaseSurface } from './components/BaseSurface.vue'
 export { default as BaseText } from './components/BaseText.vue'
 
 export type { AlertVariant } from './components/BaseAlert.vue'
-export type { BadgeVariant } from './components/BaseBadge.vue'
+export type { BadgeAppearance, BadgeVariant } from './components/BaseBadge.vue'
 export type { ButtonSize, ButtonVariant } from './components/BaseButton.vue'
 export type { ProgressTone } from './components/BaseProgress.vue'
-export type { SurfaceVariant } from './components/BaseSurface.vue'
+export type { SurfaceShape, SurfaceVariant } from './components/BaseSurface.vue'
 export type { TextTone, TextVariant } from './components/BaseText.vue'
 
 export { initTheme, useTheme, type Theme } from './theme'

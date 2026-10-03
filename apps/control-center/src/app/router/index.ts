@@ -1,13 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { controlCenterRoutes } from '@/modules/control-center'
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    {
-      path: '/control-center',
-      name: 'control-center',
-      component: () => import('@/app/ControlCenterPlaceholder.vue'),
-    },
+    ...controlCenterRoutes,
     { path: '/:pathMatch(.*)*', redirect: { name: 'control-center' } },
   ],
 })

@@ -44,7 +44,7 @@ const text = cva('', {
       'body-sm': 'text-body-sm',
       'label-lg': 'text-label-lg',
       'label-md': 'text-label-md',
-      'label-sm': 'text-label-sm uppercase',
+      'label-sm': 'text-label-sm',
       caption: 'text-caption',
     },
     tone: {

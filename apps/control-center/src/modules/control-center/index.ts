@@ -1,0 +1,1 @@
+export { controlCenterRoutes } from './routes'

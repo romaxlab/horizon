@@ -14,30 +14,31 @@ defineSlots<{
   actions?: () => unknown
 }>()
 
-const alert = cva(
-  'flex items-start gap-3 rounded-md border-l-2 bg-surface-raised py-2.5 pr-2.5 pl-3',
-  {
-    variants: {
-      variant: {
-        info: 'border-status-info',
-        success: 'border-status-success',
-        warning: 'border-status-warning',
-        danger: 'border-status-danger',
-      },
+const marker = cva('mt-1.5 size-2 shrink-0 rounded-full', {
+  variants: {
+    variant: {
+      info: 'bg-status-info',
+      success: 'bg-status-success',
+      warning: 'bg-status-warning',
+      danger: 'bg-status-danger',
     },
   },
-)
+})
 </script>
 
 <template>
-  <div :role="variant === 'danger' ? 'alert' : 'status'" :class="alert({ variant })">
+  <div
+    :role="variant === 'danger' ? 'alert' : 'status'"
+    class="flex items-start gap-3 rounded-lg bg-surface-raised p-3 shadow-raised"
+  >
+    <span :class="marker({ variant })" aria-hidden="true" />
     <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-      <BaseText variant="label-sm" :tone="variant">{{ title }}</BaseText>
+      <BaseText variant="heading-sm" :tone="variant">{{ title }}</BaseText>
       <BaseText v-if="$slots.default" variant="body-sm" tone="secondary">
         <slot />
       </BaseText>
     </div>
-    <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5">
+    <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5 self-center">
       <slot name="actions" />
     </div>
   </div>

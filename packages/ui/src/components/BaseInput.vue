@@ -29,7 +29,7 @@ const id = useId()
       :type="type"
       :aria-invalid="invalid || undefined"
       :aria-describedby="hint ? `${id}-hint` : undefined"
-      class="h-control-md rounded-md border border-border-control bg-surface-sunken px-2.5 text-body-md text-text-primary transition-colors placeholder:text-text-muted focus-visible:border-border-focus aria-invalid:border-status-danger"
+      class="h-control-md rounded-md border border-border-control bg-fill px-3 text-body-md text-text-primary transition-colors placeholder:text-text-muted focus-visible:border-border-focus aria-invalid:border-status-danger"
       v-bind="$attrs"
     />
     <BaseText v-if="hint" :id="`${id}-hint`" variant="caption" :tone="invalid ? 'danger' : 'muted'">

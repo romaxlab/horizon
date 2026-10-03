@@ -33,17 +33,17 @@ The MVP is primarily one map-first operational workspace:
 
 The map remains visible during the main workflows.
 
-Primary interface regions:
+Primary interface regions — the map is full-bleed and panels float over it:
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│ Header                                                     │
-├───────────────┬───────────────────────────┬────────────────┤
-│ Fleet Panel   │                           │ UAV Inspector  │
-│               │       3D Cesium Map       │                │
-│               │                           │                │
-├───────────────┴───────────────────────────┴────────────────┤
-│ Mission Status / contextual operational surface           │
+│ ( Horizon · mission )            ( connection · time · ◐ ) │
+│ ┌───────────┐                                ┌───────────┐ │
+│ │ Fleet     │                                │ UAV       │ │
+│ │ Panel     │        3D Cesium Map           │ Inspector │ │
+│ │           │        (full-bleed)            │           │ │
+│ └───────────┘                                └───────────┘ │
+│                 ( Mission status capsule )                 │
 └────────────────────────────────────────────────────────────┘
 ```
 

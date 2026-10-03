@@ -2,3 +2,7 @@
 @import '@horizon/ui/styles.css';
 
 @source '../../';
+
+#app {
+  @apply h-full;
+}

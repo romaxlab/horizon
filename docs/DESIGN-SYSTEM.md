@@ -24,6 +24,14 @@ Avoid:
 
 The visual target is a polished professional control application with restrained motion and strong information hierarchy.
 
+Reference: Apple-like minimalism (Apple Maps / Find My on macOS):
+
+- the map is full-bleed; panels float over it as translucent "glass" material;
+- generous radii, hairline edges and soft shadows instead of borders and dividers;
+- system typography (SF Pro on Apple platforms, Inter as fallback);
+- pill-shaped buttons and capsules; neutral fills for controls, hover and selection;
+- status shown as a colored dot plus a neutral text label, not as colored chips.
+
 ---
 
 ## 2. Styling stack
@@ -176,20 +184,20 @@ tokens.css   primitive tokens + light/dark semantic tokens
 theme.css    Tailwind @theme mapping of semantic tokens to utilities
 ```
 
-Tailwind's default color palette, shadows, radii, font sizes, font weights, tracking and leading are reset there. Only named token utilities exist, so classes such as `bg-red-500`, `text-sm` or `font-bold` do not compile. Semantic text/background pairs meet WCAG AA in both themes; control borders meet 3:1.
+Tailwind's default color palette, shadows, radii, font sizes, font weights, tracking and leading are reset there. Only named token utilities exist, so classes such as `bg-red-500`, `text-sm` or `font-bold` do not compile. Semantic text/background pairs meet WCAG AA in both themes, measured on glass surfaces over a worst-case map background; control borders meet 3:1.
 
 Utility naming:
 
 ```text
-bg-canvas / bg-surface / bg-surface-raised / bg-surface-hover / bg-overlay
+bg-canvas / bg-surface / bg-surface-raised / bg-surface-sunken / bg-glass
+bg-fill / bg-fill-strong / bg-surface-hover
 text-text-primary / text-text-secondary / text-text-muted
 border-border-default / border-border-subtle / border-border-control / border-border-focus
 bg-action-primary / text-action-primary-text
-text-status-{success|warning|danger|info|neutral}
-bg-status-{...}-subtle
+text-status-{success|warning|danger|info|neutral} / bg-status-{...}
 text-{display|heading-*|body-*|label-*|caption}
 h-control-{sm|md} / size-control-{sm|md}
-rounded-{sm|md|lg|full} / shadow-floating
+rounded-{sm|md|lg|xl|full} / shadow-floating / shadow-raised
 ```
 
 ---
@@ -307,11 +315,13 @@ Panels should feel lightweight and integrated rather than like a grid of indepen
 Common surface intents may include:
 
 ```text
-panel
-floating
-subtle
-raised
+panel      opaque surface
+floating   translucent glass over the map (default for Control Center panels)
+subtle     neutral fill
+raised     opaque card with soft shadow
 ```
+
+`BaseSurface` also takes `shape="pill"` for capsule controls such as the header clusters and the mission status bar.
 
 Exact variants should follow actual product needs.
 

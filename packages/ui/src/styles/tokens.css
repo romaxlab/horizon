@@ -2,107 +2,120 @@
  * Token source. Raw design values are allowed only in this file.
  *
  * primitive tokens → semantic tokens (light on :root, dark overrides)
+ *
+ * Visual direction: calm, Apple-like minimalism — translucent "glass" surfaces floating over a
+ * full-bleed map, generous radii, hairline edges, soft shadows, restrained color.
  */
 
 :root {
-  /* Primitive: neutral ramp (cool slate) */
-  --neutral-0: #ffffff;
-  --neutral-50: #f6f7f9;
-  --neutral-100: #eceef2;
-  --neutral-200: #dde1e7;
-  --neutral-300: #c3c9d2;
-  --neutral-400: #9aa2ae;
-  --neutral-450: #848c98;
-  --neutral-500: #737c89;
-  --neutral-550: #646c78;
-  --neutral-600: #565e6a;
-  --neutral-700: #3c434d;
-  --neutral-800: #272c34;
-  --neutral-850: #1d2128;
-  --neutral-900: #15181d;
-  --neutral-950: #0e1014;
+  /* Primitive: neutrals */
+  --gray-0: #ffffff;
+  --gray-50: #f5f5f7;
+  --gray-100: #f2f2f7;
+  --gray-500: #8a8a8e;
+  --gray-550: #7c7c80;
+  --gray-600: #6e6e73;
+  --gray-700: #545458;
+  --gray-800: #424245;
+  --gray-900: #1d1d1f;
+  --gray-d-100: #d1d1d6;
+  --gray-d-300: #b4b4ba;
+  --gray-d-700: #2c2c2e;
+  --gray-d-800: #1c1c1e;
+  --gray-d-900: #0b0b0c;
+  --black: #000000;
+  --white: #ffffff;
 
   /* Primitive: accent */
-  --blue-300: #8db8ff;
-  --blue-400: #5f97f5;
-  --blue-500: #3b7be6;
-  --blue-600: #2563cc;
-  --blue-700: #1d4fa3;
+  --blue-ring: #0a84ff;
+  --blue-action: #0066cc;
+  --blue-action-hover: #0058b0;
+  --blue-action-dark: #0071e3;
+  --blue-action-dark-hover: #0062c4;
+  --blue-text: #0049c4;
+  --blue-text-dark: #6cb4ff;
 
-  /* Primitive: status hues */
-  --green-400: #4cc38a;
-  --green-700: #176f45;
-  --amber-400: #f2b84b;
-  --amber-700: #875703;
-  --red-400: #f2706b;
-  --red-700: #b22b26;
+  /* Primitive: status hues (text-safe on glass in their theme) */
+  --green-text: #176429;
+  --green-text-dark: #4ade78;
+  --orange-text: #a33d00;
+  --orange-text-dark: #ffb547;
+  --red-text: #b8001b;
+  --red-text-dark: #ff8a84;
 
-  /* Primitive: shadow tints */
-  --shadow-color-light: rgb(14 16 20 / 0.12);
-  --shadow-color-dark: rgb(0 0 0 / 0.45);
+  /* Primitive: shadows */
+  --shadow-hairline-light: 0 0 0 0.5px rgb(0 0 0 / 0.08);
+  --shadow-soft-light: 0 4px 12px rgb(0 0 0 / 0.06), 0 16px 40px rgb(0 0 0 / 0.1);
+  --shadow-hairline-dark: inset 0 0 0 0.5px rgb(255 255 255 / 0.1);
+  --shadow-soft-dark: 0 4px 12px rgb(0 0 0 / 0.3), 0 16px 40px rgb(0 0 0 / 0.45);
 
   /* Semantic: light theme */
   color-scheme: light;
 
-  --bg-canvas: var(--neutral-100);
-  --bg-surface: var(--neutral-0);
-  --bg-surface-raised: var(--neutral-0);
-  --bg-surface-hover: var(--neutral-100);
-  --bg-surface-sunken: var(--neutral-50);
-  --bg-overlay: color-mix(in oklab, var(--neutral-0) 92%, transparent);
+  --bg-canvas: var(--gray-100);
+  --bg-surface: var(--gray-0);
+  --bg-surface-raised: var(--gray-0);
+  --bg-surface-sunken: var(--gray-50);
+  /* Translucent material for panels floating over the map. */
+  --bg-glass: color-mix(in oklab, var(--gray-0) 88%, transparent);
+  /* Neutral fills for controls, hover and selection; work on any surface. */
+  --bg-fill: color-mix(in oklab, var(--black) 5%, transparent);
+  --bg-fill-strong: color-mix(in oklab, var(--black) 9%, transparent);
+  --bg-surface-hover: var(--bg-fill);
 
-  --text-primary: var(--neutral-900);
-  --text-secondary: var(--neutral-700);
-  --text-muted: var(--neutral-600);
-  --text-inverse: var(--neutral-0);
+  --text-primary: var(--gray-900);
+  --text-secondary: var(--gray-800);
+  --text-muted: var(--gray-700);
+  --text-inverse: var(--white);
 
-  --border-default: var(--neutral-200);
-  --border-subtle: var(--neutral-100);
-  --border-control: var(--neutral-450);
-  --border-focus: var(--blue-500);
+  --border-default: color-mix(in oklab, var(--black) 10%, transparent);
+  --border-subtle: color-mix(in oklab, var(--black) 6%, transparent);
+  --border-control: var(--gray-500);
+  --border-focus: var(--blue-ring);
 
-  --action-primary: var(--blue-600);
-  --action-primary-hover: var(--blue-700);
-  --action-primary-text: var(--neutral-0);
+  --action-primary: var(--blue-action);
+  --action-primary-hover: var(--blue-action-hover);
+  --action-primary-text: var(--white);
 
-  --status-success: var(--green-700);
-  --status-warning: var(--amber-700);
-  --status-danger: var(--red-700);
-  --status-info: var(--blue-600);
-  --status-neutral: var(--neutral-500);
+  --status-success: var(--green-text);
+  --status-warning: var(--orange-text);
+  --status-danger: var(--red-text);
+  --status-info: var(--blue-text);
+  --status-neutral: var(--gray-600);
 
-  --elevation-floating: 0 8px 24px var(--shadow-color-light);
+  --elevation-floating: var(--shadow-hairline-light), var(--shadow-soft-light);
+  --elevation-raised: var(--shadow-hairline-light), 0 2px 8px rgb(0 0 0 / 0.06);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg-canvas: var(--neutral-950);
-  --bg-surface: var(--neutral-900);
-  --bg-surface-raised: var(--neutral-850);
-  --bg-surface-hover: var(--neutral-800);
-  --bg-surface-sunken: var(--neutral-950);
-  --bg-overlay: color-mix(in oklab, var(--neutral-900) 88%, transparent);
+  --bg-canvas: var(--gray-d-900);
+  --bg-surface: var(--gray-d-800);
+  --bg-surface-raised: var(--gray-d-700);
+  --bg-surface-sunken: var(--gray-d-700);
+  --bg-glass: color-mix(in oklab, var(--gray-d-800) 88%, transparent);
+  --bg-fill: color-mix(in oklab, var(--white) 8%, transparent);
+  --bg-fill-strong: color-mix(in oklab, var(--white) 13%, transparent);
 
-  --text-primary: var(--neutral-50);
-  --text-secondary: var(--neutral-300);
-  --text-muted: var(--neutral-400);
-  --text-inverse: var(--neutral-950);
+  --text-primary: var(--gray-50);
+  --text-secondary: var(--gray-d-100);
+  --text-muted: var(--gray-d-300);
+  --text-inverse: var(--gray-900);
 
-  --border-default: var(--neutral-800);
-  --border-subtle: var(--neutral-850);
-  --border-control: var(--neutral-550);
-  --border-focus: var(--blue-400);
+  --border-default: color-mix(in oklab, var(--white) 12%, transparent);
+  --border-subtle: color-mix(in oklab, var(--white) 8%, transparent);
+  --border-control: var(--gray-550);
 
-  --action-primary: var(--blue-600);
-  --action-primary-hover: var(--blue-700);
-  --action-primary-text: var(--neutral-0);
+  --action-primary: var(--blue-action-dark);
+  --action-primary-hover: var(--blue-action-dark-hover);
 
-  --status-success: var(--green-400);
-  --status-warning: var(--amber-400);
-  --status-danger: var(--red-400);
-  --status-info: var(--blue-300);
-  --status-neutral: var(--neutral-400);
+  --status-success: var(--green-text-dark);
+  --status-warning: var(--orange-text-dark);
+  --status-danger: var(--red-text-dark);
+  --status-info: var(--blue-text-dark);
+  --status-neutral: var(--gray-d-300);
 
-  --elevation-floating: 0 8px 24px var(--shadow-color-dark);
+  --elevation-floating: var(--shadow-hairline-dark), var(--shadow-soft-dark);
+  --elevation-raised: var(--shadow-hairline-dark), 0 2px 8px rgb(0 0 0 / 0.3);
 }
