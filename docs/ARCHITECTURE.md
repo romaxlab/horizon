@@ -636,6 +636,20 @@ Rendering paths (`modules/fleet`, `modules/map`):
 - mission routes/waypoints are static geometry, rebuilt only when the overlay or ground height
   changes; demo diagnostics show coalesced and stale-dropped telemetry per second.
 
+Benchmark (Stress preset, mock backend, Chromium, 2026-10-03):
+
+```text
+fleet                       480 UAVs (6 flying, rest parked)
+telemetry in                ~500 msg/s at 1× · ~4000 msg/s at 8×
+store flushes               ~4–10 /s (≤ 1 per flush interval)
+Cesium                      60 FPS under active load · ~4 renders/s when idle
+long tasks                  0 in 30 s, including select / inspector / follow
+memory (after GC, 75 s 8×)  stable, ~156–166 MB
+```
+
+Decision: the Entity API stays and no Web Worker is used until profiling shows a real
+bottleneck; re-run this benchmark before changing either.
+
 Example target:
 
 ```text
