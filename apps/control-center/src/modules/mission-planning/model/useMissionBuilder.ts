@@ -2,7 +2,7 @@ import type { GeoPoint, Mission } from '@horizon/domain'
 import { useMutation } from '@tanstack/vue-query'
 import { computed, inject, provide, ref, type InjectionKey, type Ref } from 'vue'
 import { useAppServices } from '@/app/providers/services'
-import type { MissionPlanRequest } from './mission.types'
+import { MissionPlanningError, type MissionPlanRequest } from './mission.types'
 
 export type BuilderStep = 'details' | 'area' | 'review'
 
@@ -57,6 +57,11 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
   const error = computed(() => {
     const failure = planMutation.error.value ?? launchMutation.error.value
     return failure ? failure.message : null
+  })
+  /** No-fly zone that blocked the last plan; the map highlights it. */
+  const conflictGeofenceId = computed(() => {
+    const failure = planMutation.error.value
+    return failure instanceof MissionPlanningError ? failure.geofenceId : null
   })
   const busy = computed(() => planMutation.isPending.value || launchMutation.isPending.value)
 
@@ -154,6 +159,7 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     detailErrors,
     areaReady,
     error,
+    conflictGeofenceId,
     busy,
     summary,
     overlay,

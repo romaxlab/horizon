@@ -101,6 +101,13 @@ const activeHint = computed(
               Telemetry
             </BaseButton>
           </div>
+          <BaseButton
+            size="sm"
+            :disabled="!controls.target.value"
+            @click="controls.inject('breachGeofence')"
+          >
+            No-fly zone breach
+          </BaseButton>
           <div class="grid grid-cols-2 gap-1.5">
             <BaseButton size="sm" @click="controls.networkOutage()">Network outage</BaseButton>
             <BaseButton size="sm" variant="primary" @click="controls.restoreAll()">

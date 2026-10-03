@@ -25,6 +25,7 @@ const {
   builder,
   canCreateMission,
   missionOverlay,
+  geofenceOverlay,
   selectedFeed,
   incidents,
   inspectIncident,
@@ -65,6 +66,7 @@ watch(selectedUavId, (id) => {
         :fleet="fleetFeed"
         :selected-uav-id="selectedUavId"
         :mission-overlay="missionOverlay"
+        :geofences="geofenceOverlay"
         :drawing="builder.drawing.value"
         @select="selectUav"
         @draw="builder.addPoint"

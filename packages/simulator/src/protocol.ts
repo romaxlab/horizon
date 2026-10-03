@@ -75,6 +75,12 @@ export interface MissionDto {
 }
 
 /** Fake REST: POST /missions/plan body. */
+export interface GeofenceDto {
+  id: string
+  name: string
+  polygon: GeoPointDto[]
+}
+
 export interface MissionPlanRequestDto {
   name: string
   area: { polygon: GeoPointDto[] }

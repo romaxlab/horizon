@@ -1,4 +1,4 @@
-import type { GeoPosition, MissionArea } from '@horizon/domain'
+import type { Geofence, GeoPosition, MissionArea } from '@horizon/domain'
 
 /** Fleet base: the center of the football stadium pitch east of the demo mission area. */
 export const DEMO_BASE: GeoPosition = { latitude: 24.452756, longitude: 54.392171, altitude: 0 }
@@ -33,3 +33,41 @@ export const DEMO_MISSION = {
     ],
   } satisfies MissionArea,
 } as const
+
+/**
+ * Fixed no-fly zones around the demo site, placed clear of the demo mission, its transit from
+ * the base and the default map view, so the prepared mission and a first drawn area stay
+ * plannable.
+ */
+export const DEMO_GEOFENCES: Geofence[] = [
+  {
+    id: 'nfz-helipad',
+    name: 'Hospital helipad',
+    polygon: [
+      { latitude: 24.441, longitude: 54.358 },
+      { latitude: 24.446, longitude: 54.358 },
+      { latitude: 24.446, longitude: 54.364 },
+      { latitude: 24.441, longitude: 54.364 },
+    ],
+  },
+  {
+    id: 'nfz-palace',
+    name: 'Palace grounds',
+    polygon: [
+      { latitude: 24.4765, longitude: 54.3635 },
+      { latitude: 24.4805, longitude: 54.366 },
+      { latitude: 24.4795, longitude: 54.3725 },
+      { latitude: 24.476, longitude: 54.371 },
+    ],
+  },
+  {
+    id: 'nfz-marina',
+    name: 'Marina',
+    polygon: [
+      { latitude: 24.4625, longitude: 54.3505 },
+      { latitude: 24.4685, longitude: 54.3495 },
+      { latitude: 24.469, longitude: 54.3555 },
+      { latitude: 24.4635, longitude: 54.3565 },
+    ],
+  },
+]

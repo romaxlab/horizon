@@ -20,6 +20,7 @@ import {
 import type { MapBasemap, MapPerspective } from '../../model/map.store'
 import { createCameraController, OPERATING_SITE } from './camera-controller'
 import { createClusterLayer } from './cluster-layer'
+import { createGeofenceLayer, type GeofenceOverlay } from './geofence-layer'
 import { createMissionLayer, type MissionOverlay } from './mission-layer'
 import { readMapPalette } from './palette'
 import { createUavLayer } from './uav-layer'
@@ -90,6 +91,7 @@ export interface MapScene {
   setBasemap(basemap: MapBasemap): void
   setPerspective(perspective: MapPerspective): void
   setMissionOverlay(overlay: MissionOverlay | null): void
+  setGeofences(zones: readonly GeofenceOverlay[]): void
   /** While drawing, clicks add area points instead of selecting UAVs. */
   setDrawing(drawing: boolean): void
   home(): void
@@ -169,6 +171,7 @@ export function createMapScene({
   const layer = createUavLayer(viewer, palette)
   const clusters = createClusterLayer(viewer, layer, palette)
   const missionLayer = createMissionLayer(viewer, palette)
+  const geofenceLayer = createGeofenceLayer(viewer, palette)
   let drawing = false
 
   function setGroundHeight(meters: number) {
@@ -428,6 +431,7 @@ export function createMapScene({
       layer.setPalette(palette)
       clusters.setPalette(palette)
       missionLayer.setPalette(palette)
+      geofenceLayer.setPalette(palette)
       if (basemap === 'map') replaceBasemap()
     }),
     setBasemap: withRender((next: MapBasemap) => {
@@ -455,6 +459,9 @@ export function createMapScene({
     setMissionOverlay: withRender((overlay: MissionOverlay | null) => {
       missionLayer.set(overlay)
     }),
+    setGeofences: withRender((zones: readonly GeofenceOverlay[]) => {
+      geofenceLayer.set(zones)
+    }),
     setDrawing: withRender((next: boolean) => {
       drawing = next
       scene.canvas.style.cursor = next ? 'crosshair' : ''
@@ -467,6 +474,7 @@ export function createMapScene({
       handler.destroy()
       clusters.destroy()
       missionLayer.destroy()
+      geofenceLayer.destroy()
       layer.destroy()
       viewer.destroy()
     },

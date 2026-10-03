@@ -6,9 +6,9 @@ import { parseMission } from './mission.parsers'
 /** Backend rejections the operator can act on (e.g. area too small, UAVs unavailable). */
 const PLANNING_REJECTIONS = new Set([409, 422])
 
-function messageOf(body: unknown): string | null {
-  const message = (body as { message?: unknown } | null)?.message
-  return typeof message === 'string' ? message : null
+function field(body: unknown, key: 'message' | 'geofence_id'): string | null {
+  const value = (body as Record<string, unknown> | null)?.[key]
+  return typeof value === 'string' ? value : null
 }
 
 /** Re-throws backend rejections as planning errors; other failures stay HTTP errors. */
@@ -21,7 +21,10 @@ async function planning<T>(request: Promise<T>, fallback: string): Promise<T> {
       error.status !== null &&
       PLANNING_REJECTIONS.has(error.status)
     ) {
-      throw new MissionPlanningError(messageOf(error.body) ?? fallback)
+      throw new MissionPlanningError(
+        field(error.body, 'message') ?? fallback,
+        field(error.body, 'geofence_id'),
+      )
     }
     throw error
   }

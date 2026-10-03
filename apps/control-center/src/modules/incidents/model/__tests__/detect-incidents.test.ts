@@ -9,6 +9,7 @@ const uav = (overrides: Partial<UavObservation> = {}): UavObservation => ({
   battery: 80,
   lowBattery: false,
   weakSignal: false,
+  geofence: null,
   ...overrides,
 })
 
@@ -43,6 +44,26 @@ describe('detectIncidents', () => {
     expect(detectIncidents(low, low).incidents).toEqual([])
     expect(detectIncidents(low, before).resolutions).toEqual([
       { uavId: 'uav-03', types: ['LOW_BATTERY'] },
+    ])
+  })
+
+  it('raises a breach when a UAV enters a no-fly zone and resolves it on exit', () => {
+    const outside = observe([uav()])
+    const inside = observe([uav({ geofence: 'Marina' })])
+    const result = detectIncidents(outside, inside)
+    expect(result.incidents).toEqual([
+      {
+        type: 'GEOFENCE_BREACH',
+        severity: 'critical',
+        uavId: 'uav-03',
+        uavName: 'UAV-03',
+        missionId: 'm-1',
+        detail: 'Marina',
+      },
+    ])
+    expect(detectIncidents(inside, inside).incidents).toEqual([])
+    expect(detectIncidents(inside, outside).resolutions).toEqual([
+      { uavId: 'uav-03', types: ['GEOFENCE_BREACH'] },
     ])
   })
 

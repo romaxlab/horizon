@@ -10,6 +10,7 @@ export type OperationalEventType =
   | 'CONNECTION_RESTORED'
   | 'MISSION_COMPLETED'
   | 'MISSION_ABORTED'
+  | 'GEOFENCE_BREACH'
 
 export interface OperationalEvent {
   id: string

@@ -728,6 +728,7 @@ interface AppServices {
   fleetRepository: FleetRepository
   realtimeTransport: RealtimeTransport
   missionPlanner: MissionPlanner
+  airspaceRepository: AirspaceRepository
   videoProvider: VideoProvider
 }
 ```
@@ -757,10 +758,11 @@ Selection: `VITE_DATA_SOURCE=mock` (default) or `remote` with `VITE_API_URL` and
 
 ```text
 RestFleetRepository        GET  {api}/fleet/snapshot              → FleetSnapshotDto
-RemoteMissionPlanner       POST {api}/missions/plan               → MissionDto (409/422 + {message} = planning error)
+RemoteMissionPlanner       POST {api}/missions/plan               → MissionDto (409/422 + {message, geofence_id?} = planning error)
                            POST {api}/missions/{id}/launch | abort → 204
                            GET  {api}/missions/current            → MissionDto | empty
 RemoteVideoProvider        GET  {api}/uavs/{id}/video             → VideoSourceDto | 404
+RestAirspaceRepository     GET  {api}/airspace/geofences          → [{id, name, polygon: [{lat, lon}]}]
 WebSocketRealtimeTransport {ws}  JSON envelopes {type: 'telemetry' | 'mission', data}
 ```
 
@@ -851,7 +853,8 @@ Demo controls send commands to the simulator. They never patch application store
 Implementation: `DemoControl` (`modules/demo-controls`) is provided only by the mock composition
 and only when `VITE_DEMO_CONTROLS` is on (default in dev). Presets: NORMAL (demo mission),
 INCIDENT (NORMAL plus a scheduled failure sequence on mission UAVs: signal → low battery →
-telemetry loss → backend outage → reconnect → restore), STRESS (480 UAVs). Presets and reset
+telemetry loss → backend outage → reconnect → restore), STRESS (480 UAVs). Targeted injections
+(battery, signal, telemetry, no-fly zone breach) apply to the selected UAV. Presets and reset
 replace backend state, so the app resyncs through the normal snapshot path. Diagnostics show
 incoming telemetry rate, store flush rate, fleet size and connection state.
 
@@ -923,6 +926,7 @@ TELEMETRY_STALE
 CONNECTION_LOST
 CONNECTION_RESTORED
 MISSION_COMPLETED
+GEOFENCE_BREACH
 ```
 
 Event behavior:
@@ -940,6 +944,18 @@ alerts until acknowledged or resolved by the opposite transition (e.g. connectio
 During a backend outage one `CONNECTION_LOST` replaces per-UAV link events. `WAYPOINT_REACHED` is
 not emitted (too noisy for the feed); `MISSION_ABORTED` was added for operator stops. Inspect
 selects the UAV, focuses the map and opens the inspector through the normal selection path.
+
+### Geofences
+
+No-fly zones are fixed backend data (`modules/airspace`, `AirspaceRepository`), loaded once
+through TanStack Query (`staleTime: Infinity`) and drawn on the map. Planning flies around them:
+scan lines skip each zone plus a margin, and every leg — transit from the base, jumps between
+scan lines, and the return home (also after low battery or a stop) — detours along the shortest
+path around the zones (visibility graph over inflated zone corners, `@horizon/simulator`
+`airspace-routing.ts`). A plan is rejected only when nothing is left to scan; the error carries
+the zone id and the map highlights it. A flying UAV inside a zone (e.g. the demo breach) raises a
+critical `GEOFENCE_BREACH`, resolved when it leaves; the zone is highlighted meanwhile.
+Containment uses planar tests on longitude/latitude (`@horizon/domain`), adequate at site scale.
 
 ---
 

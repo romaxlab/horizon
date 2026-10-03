@@ -96,6 +96,13 @@ export function detectIncidents(previous: Observation | null, next: Observation)
       resolutions.push({ uavId: uav.id, types: ['SIGNAL_DEGRADED'] })
     }
 
+    if (uav.geofence !== null && uav.geofence !== was.geofence) {
+      incidents.push(uavIncident('GEOFENCE_BREACH', uav, missionId, uav.geofence))
+    }
+    if (uav.geofence === null && was.geofence !== null) {
+      resolutions.push({ uavId: uav.id, types: ['GEOFENCE_BREACH'] })
+    }
+
     if (!next.backendLive || !previous.backendLive || uav.link === was.link) continue
     if (uav.link === 'stale' && was.link === 'fresh') {
       incidents.push(uavIncident('TELEMETRY_STALE', uav, missionId, 'No telemetry for 5 s'))

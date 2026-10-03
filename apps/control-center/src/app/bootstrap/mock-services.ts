@@ -1,6 +1,7 @@
 import { createMockRealtimeTransport } from '@horizon/realtime'
 import { createSimulator, type Simulator, type SimulatorCommand } from '@horizon/simulator'
 import type { AppServices } from '@/app/providers/services'
+import { parseGeofences, type AirspaceRepository } from '@/modules/airspace'
 import { parseFleetSnapshot, type FleetRepository } from '@/modules/fleet'
 import {
   MissionPlanningError,
@@ -59,7 +60,7 @@ export function createMockServices(config: AppConfig): AppServices {
     async plan(planRequest, signal) {
       await backendCall(signal)
       const result = simulator.planMission(toPlanRequestDto(planRequest))
-      if (!result.ok) throw new MissionPlanningError(result.reason)
+      if (!result.ok) throw new MissionPlanningError(result.reason, result.geofenceId)
       return parseMission(structuredClone(result.mission))
     },
     async launch(missionId) {
@@ -76,6 +77,13 @@ export function createMockServices(config: AppConfig): AppServices {
       await backendCall(signal)
       const mission = simulator.getActiveMission()
       return mission ? parseMission(structuredClone(mission)) : null
+    },
+  }
+
+  const airspaceRepository: AirspaceRepository = {
+    async getGeofences(signal) {
+      await backendCall(signal)
+      return parseGeofences(structuredClone(simulator.getGeofences()))
     },
   }
 
@@ -112,6 +120,8 @@ export function createMockServices(config: AppConfig): AppServices {
         return { type: 'setNetwork', up: false }
       case 'restoreAll':
         return { type: 'restoreAll' }
+      case 'breachGeofence':
+        return { type: 'breachGeofence', uavId: command.uavId }
       case 'completeMission':
         return { type: 'completeMission' }
       case 'reset':
@@ -141,6 +151,7 @@ export function createMockServices(config: AppConfig): AppServices {
     demoControl,
     videoProvider,
     missionPlanner,
+    airspaceRepository,
     realtimeTransport: createMockRealtimeTransport(simulator),
   }
 }

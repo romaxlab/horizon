@@ -1,3 +1,4 @@
+export { isPointInPolygon, pathEntersPolygon, polygonsOverlap, type Geofence } from './airspace'
 export type { OperationalEvent, OperationalEventType, EventSeverity } from './events'
 export {
   bearingDegrees,

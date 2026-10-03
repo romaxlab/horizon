@@ -9,6 +9,8 @@ export interface UavObservation {
   battery: number | null
   lowBattery: boolean
   weakSignal: boolean
+  /** Name of the no-fly zone the UAV is flying in; null outside restricted airspace. */
+  geofence: string | null
 }
 
 export interface MissionObservation {
@@ -47,6 +49,7 @@ export const severityOf: Record<OperationalEventType, EventSeverity> = {
   WAYPOINT_REACHED: 'info',
   MISSION_COMPLETED: 'info',
   MISSION_ABORTED: 'warning',
+  GEOFENCE_BREACH: 'critical',
   LOW_BATTERY: 'critical',
   SIGNAL_DEGRADED: 'warning',
   TELEMETRY_STALE: 'warning',

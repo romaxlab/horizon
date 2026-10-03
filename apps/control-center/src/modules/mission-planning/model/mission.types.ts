@@ -11,6 +11,14 @@ export interface MissionPlanRequest {
 /** Planning failures the operator can act on (e.g. area too small, not enough UAVs). */
 export class MissionPlanningError extends Error {
   override name = 'MissionPlanningError'
+
+  constructor(
+    message: string,
+    /** No-fly zone the plan conflicts with, when that is the reason. */
+    readonly geofenceId: string | null = null,
+  ) {
+    super(message)
+  }
 }
 
 /** Mission backend boundary. Mock and remote implementations share this contract. */

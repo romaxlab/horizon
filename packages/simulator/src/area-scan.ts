@@ -5,6 +5,7 @@ import {
   type UavRoute,
   type Waypoint,
 } from '@horizon/domain'
+import type { AirspaceRouter } from './airspace-routing'
 
 export interface AreaScanRequest {
   area: MissionArea
@@ -15,6 +16,8 @@ export interface AreaScanRequest {
   /** Distance between scan lines. Defaults to a camera footprint of half the altitude. */
   lineSpacingMeters?: number
   cruiseSpeedMps: number
+  /** No-fly zones: scan lines skip them and every leg (incl. transit from home) detours. */
+  airspace?: AirspaceRouter
 }
 
 export class AreaScanError extends Error {
@@ -56,9 +59,34 @@ function clipVerticalLine(polygon: Vec[], x: number): [number, number][] {
   return segments
 }
 
-function routeDistance(home: GeoPoint, waypoints: GeoPoint[]): number {
-  const path = [home, ...waypoints, home]
-  return path.slice(1).reduce((sum, point, i) => sum + distanceMeters(path[i] ?? point, point), 0)
+/** Removes the parts of `segments` covered by `holes` (all sorted [bottom, top] intervals). */
+function subtract(segments: [number, number][], holes: [number, number][]): [number, number][] {
+  let result = segments
+  for (const [holeBottom, holeTop] of holes) {
+    result = result.flatMap(([bottom, top]): [number, number][] => {
+      if (holeTop <= bottom || holeBottom >= top) return [[bottom, top]]
+      const parts: [number, number][] = []
+      if (holeBottom > bottom) parts.push([bottom, holeBottom])
+      if (holeTop < top) parts.push([holeTop, top])
+      return parts
+    })
+  }
+  return result
+}
+
+const pathDistance = (path: GeoPoint[]) =>
+  path.slice(1).reduce((sum, point, i) => sum + distanceMeters(path[i] ?? point, point), 0)
+
+/** Inserts detours between consecutive points so no leg crosses a no-fly zone. */
+function withDetours(path: GeoPoint[], airspace: AirspaceRouter | undefined): GeoPoint[] {
+  if (!airspace) return path
+  return path.flatMap((point, i) => {
+    const previous = path[i - 1]
+    if (!previous) return [point]
+    const detour = airspace.route(previous, point)
+    if (!detour) throw new AreaScanError('No clear path around the no-fly zones')
+    return [...detour, point]
+  })
 }
 
 /**
@@ -76,6 +104,9 @@ export function planAreaScan(request: AreaScanRequest): UavRoute[] {
   const origin = area.polygon[0] ?? { latitude: 0, longitude: 0 }
   const projection = createProjection(origin)
   const polygon = area.polygon.map(projection.toLocal)
+  const exclusions = (request.airspace?.exclusions ?? []).map((zone) =>
+    zone.map(projection.toLocal),
+  )
   const minX = Math.min(...polygon.map((p) => p.x))
   const maxX = Math.max(...polygon.map((p) => p.x))
 
@@ -93,21 +124,29 @@ export function planAreaScan(request: AreaScanRequest): UavRoute[] {
     for (let line = fromLine; line < toLine; line++) {
       const x = firstX + line * spacing
       const upward = (line - fromLine) % 2 === 0
-      const segments = clipVerticalLine(polygon, x)
+      const segments = subtract(
+        clipVerticalLine(polygon, x),
+        exclusions.flatMap((zone) => clipVerticalLine(zone, x)),
+      )
       for (const [bottom, top] of upward ? segments : segments.slice().reverse()) {
         const [start, end] = upward ? [bottom, top] : [top, bottom]
         points.push({ x, y: start }, { x, y: end })
       }
     }
 
-    const geoPoints = points.map(projection.toGeo)
+    // Home → scan → (return home is routed at flight time, see the simulator).
+    const scan = points.map(projection.toGeo)
+    const flown = scan.length > 0 ? withDetours([uav.home, ...scan], request.airspace) : [uav.home]
+    const geoPoints = flown.slice(1)
+    const back =
+      scan.length > 0 ? withDetours([scan.at(-1) ?? uav.home, uav.home], request.airspace) : []
     const waypoints: Waypoint[] = geoPoints.map((point, order) => ({
       id: `${uav.id}-wp-${order}`,
       ...point,
       altitude,
       order,
     }))
-    const distance = routeDistance(uav.home, geoPoints)
+    const distance = pathDistance([...flown, ...back.slice(1)])
     return {
       uavId: uav.id,
       waypoints,

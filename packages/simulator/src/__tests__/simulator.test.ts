@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { distanceMeters } from '@horizon/domain'
-import { DEMO_BASE, DEMO_MISSION, DEMO_PARKING, STRESS_FLEET_SIZE } from '../demo'
+import { distanceMeters, isPointInPolygon, pathEntersPolygon } from '@horizon/domain'
+import { DEMO_BASE, DEMO_GEOFENCES, DEMO_MISSION, DEMO_PARKING, STRESS_FLEET_SIZE } from '../demo'
 import type { MissionDto, SimulatorMessage, TelemetryDto } from '../protocol'
 import { createSimulator, type SimulatorOptions } from '../simulator'
 
@@ -414,5 +414,112 @@ describe('createSimulator', () => {
       () => simulator.getActiveMission()?.status === 'completed',
       30 * 60,
     )
+  })
+
+  it('plans scan lines and transit around no-fly zones instead of through them', () => {
+    const { simulator } = record()
+    // Overlaps the Marina zone, and transit from the base would cut across the helipad zone.
+    const area = {
+      polygon: [
+        { lat: 24.436, lon: 54.345 },
+        { lat: 24.468, lon: 54.345 },
+        { lat: 24.468, lon: 54.356 },
+        { lat: 24.436, lon: 54.356 },
+      ],
+    }
+    const result = simulator.planMission({ name: 'West', area, altitude_m: 120, uav_count: 3 })
+    if (!result.ok) throw new Error(result.reason)
+    const homes = new Map(
+      simulator
+        .getFleetSnapshot()
+        .telemetry.map((t) => [t.uav_id, { latitude: t.lat, longitude: t.lon }]),
+    )
+    for (const route of result.mission.routes) {
+      const home = homes.get(route.uav_id)
+      if (!home) throw new Error('unknown UAV')
+      const path = [
+        home,
+        ...route.waypoints.map((w) => ({ latitude: w.lat, longitude: w.lon })),
+        home,
+      ]
+      for (const zone of DEMO_GEOFENCES) {
+        expect(pathEntersPolygon(path.slice(0, -1), zone.polygon)).toBe(false)
+      }
+    }
+  })
+
+  it('flies a detoured mission and its return without entering a no-fly zone', () => {
+    const { simulator, messages } = record()
+    // Behind the helipad zone as seen from the base.
+    const behindHelipad = {
+      polygon: [
+        { lat: 24.436, lon: 54.345 },
+        { lat: 24.44, lon: 54.345 },
+        { lat: 24.44, lon: 54.353 },
+        { lat: 24.436, lon: 54.353 },
+      ],
+    }
+    const plan = simulator.planMission({
+      name: 'South',
+      area: behindHelipad,
+      altitude_m: 60,
+      uav_count: 1,
+    })
+    if (!plan.ok) throw new Error(plan.reason)
+    simulator.dispatch({ type: 'launchMission', missionId: plan.mission.id })
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      3600,
+    )
+    const flown = telemetryOf(messages, plan.mission.assigned_uav_ids[0] ?? '')
+    expect(flown.some((t) => t.flight_phase === 'returning')).toBe(true)
+    for (const zone of DEMO_GEOFENCES) {
+      expect(
+        flown.some((t) => isPointInPolygon({ latitude: t.lat, longitude: t.lon }, zone.polygon)),
+      ).toBe(false)
+    }
+  })
+
+  it('rejects an area that lies entirely inside a no-fly zone, naming the zone', () => {
+    const { simulator } = record()
+    const marina = DEMO_GEOFENCES.find((zone) => zone.id === 'nfz-marina')
+    const inside = {
+      polygon: [
+        { lat: 24.4645, lon: 54.3515 },
+        { lat: 24.4665, lon: 54.3515 },
+        { lat: 24.4665, lon: 54.354 },
+        { lat: 24.4645, lon: 54.354 },
+      ],
+    }
+    expect(
+      simulator.planMission({ name: 'x', area: inside, altitude_m: 40, uav_count: 1 }),
+    ).toMatchObject({ ok: false, geofenceId: marina?.id })
+  })
+
+  it('drifts a mission UAV into the nearest no-fly zone, then resumes its route', () => {
+    const { simulator } = record()
+    expect(simulator.dispatch({ type: 'breachGeofence', uavId: 'uav-01' })).toMatchObject({
+      ok: false,
+    })
+    simulator.dispatch({ type: 'startDemoMission' })
+    const uavId = simulator.getActiveMission()?.assigned_uav_ids[0] ?? ''
+    simulator.step(60_000)
+    expect(simulator.dispatch({ type: 'breachGeofence', uavId })).toEqual({ ok: true })
+
+    const position = () => {
+      const t = simulator.getFleetSnapshot().telemetry.find((x) => x.uav_id === uavId)
+      return { latitude: t?.lat ?? 0, longitude: t?.lon ?? 0 }
+    }
+    const inAnyZone = () => DEMO_GEOFENCES.some((z) => isPointInPolygon(position(), z.polygon))
+    const step = (ms: number) => {
+      simulator.step(ms)
+    }
+    runUntil(step, inAnyZone, 600)
+    runUntil(step, () => !inAnyZone(), 600)
+    const phase = simulator.getFleetSnapshot().telemetry.find((x) => x.uav_id === uavId)
+    expect(phase?.flight_phase).toBe('mission')
   })
 })

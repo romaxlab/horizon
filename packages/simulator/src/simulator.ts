@@ -2,15 +2,19 @@ import {
   bearingDegrees,
   destinationPoint,
   distanceMeters,
+  polygonsOverlap,
+  type GeoPoint,
   type GeoPosition,
   type ReturnReason,
   type Uav,
   type Waypoint,
 } from '@horizon/domain'
+import { createAirspaceRouter } from './airspace-routing'
 import { planAreaScan } from './area-scan'
 import {
   DEMO_BASE,
   DEMO_FLEET_SIZE,
+  DEMO_GEOFENCES,
   DEMO_MISSION,
   DEMO_PARKING,
   STRESS_FLEET_SIZE,
@@ -20,6 +24,7 @@ import {
 import { generateFleet, type ParkingLayout } from './fleet'
 import type {
   FleetSnapshotDto,
+  GeofenceDto,
   GeoPointDto,
   MissionDto,
   MissionPlanRequestDto,
@@ -54,6 +59,8 @@ export type SimulatorCommand =
   | { type: 'setSignalDegraded'; uavId: string; degraded: boolean }
   /** Demo/test control: backend ↔ client network outage (snapshot and stream unreachable). */
   | { type: 'setNetwork'; up: boolean }
+  /** Demo control: a mission UAV drifts off its route into the nearest no-fly zone, then resumes. */
+  | { type: 'breachGeofence'; uavId: string }
   /** Demo control: finishes the active mission's scan now; UAVs return and land. */
   | { type: 'completeMission' }
   /** Demo control: simulation speed (1 = real time). */
@@ -64,7 +71,10 @@ export type SimulatorCommand =
   | { type: 'applyPreset'; preset: DemoPreset }
   | { type: 'reset' }
 
-export type PlanResult = { ok: true; mission: MissionDto } | { ok: false; reason: string }
+export type PlanResult =
+  | { ok: true; mission: MissionDto }
+  /** `geofenceId`: the no-fly zone the plan conflicts with, if that is the reason. */
+  | { ok: false; reason: string; geofenceId?: string }
 
 export type CommandResult = { ok: true } | { ok: false; reason: string }
 
@@ -75,6 +85,8 @@ export interface Simulator {
   getFleetSnapshot(): FleetSnapshotDto
   /** Fake REST: the current (active or most recent) mission. */
   getActiveMission(): MissionDto | null
+  /** Fake REST: no-fly zones. */
+  getGeofences(): GeofenceDto[]
   /** Fake REST: plans an Area Scan with standby UAVs; the plan is kept until launched. */
   planMission(request: MissionPlanRequestDto): PlanResult
   /** Fake realtime stream. */
@@ -105,6 +117,8 @@ const RETURN_RESERVE_PCT = 8
 const DEGRADED_SIGNAL_PENALTY = 75
 /** Parked UAVs all face along the parking rows so the formation reads as an even grid. */
 const PARKED_HEADING = (DEMO_PARKING.axisBearing + 180) % 360
+/** Plans and returns detour around the fixed no-fly zones. */
+const airspace = createAirspaceRouter(DEMO_GEOFENCES)
 
 type Phase = 'parked' | 'mission' | 'returning'
 
@@ -126,6 +140,10 @@ interface UavRuntime {
   missionId: string | null
   route: Waypoint[]
   waypointIndex: number
+  /** Turn points around no-fly zones on the way home, flown at the return layer. */
+  returnPath: GeoPoint[]
+  /** Off-route point the UAV is drifting to (geofence breach demo); null on route. */
+  diversion: GeoPosition | null
 }
 
 const toGeoPoint = ({ lat, lon }: GeoPointDto) => ({ latitude: lat, longitude: lon })
@@ -180,6 +198,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       missionId: null,
       route: [],
       waypointIndex: 0,
+      returnPath: [],
+      diversion: null,
     }))
   }
 
@@ -246,7 +266,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     const layer = returnLayer()
     const seconds =
       Math.max(0, layer - state.position.altitude) / CLIMB_RATE_MPS +
-      distanceMeters(state.position, state.home) / CRUISE_SPEED_MPS +
+      airspace.distance(state.position, state.home) / CRUISE_SPEED_MPS +
       layer / CLIMB_RATE_MPS
     return seconds * BATTERY_DRAIN_PCT_PER_SEC + RETURN_RESERVE_PCT
   }
@@ -254,12 +274,16 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   function returnHome(state: UavRuntime, reason: ReturnReason) {
     state.phase = 'returning'
     state.returnReason = reason
+    // From inside a zone (breach) no clear path exists; the UAV then flies straight out and home.
+    state.returnPath = airspace.route(state.position, state.home) ?? []
   }
 
   function advanceUav(state: UavRuntime, dt: number) {
     if (state.phase === 'mission') {
       if (state.battery <= batteryNeededToReturn(state)) {
         returnHome(state, 'low-battery')
+      } else if (state.diversion) {
+        if (moveToward(state, state.diversion, dt)) state.diversion = null
       } else {
         const target = state.route[state.waypointIndex]
         if (target && moveToward(state, target, dt)) state.waypointIndex += 1
@@ -270,12 +294,16 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       const overHome = distanceMeters(state.position, state.home) <= ARRIVAL_TOLERANCE_METERS
       // Climb vertically to the return layer first, so return paths never cross active scan
       // lines at the scan altitude; then fly home and descend over the parking spot.
+      const climbing = !overHome && state.position.altitude < layer - 0.1
+      const turn = overHome || climbing ? undefined : state.returnPath[0]
       const target = overHome
         ? state.home
-        : state.position.altitude < layer - 0.1
+        : climbing
           ? { ...state.position, altitude: layer }
-          : { ...state.home, altitude: layer }
-      if (moveToward(state, target, dt) && overHome) {
+          : { ...(turn ?? state.home), altitude: layer }
+      const arrived = moveToward(state, target, dt)
+      if (arrived && turn) state.returnPath.shift()
+      if (arrived && overHome) {
         state.phase = 'parked'
         state.returnReason = null
         state.speed = 0
@@ -283,6 +311,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
         state.missionId = null
         state.route = []
         state.waypointIndex = 0
+        state.diversion = null
       }
     }
 
@@ -349,16 +378,29 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     const assigned = [...available]
       .sort((a, b) => b.battery - a.battery || a.uav.id.localeCompare(b.uav.id))
       .slice(0, request.uav_count)
+    const area = request.area.polygon.map(toGeoPoint)
     let routes
     try {
       routes = planAreaScan({
-        area: { polygon: request.area.polygon.map(toGeoPoint) },
+        area: { polygon: area },
         altitude: request.altitude_m,
         uavs: assigned.map((u) => ({ id: u.uav.id, home: u.home })),
         cruiseSpeedMps: CRUISE_SPEED_MPS,
+        airspace,
       })
     } catch (error) {
       return { ok: false, reason: error instanceof Error ? error.message : 'Planning failed' }
+    }
+
+    if (routes.every((route) => route.waypoints.length === 0)) {
+      const zone = DEMO_GEOFENCES.find((z) => polygonsOverlap(area, z.polygon))
+      return {
+        ok: false,
+        reason: zone
+          ? `Mission area lies inside no-fly zone "${zone.name}"`
+          : 'Mission area has nothing to scan',
+        geofenceId: zone?.id,
+      }
     }
 
     missionSeq += 1
@@ -454,6 +496,26 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     return { ok: true }
   }
 
+  function breachGeofence(uavId: string): CommandResult {
+    const state = uavs.find((u) => u.uav.id === uavId)
+    if (!state) return { ok: false, reason: 'Unknown UAV' }
+    if (state.phase !== 'mission') return { ok: false, reason: 'UAV is not on a mission' }
+    const centers = DEMO_GEOFENCES.map((zone) => ({
+      latitude: zone.polygon.reduce((sum, p) => sum + p.latitude, 0) / zone.polygon.length,
+      longitude: zone.polygon.reduce((sum, p) => sum + p.longitude, 0) / zone.polygon.length,
+    }))
+    const nearest = centers.reduce<GeoPoint | null>(
+      (best, center) =>
+        !best || distanceMeters(state.position, center) < distanceMeters(state.position, best)
+          ? center
+          : best,
+      null,
+    )
+    if (!nearest) return { ok: false, reason: 'No no-fly zones defined' }
+    state.diversion = { ...nearest, altitude: state.position.altitude }
+    return { ok: true }
+  }
+
   function completeMission(): CommandResult {
     if (!mission || !missionActive()) return { ok: false, reason: 'No active mission' }
     for (const state of uavs) {
@@ -541,6 +603,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
         })
       case 'setNetwork':
         return setNetwork(command.up)
+      case 'breachGeofence':
+        return breachGeofence(command.uavId)
       case 'completeMission':
         return completeMission()
       case 'setTimeScale':
@@ -579,6 +643,12 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       }),
     }),
     getActiveMission: () => (mission ? structuredClone(mission) : null),
+    getGeofences: () =>
+      DEMO_GEOFENCES.map((zone) => ({
+        id: zone.id,
+        name: zone.name,
+        polygon: zone.polygon.map((p) => ({ lat: p.latitude, lon: p.longitude })),
+      })),
     planMission: (request) => planMission(request),
     subscribe(listener) {
       listeners.add(listener)

@@ -6,6 +6,7 @@ import { storeToRefs } from 'pinia'
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { appConfig } from '@/shared/config'
 import type { MapScene } from '../lib/cesium/map-scene'
+import type { GeofenceOverlay } from '../lib/cesium/geofence-layer'
 import type { MissionOverlay } from '../lib/cesium/mission-layer'
 import { useMapStore } from '../model/map.store'
 
@@ -14,6 +15,7 @@ const props = defineProps<{
   fleet: FleetFeed
   selectedUavId: string | null
   missionOverlay: MissionOverlay | null
+  geofences: readonly GeofenceOverlay[]
   /** Clicks add mission area points instead of selecting UAVs. */
   drawing: boolean
 }>()
@@ -59,6 +61,7 @@ onMounted(async () => {
       else created.update(change.changed)
     })
     scene.value.setMissionOverlay(props.missionOverlay)
+    scene.value.setGeofences(props.geofences)
     scene.value.setDrawing(props.drawing)
   } catch (error) {
     console.error('[map] failed to initialize', error)
@@ -81,6 +84,12 @@ watch(
   () => props.missionOverlay,
   (overlay) => {
     scene.value?.setMissionOverlay(overlay)
+  },
+)
+watch(
+  () => props.geofences,
+  (zones) => {
+    scene.value?.setGeofences(zones)
   },
 )
 watch(

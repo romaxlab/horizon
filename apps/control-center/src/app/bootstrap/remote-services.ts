@@ -1,5 +1,6 @@
 import { createWebSocketRealtimeTransport } from '@horizon/realtime'
 import type { AppServices } from '@/app/providers/services'
+import { createRestAirspaceRepository } from '@/modules/airspace'
 import { createRestFleetRepository } from '@/modules/fleet'
 import { createRemoteMissionPlanner } from '@/modules/mission-planning'
 import { createRemoteVideoProvider } from '@/modules/video-monitoring'
@@ -15,6 +16,7 @@ export function createRemoteServices(endpoints: { apiUrl: string; wsUrl: string 
     fleetRepository: createRestFleetRepository(http),
     realtimeTransport: createWebSocketRealtimeTransport({ url: endpoints.wsUrl }),
     missionPlanner: createRemoteMissionPlanner(http),
+    airspaceRepository: createRestAirspaceRepository(http),
     videoProvider: createRemoteVideoProvider(http),
     // Demo controls drive the simulator and do not exist against a real backend.
     demoControl: null,

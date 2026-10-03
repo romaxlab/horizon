@@ -1,5 +1,6 @@
 import type { RealtimeTransport } from '@horizon/realtime'
 import { inject, type App, type InjectionKey } from 'vue'
+import type { AirspaceRepository } from '@/modules/airspace'
 import type { DemoControl } from '@/modules/demo-controls'
 import type { FleetRepository } from '@/modules/fleet'
 import type { MissionPlanner } from '@/modules/mission-planning'
@@ -10,6 +11,7 @@ export interface AppServices {
   fleetRepository: FleetRepository
   realtimeTransport: RealtimeTransport
   missionPlanner: MissionPlanner
+  airspaceRepository: AirspaceRepository
   videoProvider: VideoProvider
   /** Simulator demo controls; null unless the mock backend runs with demo controls enabled. */
   demoControl: DemoControl | null

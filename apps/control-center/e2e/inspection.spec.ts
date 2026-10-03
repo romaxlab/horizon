@@ -13,7 +13,8 @@ test('select a UAV: inspector opens with telemetry and the simulated video feed'
   const inspector = page.getByRole('complementary', { name: 'UAV inspector' })
   await expect(inspector.getByRole('heading', { name: 'UAV-03' })).toBeVisible()
   for (const metric of ['Battery', 'Altitude', 'Speed', 'Heading', 'Signal', 'GPS', 'Updated']) {
-    await expect(inspector.getByText(metric, { exact: true })).toBeVisible()
+    // Battery, Altitude and Speed also caption the trend charts.
+    await expect(inspector.getByText(metric, { exact: true }).first()).toBeVisible()
   }
 
   const feed = inspector.getByRole('figure', { name: /UAV-03 camera feed/ })

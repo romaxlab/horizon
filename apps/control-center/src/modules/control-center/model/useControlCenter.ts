@@ -1,11 +1,13 @@
+import { isPointInPolygon, type Geofence, type GeoPoint } from '@horizon/domain'
 import type { BadgeVariant } from '@horizon/ui'
 import { useMutation } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { useAppServices } from '@/app/providers/services'
+import { useGeofences } from '@/modules/airspace'
 import { healthIssues, useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
 import { useDemoControls } from '@/modules/demo-controls'
 import { useIncidentCenter, type Observation } from '@/modules/incidents'
-import { useMapStore, type MissionOverlay } from '@/modules/map'
+import { useMapStore, type GeofenceOverlay, type MissionOverlay } from '@/modules/map'
 import {
   computeMissionProgress,
   provideMissionBuilder,
@@ -21,6 +23,9 @@ const connectionPresentation: Record<ConnectionStatus, { label: string; variant:
   live: { label: 'Live', variant: 'success' },
   reconnecting: { label: 'Reconnecting', variant: 'warning' },
 }
+
+const zoneAt = (zones: readonly Geofence[], point: GeoPoint) =>
+  zones.find((zone) => isPointInPolygon(point, zone.polygon)) ?? null
 
 /** Route-level composition for the Control Center: starts live sync and coordinates modules. */
 export function useControlCenter() {
@@ -79,6 +84,30 @@ export function useControlCenter() {
     () => missions.current?.status !== 'active' && !builder.open.value,
   )
 
+  const { geofences } = useGeofences()
+  /** Zones a flying UAV is currently inside; stable so the map only redraws on change. */
+  const breachedZoneIds = stableComputed(
+    () =>
+      geofences.value
+        .filter((zone) =>
+          fleet.uavs.some(
+            (state) =>
+              state.telemetry !== null &&
+              state.telemetry.flightPhase !== 'parked' &&
+              isPointInPolygon(state.telemetry.position, zone.polygon),
+          ),
+        )
+        .map((zone) => zone.id),
+    (a, b) => a.length === b.length && a.every((id, i) => id === b[i]),
+  )
+  const geofenceOverlay = computed<GeofenceOverlay[]>(() =>
+    geofences.value.map((zone) => ({
+      ...zone,
+      highlighted:
+        zone.id === builder.conflictGeofenceId.value || breachedZoneIds.value.includes(zone.id),
+    })),
+  )
+
   const { missionPlanner, demoControl } = useAppServices()
   const abortMutation = useMutation({
     mutationFn: (missionId: string) => missionPlanner.abort(missionId),
@@ -105,6 +134,10 @@ export function useControlCenter() {
         battery: state.telemetry?.battery ?? null,
         lowBattery: issues.includes('low-battery'),
         weakSignal: issues.includes('weak-signal'),
+        geofence:
+          state.telemetry && state.telemetry.flightPhase !== 'parked'
+            ? (zoneAt(geofences.value, state.telemetry.position)?.name ?? null)
+            : null,
       }
     }),
   }))
@@ -219,6 +252,7 @@ export function useControlCenter() {
     stoppingMission: computed(() => abortMutation.isPending.value),
     stopError: computed(() => abortMutation.error.value?.message ?? null),
     missionOverlay,
+    geofenceOverlay,
     selectUav,
     focusSelected,
     toggleFollow,

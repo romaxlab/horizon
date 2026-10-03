@@ -6,6 +6,7 @@ export type DemoCommand =
   | { type: 'lowBattery'; uavId: string }
   | { type: 'degradeSignal'; uavId: string }
   | { type: 'loseTelemetry'; uavId: string }
+  | { type: 'breachGeofence'; uavId: string }
   | { type: 'networkOutage' }
   | { type: 'restoreAll' }
   | { type: 'completeMission' }

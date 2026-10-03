@@ -54,7 +54,7 @@ export function useDemoControls({
     if (!lastError.value) activePreset.value = preset
   }
 
-  function inject(type: 'lowBattery' | 'degradeSignal' | 'loseTelemetry') {
+  function inject(type: 'lowBattery' | 'degradeSignal' | 'loseTelemetry' | 'breachGeofence') {
     const uav = target.value
     if (uav) run({ type, uavId: uav.id })
   }

@@ -1,5 +1,6 @@
 import { createSimulator } from '@horizon/simulator'
 import { describe, expect, it, vi } from 'vitest'
+import { createRestAirspaceRepository } from '@/modules/airspace'
 import { createRemoteMissionPlanner, MissionPlanningError } from '@/modules/mission-planning'
 import { createRemoteVideoProvider } from '@/modules/video-monitoring'
 import { createHttpClient } from '@/shared/http'
@@ -86,6 +87,47 @@ describe('createRemoteMissionPlanner', () => {
       new MissionPlanningError('Area is too small'),
     )
     await expect(planner.launch('m-1')).rejects.toMatchObject({ name: 'HttpError', status: 503 })
+  })
+
+  it('keeps the conflicting no-fly zone of a rejected plan', async () => {
+    const planner = createRemoteMissionPlanner(
+      createHttpClient({
+        baseUrl: API,
+        fetch: fakeFetch({
+          'POST missions/plan': () => ({
+            status: 409,
+            body: {
+              message: 'Mission area lies inside no-fly zone "Marina"',
+              geofence_id: 'nfz-marina',
+            },
+          }),
+        }),
+      }),
+    )
+    const request = { name: 'x', area: { polygon: [] }, altitude: 120, uavCount: 1 }
+    await expect(planner.plan(request)).rejects.toMatchObject({ geofenceId: 'nfz-marina' })
+  })
+})
+
+describe('createRestAirspaceRepository', () => {
+  it('maps the simulator geofence payload and rejects invalid zones', async () => {
+    const zones = createSimulator({ startTime: START }).getGeofences()
+    const repository = (body: unknown) =>
+      createRestAirspaceRepository(
+        createHttpClient({
+          baseUrl: API,
+          fetch: fakeFetch({ 'GET airspace/geofences': () => ({ status: 200, body }) }),
+        }),
+      )
+    const geofences = await repository(zones).getGeofences()
+    expect(geofences).toHaveLength(zones.length)
+    expect(geofences[0]?.polygon[0]).toEqual({
+      latitude: zones[0]?.polygon[0]?.lat,
+      longitude: zones[0]?.polygon[0]?.lon,
+    })
+    await expect(
+      repository([{ id: 'x', name: 'Bad', polygon: [] }]).getGeofences(),
+    ).rejects.toMatchObject({ name: 'AirspacePayloadError' })
   })
 })
 

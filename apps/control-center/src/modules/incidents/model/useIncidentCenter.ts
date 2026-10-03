@@ -10,6 +10,7 @@ const titles: Record<OperationalEventType, string> = {
   WAYPOINT_REACHED: 'Waypoint reached',
   MISSION_COMPLETED: 'Mission completed',
   MISSION_ABORTED: 'Mission stopped',
+  GEOFENCE_BREACH: 'No-fly zone breach',
   LOW_BATTERY: 'Low battery',
   SIGNAL_DEGRADED: 'Signal degraded',
   TELEMETRY_STALE: 'Telemetry stale',
