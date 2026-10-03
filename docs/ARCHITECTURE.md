@@ -648,6 +648,20 @@ longer gap
 → offline
 ```
 
+Status precedence (`modules/fleet/model/fleet.status.ts`):
+
+```text
+no telemetry for > 15 s          offline
+no telemetry for > 5 s           stale
+battery < 20 % | signal < 35 %   warning
+  | fewer than 6 GPS satellites
+on a mission                     active
+otherwise                        standby
+```
+
+The fleet store re-evaluates statuses every second, so UAVs age to stale/offline without new
+telemetry.
+
 Last known position remains visible.
 
 ### Reconnect

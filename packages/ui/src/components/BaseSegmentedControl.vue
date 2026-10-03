@@ -10,19 +10,26 @@ export interface SegmentOption<V extends string = string> {
   hint?: string
 }
 
-const { options, label } = defineProps<{
+const {
+  options,
+  label,
+  block = false,
+} = defineProps<{
   options: SegmentOption<T>[]
   /** Accessible name of the group. */
   label: string
+  /** Stretches to the container width with equal segments. */
+  block?: boolean
 }>()
 
 const model = defineModel<T>({ required: true })
 const buttons = useTemplateRef<HTMLButtonElement[]>('buttons')
 
 const segment = cva(
-  'h-control-sm rounded-full px-3 text-label-md whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-40',
+  'h-control-sm rounded-full text-label-md whitespace-nowrap cursor-pointer transition-colors disabled:pointer-events-none disabled:opacity-40',
   {
     variants: {
+      block: { true: 'min-w-0 flex-auto px-2', false: 'px-3' },
       selected: {
         true: 'bg-surface-raised text-text-primary shadow-raised',
         false: 'text-text-secondary hover:text-text-primary',
@@ -52,7 +59,10 @@ function onKeydown(event: KeyboardEvent, index: number) {
   <div
     role="radiogroup"
     :aria-label="label"
-    class="inline-flex items-center gap-0.5 rounded-full bg-fill p-0.5"
+    :class="[
+      'items-center gap-0.5 rounded-full bg-fill p-0.5',
+      block ? 'flex w-full' : 'inline-flex',
+    ]"
   >
     <button
       v-for="(option, index) in options"
@@ -64,7 +74,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
       :tabindex="model === option.value ? 0 : -1"
       :disabled="option.disabled"
       :title="option.hint"
-      :class="segment({ selected: model === option.value })"
+      :class="segment({ selected: model === option.value, block })"
       @click="model = option.value"
       @keydown="onKeydown($event, index)"
     >

@@ -19,7 +19,7 @@ const {
 }>()
 
 const iconButton = cva(
-  'inline-flex shrink-0 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4',
+  'inline-flex shrink-0 items-center justify-center rounded-full cursor-pointer transition-colors disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4',
   {
     variants: {
       variant: {

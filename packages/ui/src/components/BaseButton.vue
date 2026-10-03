@@ -17,7 +17,7 @@ const {
 }>()
 
 const button = cva(
-  'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full whitespace-nowrap transition-colors select-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4',
+  'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full cursor-pointer whitespace-nowrap transition-colors select-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4',
   {
     variants: {
       variant: {

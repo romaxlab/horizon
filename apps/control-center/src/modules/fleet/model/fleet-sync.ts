@@ -6,6 +6,7 @@ import type { ConnectionStatus, FleetSnapshot } from './fleet.types'
 export interface FleetSyncTarget {
   hydrate(snapshot: FleetSnapshot, receivedAt: number): void
   applyTelemetry(batch: UavTelemetry[], receivedAt: number): number
+  refreshStatuses(now: number): void
   setConnectionStatus(status: ConnectionStatus): void
 }
 
@@ -15,6 +16,8 @@ export interface FleetSyncOptions {
   target: FleetSyncTarget
   /** How often buffered telemetry is flushed into application state. */
   flushIntervalMs?: number
+  /** How often time-dependent status (stale/offline) is re-evaluated. */
+  statusIntervalMs?: number
   now?: () => number
   logger?: Pick<Console, 'warn'>
 }
@@ -34,6 +37,7 @@ export function createFleetSync({
   loadSnapshot,
   target,
   flushIntervalMs = 100,
+  statusIntervalMs = 1_000,
   now = Date.now,
   logger = console,
 }: FleetSyncOptions): FleetSync {
@@ -43,6 +47,7 @@ export function createFleetSync({
   })
   let unsubscribe: (() => void) | null = null
   let flushTimer: ReturnType<typeof setInterval> | null = null
+  let statusTimer: ReturnType<typeof setInterval> | null = null
   let hydrated = false
   /** Incremented on every start/stop so async work from a stopped session is discarded. */
   let session = 0
@@ -85,6 +90,9 @@ export function createFleetSync({
       })
       hydrated = true
       flushTimer = setInterval(flush, flushIntervalMs)
+      statusTimer = setInterval(() => {
+        target.refreshStatuses(now())
+      }, statusIntervalMs)
       target.setConnectionStatus('live')
     } catch (error) {
       if (current !== session) return
@@ -98,7 +106,9 @@ export function createFleetSync({
     unsubscribe?.()
     unsubscribe = null
     if (flushTimer !== null) clearInterval(flushTimer)
+    if (statusTimer !== null) clearInterval(statusTimer)
     flushTimer = null
+    statusTimer = null
     transport.disconnect()
     buffer.clear()
   }

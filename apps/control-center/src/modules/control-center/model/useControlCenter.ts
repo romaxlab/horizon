@@ -40,10 +40,22 @@ export function useControlCenter() {
         }
   })
 
-  /** Selecting from the map keeps the camera; Follow switches to the new selection or stops. */
-  function selectUav(uavId: string | null) {
+  /**
+   * One shared selection for list, map and inspector. Selecting from the list also flies the map
+   * to the UAV; selecting on the map keeps the camera. Follow moves to the new selection or stops.
+   */
+  function selectUav(uavId: string | null, options: { focus?: boolean } = {}) {
     fleet.selectUav(uavId)
     if (map.followUavId !== null) map.setFollow(fleet.selectedUavId)
+    if (options.focus && fleet.selectedUavId) map.focusUav(fleet.selectedUavId)
+  }
+
+  function focusSelected() {
+    if (fleet.selectedUavId) map.focusUav(fleet.selectedUavId)
+  }
+
+  function toggleFollow() {
+    map.setFollow(map.followUavId === null ? fleet.selectedUavId : null)
   }
 
   return {
@@ -52,6 +64,10 @@ export function useControlCenter() {
     mission,
     uavs: computed(() => fleet.uavs),
     selectedUavId: computed(() => fleet.selectedUavId),
+    inspectorOpen: computed(() => fleet.selectedUav !== null),
+    following: computed(() => map.followUavId !== null),
     selectUav,
+    focusSelected,
+    toggleFollow,
   }
 }

@@ -7,11 +7,14 @@ const {
   type = 'text',
   invalid = false,
   hint,
+  hideLabel = false,
 } = defineProps<{
   label: string
   type?: 'text' | 'number' | 'search'
   invalid?: boolean
   hint?: string
+  /** Keeps the label for assistive technology only (e.g. a search field with a placeholder). */
+  hideLabel?: boolean
 }>()
 
 defineOptions({ inheritAttrs: false })
@@ -22,7 +25,14 @@ const id = useId()
 
 <template>
   <div class="flex flex-col gap-1">
-    <BaseText as="label" :for="id" variant="label-md" tone="secondary">{{ label }}</BaseText>
+    <BaseText
+      as="label"
+      :for="id"
+      variant="label-md"
+      tone="secondary"
+      :class="{ 'sr-only': hideLabel }"
+      >{{ label }}</BaseText
+    >
     <input
       :id="id"
       v-model="model"

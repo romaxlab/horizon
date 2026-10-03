@@ -1,29 +1,7 @@
-import type { Uav, UavTelemetry } from '@horizon/domain'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { telemetry, uav } from './fleet.fixtures.test-utils'
 import { useFleetStore } from './fleet.store'
-
-const uav = (id: string): Uav => ({
-  id,
-  name: id.toUpperCase(),
-  model: 'Falcon X4',
-  callsign: id,
-  capabilities: { camera: true, thermalCamera: false },
-})
-
-const telemetry = (uavId: string, timestamp: number, missionId: string | null = null) =>
-  ({
-    uavId,
-    timestamp,
-    position: { latitude: 24.45, longitude: 54.38, altitude: 0 },
-    speed: 0,
-    heading: 0,
-    battery: 90,
-    signal: 98,
-    gpsSatellites: 14,
-    missionId,
-    currentWaypoint: null,
-  }) satisfies UavTelemetry
 
 describe('useFleetStore', () => {
   beforeEach(() => {
@@ -39,13 +17,13 @@ describe('useFleetStore', () => {
 
     expect(store.uavs.map((s) => s.uav.id)).toEqual(['a', 'b'])
     expect(store.uavsById.a?.lastUpdatedAt).toBe(47_000)
-    expect(store.uavsById.b).toMatchObject({ telemetry: null, status: 'standby' })
+    expect(store.uavsById.b).toMatchObject({ telemetry: null, status: 'offline' })
   })
 
   it('keeps newer streamed telemetry when reconciling an older snapshot', () => {
     const store = useFleetStore()
     store.hydrate({ serverTime: 1, uavs: [uav('a')], telemetry: [telemetry('a', 1)] }, 1)
-    store.applyTelemetry([telemetry('a', 9, 'm-1')], 9)
+    store.applyTelemetry([telemetry('a', 9, { missionId: 'm-1' })], 9)
     store.hydrate({ serverTime: 5, uavs: [uav('a')], telemetry: [telemetry('a', 5)] }, 10)
 
     expect(store.uavsById.a?.telemetry?.timestamp).toBe(9)
@@ -75,5 +53,24 @@ describe('useFleetStore', () => {
     store.selectUav('a')
     store.hydrate({ serverTime: 1, uavs: [uav('b')], telemetry: [] }, 1)
     expect(store.selectedUavId).toBeNull()
+  })
+
+  it('ages UAVs to stale and offline without new telemetry, and recovers on new data', () => {
+    const store = useFleetStore()
+    store.hydrate(
+      { serverTime: 0, uavs: [uav('a')], telemetry: [telemetry('a', 0, { missionId: 'm-1' })] },
+      0,
+    )
+    expect(store.uavsById.a?.status).toBe('active')
+
+    store.refreshStatuses(6_000)
+    expect(store.uavsById.a?.status).toBe('stale')
+    store.refreshStatuses(16_000)
+    expect(store.uavsById.a?.status).toBe('offline')
+    expect(store.statusCounts.offline).toBe(1)
+
+    store.applyTelemetry([telemetry('a', 16_000, { missionId: 'm-1' })], 16_000)
+    expect(store.uavsById.a?.status).toBe('active')
+    expect(store.uavsById.a?.telemetry?.position).toBeDefined()
   })
 })
