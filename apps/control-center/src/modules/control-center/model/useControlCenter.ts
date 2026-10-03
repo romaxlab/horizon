@@ -154,14 +154,30 @@ export function useControlCenter() {
     () => {
       const state =
         fleet.selectedUav ?? fleet.uavs.find((s) => s.status === 'active') ?? fleet.uavs[0] ?? null
-      return state ? { id: state.uav.id, name: state.uav.name } : null
+      return state
+        ? {
+            id: state.uav.id,
+            name: state.uav.name,
+            onMission: state.telemetry?.flightPhase === 'mission',
+          }
+        : null
     },
-    (a, b) => a?.id === b?.id,
+    (a, b) => a?.id === b?.id && a?.onMission === b?.onMission,
   )
   const demo = demoControl
     ? useDemoControls({
         control: demoControl,
         target: demoTarget,
+        // UAVs still flying scan lines: "Complete mission" has something to end.
+        missionScanning: computed(() => {
+          const current = missions.current
+          return (
+            current?.status === 'active' &&
+            current.assignedUavIds.some(
+              (id) => fleet.uavsById[id]?.telemetry?.flightPhase === 'mission',
+            )
+          )
+        }),
         diagnostics: {
           stats: fleetSync.stats,
           fleetSize: computed(() => fleet.uavs.length),

@@ -29,4 +29,5 @@ export {
   type SimulatorCommand,
   type SimulatorMode,
   type SimulatorOptions,
+  type UavInjections,
 } from './simulator'

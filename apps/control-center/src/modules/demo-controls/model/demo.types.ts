@@ -1,13 +1,15 @@
 export type DemoPreset = 'normal' | 'incident' | 'stress'
 
+/** Reversible failures that can be injected on one UAV. */
+export type DemoInjection = 'lowBattery' | 'signalDegraded' | 'telemetryLost' | 'geofenceBreach'
+
+export type DemoInjections = Record<DemoInjection, boolean>
+
 /** Operator-facing demo commands; implementations forward them to the simulated backend. */
 export type DemoCommand =
   | { type: 'preset'; preset: DemoPreset }
-  | { type: 'lowBattery'; uavId: string }
-  | { type: 'degradeSignal'; uavId: string }
-  | { type: 'loseTelemetry'; uavId: string }
-  | { type: 'breachGeofence'; uavId: string }
-  | { type: 'networkOutage' }
+  | { type: 'setInjection'; uavId: string; injection: DemoInjection; active: boolean }
+  | { type: 'setNetwork'; up: boolean }
   | { type: 'restoreAll' }
   | { type: 'completeMission' }
   | { type: 'reset' }
@@ -27,4 +29,10 @@ export interface DemoCommandResult {
 export interface DemoControl {
   dispatch(command: DemoCommand): DemoCommandResult
   readonly timeScale: number
+  /** Failures currently injected on a UAV (null for an unknown UAV). */
+  injections(uavId: string): DemoInjections | null
+  /** Whether the simulated backend is reachable (false during a network outage). */
+  readonly networkUp: boolean
+  /** Nothing to reset: no mission, no injected failures, backend reachable. */
+  readonly pristine: boolean
 }

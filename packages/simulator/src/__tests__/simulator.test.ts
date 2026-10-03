@@ -499,15 +499,16 @@ describe('createSimulator', () => {
     ).toMatchObject({ ok: false, geofenceId: marina?.id })
   })
 
-  it('drifts a mission UAV into the nearest no-fly zone, then resumes its route', () => {
+  it('holds a mission UAV in the nearest no-fly zone until the breach is switched off', () => {
     const { simulator } = record()
-    expect(simulator.dispatch({ type: 'breachGeofence', uavId: 'uav-01' })).toMatchObject({
-      ok: false,
-    })
+    const breach = (uavId: string, active: boolean) =>
+      simulator.dispatch({ type: 'setGeofenceBreach', uavId, active })
+    expect(breach('uav-01', true)).toMatchObject({ ok: false })
     simulator.dispatch({ type: 'startDemoMission' })
     const uavId = simulator.getActiveMission()?.assigned_uav_ids[0] ?? ''
     simulator.step(60_000)
-    expect(simulator.dispatch({ type: 'breachGeofence', uavId })).toEqual({ ok: true })
+    expect(breach(uavId, true)).toEqual({ ok: true })
+    expect(simulator.getInjections(uavId)?.geofenceBreach).toBe(true)
 
     const position = () => {
       const t = simulator.getFleetSnapshot().telemetry.find((x) => x.uav_id === uavId)
@@ -518,8 +519,41 @@ describe('createSimulator', () => {
       simulator.step(ms)
     }
     runUntil(step, inAnyZone, 600)
+    simulator.step(30_000)
+    expect(inAnyZone()).toBe(true)
+
+    breach(uavId, false)
+    expect(simulator.getInjections(uavId)?.geofenceBreach).toBe(false)
     runUntil(step, () => !inAnyZone(), 600)
     const phase = simulator.getFleetSnapshot().telemetry.find((x) => x.uav_id === uavId)
     expect(phase?.flight_phase).toBe('mission')
+  })
+
+  it('reports whether there is anything to reset', () => {
+    const { simulator } = record()
+    expect(simulator.pristine).toBe(true)
+    simulator.dispatch({ type: 'setSignalDegraded', uavId: 'uav-01', degraded: true })
+    expect(simulator.pristine).toBe(false)
+    simulator.dispatch({ type: 'reset' })
+    expect(simulator.pristine).toBe(true)
+    simulator.dispatch({ type: 'startDemoMission' })
+    expect(simulator.pristine).toBe(false)
+  })
+
+  it('injects low battery reversibly, restoring the previous level', () => {
+    const { simulator } = record()
+    const level = () => simulator.getFleetSnapshot().telemetry.find((t) => t.uav_id === 'uav-01')
+    const before = level()?.battery_pct ?? 0
+    simulator.dispatch({ type: 'setLowBattery', uavId: 'uav-01', low: true })
+    expect(level()?.battery_pct).toBe(18)
+    expect(simulator.getInjections('uav-01')).toMatchObject({ lowBattery: true })
+    simulator.dispatch({ type: 'setLowBattery', uavId: 'uav-01', low: false })
+    expect(level()?.battery_pct).toBe(before)
+    expect(simulator.getInjections('uav-01')).toEqual({
+      lowBattery: false,
+      signalDegraded: false,
+      telemetryLost: false,
+      geofenceBreach: false,
+    })
   })
 })

@@ -10,7 +10,7 @@ import {
   type MissionPlanner,
 } from '@/modules/mission-planning'
 import type { VideoProvider } from '@/modules/video-monitoring'
-import type { DemoCommand, DemoControl } from '@/modules/demo-controls'
+import type { DemoCommand, DemoControl, DemoInjection } from '@/modules/demo-controls'
 import type { AppConfig } from '@/shared/config'
 import { HttpError } from '@/shared/http'
 
@@ -106,22 +106,32 @@ export function createMockServices(config: AppConfig): AppServices {
     },
   }
 
+  const toInjectionCommand = (
+    uavId: string,
+    injection: DemoInjection,
+    active: boolean,
+  ): SimulatorCommand => {
+    switch (injection) {
+      case 'lowBattery':
+        return { type: 'setLowBattery', uavId, low: active }
+      case 'signalDegraded':
+        return { type: 'setSignalDegraded', uavId, degraded: active }
+      case 'telemetryLost':
+        return { type: 'setTelemetryLoss', uavId, lost: active }
+      case 'geofenceBreach':
+        return { type: 'setGeofenceBreach', uavId, active }
+    }
+  }
   const toSimulatorCommand = (command: DemoCommand): SimulatorCommand => {
     switch (command.type) {
       case 'preset':
         return { type: 'applyPreset', preset: command.preset }
-      case 'lowBattery':
-        return { type: 'setBattery', uavId: command.uavId, batteryPct: 18 }
-      case 'degradeSignal':
-        return { type: 'setSignalDegraded', uavId: command.uavId, degraded: true }
-      case 'loseTelemetry':
-        return { type: 'setTelemetryLoss', uavId: command.uavId, lost: true }
-      case 'networkOutage':
-        return { type: 'setNetwork', up: false }
+      case 'setInjection':
+        return toInjectionCommand(command.uavId, command.injection, command.active)
+      case 'setNetwork':
+        return { type: 'setNetwork', up: command.up }
       case 'restoreAll':
         return { type: 'restoreAll' }
-      case 'breachGeofence':
-        return { type: 'breachGeofence', uavId: command.uavId }
       case 'completeMission':
         return { type: 'completeMission' }
       case 'reset':
@@ -142,6 +152,13 @@ export function createMockServices(config: AppConfig): AppServices {
         },
         get timeScale() {
           return simulator.timeScale
+        },
+        injections: (uavId) => simulator.getInjections(uavId),
+        get networkUp() {
+          return simulator.networkUp
+        },
+        get pristine() {
+          return simulator.pristine
         },
       }
     : null

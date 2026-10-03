@@ -59,8 +59,13 @@ export type SimulatorCommand =
   | { type: 'setSignalDegraded'; uavId: string; degraded: boolean }
   /** Demo/test control: backend ↔ client network outage (snapshot and stream unreachable). */
   | { type: 'setNetwork'; up: boolean }
-  /** Demo control: a mission UAV drifts off its route into the nearest no-fly zone, then resumes. */
-  | { type: 'breachGeofence'; uavId: string }
+  /** Demo/test control: drops a UAV's battery to a low level; off restores the previous level. */
+  | { type: 'setLowBattery'; uavId: string; low: boolean }
+  /**
+   * Demo control: a mission UAV drifts off its route into the nearest no-fly zone and holds
+   * there; off resumes its route.
+   */
+  | { type: 'setGeofenceBreach'; uavId: string; active: boolean }
   /** Demo control: finishes the active mission's scan now; UAVs return and land. */
   | { type: 'completeMission' }
   /** Demo control: simulation speed (1 = real time). */
@@ -87,6 +92,8 @@ export interface Simulator {
   getActiveMission(): MissionDto | null
   /** Fake REST: no-fly zones. */
   getGeofences(): GeofenceDto[]
+  /** Demo introspection: failures injected on a UAV; null for an unknown UAV. */
+  getInjections(uavId: string): UavInjections | null
   /** Fake REST: plans an Area Scan with standby UAVs; the plan is kept until launched. */
   planMission(request: MissionPlanRequestDto): PlanResult
   /** Fake realtime stream. */
@@ -95,6 +102,8 @@ export interface Simulator {
   readonly networkUp: boolean
   readonly timeScale: number
   readonly fleetSize: number
+  /** Nothing to reset: no mission or plan, no injected failures, backend reachable. */
+  readonly pristine: boolean
   subscribeNetwork(listener: (up: boolean) => void): () => void
   dispatch(command: SimulatorCommand): CommandResult
   /** Advances simulated time deterministically. */
@@ -142,9 +151,22 @@ interface UavRuntime {
   waypointIndex: number
   /** Turn points around no-fly zones on the way home, flown at the return layer. */
   returnPath: GeoPoint[]
-  /** Off-route point the UAV is drifting to (geofence breach demo); null on route. */
+  /** Off-route point the UAV drifts to and holds (geofence breach demo); null on route. */
   diversion: GeoPosition | null
+  /** Battery level before the low-battery injection; null when not injected. */
+  batteryBeforeLow: number | null
 }
+
+/** Demo failures currently injected on one UAV. */
+export interface UavInjections {
+  lowBattery: boolean
+  signalDegraded: boolean
+  telemetryLost: boolean
+  geofenceBreach: boolean
+}
+
+/** Battery level set by the low-battery injection: below the warning level, triggers return. */
+const INJECTED_LOW_BATTERY_PCT = 18
 
 const toGeoPoint = ({ lat, lon }: GeoPointDto) => ({ latitude: lat, longitude: lon })
 
@@ -200,6 +222,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       waypointIndex: 0,
       returnPath: [],
       diversion: null,
+      batteryBeforeLow: null,
     }))
   }
 
@@ -276,6 +299,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     state.returnReason = reason
     // From inside a zone (breach) no clear path exists; the UAV then flies straight out and home.
     state.returnPath = airspace.route(state.position, state.home) ?? []
+    state.diversion = null
   }
 
   function advanceUav(state: UavRuntime, dt: number) {
@@ -283,7 +307,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       if (state.battery <= batteryNeededToReturn(state)) {
         returnHome(state, 'low-battery')
       } else if (state.diversion) {
-        if (moveToward(state, state.diversion, dt)) state.diversion = null
+        // Holds inside the zone until the injection is switched off.
+        moveToward(state, state.diversion, dt)
       } else {
         const target = state.route[state.waypointIndex]
         if (target && moveToward(state, target, dt)) state.waypointIndex += 1
@@ -496,9 +521,26 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     return { ok: true }
   }
 
-  function breachGeofence(uavId: string): CommandResult {
+  function setLowBattery(uavId: string, low: boolean): CommandResult {
     const state = uavs.find((u) => u.uav.id === uavId)
     if (!state) return { ok: false, reason: 'Unknown UAV' }
+    if (low && state.batteryBeforeLow === null) {
+      state.batteryBeforeLow = state.battery
+      state.battery = Math.min(state.battery, INJECTED_LOW_BATTERY_PCT)
+    } else if (!low && state.batteryBeforeLow !== null) {
+      state.battery = state.batteryBeforeLow
+      state.batteryBeforeLow = null
+    }
+    return { ok: true }
+  }
+
+  function setGeofenceBreach(uavId: string, active: boolean): CommandResult {
+    const state = uavs.find((u) => u.uav.id === uavId)
+    if (!state) return { ok: false, reason: 'Unknown UAV' }
+    if (!active) {
+      state.diversion = null
+      return { ok: true }
+    }
     if (state.phase !== 'mission') return { ok: false, reason: 'UAV is not on a mission' }
     const centers = DEMO_GEOFENCES.map((zone) => ({
       latitude: zone.polygon.reduce((sum, p) => sum + p.latitude, 0) / zone.polygon.length,
@@ -531,6 +573,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     for (const state of uavs) {
       state.telemetryLost = false
       state.signalDegraded = false
+      state.diversion = null
+      setLowBattery(state.uav.id, false)
     }
     scheduled = []
     return setNetwork(true)
@@ -603,8 +647,10 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
         })
       case 'setNetwork':
         return setNetwork(command.up)
-      case 'breachGeofence':
-        return breachGeofence(command.uavId)
+      case 'setLowBattery':
+        return setLowBattery(command.uavId, command.low)
+      case 'setGeofenceBreach':
+        return setGeofenceBreach(command.uavId, command.active)
       case 'completeMission':
         return completeMission()
       case 'setTimeScale':
@@ -643,6 +689,17 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       }),
     }),
     getActiveMission: () => (mission ? structuredClone(mission) : null),
+    getInjections(uavId) {
+      const state = uavs.find((u) => u.uav.id === uavId)
+      return state
+        ? {
+            lowBattery: state.batteryBeforeLow !== null,
+            signalDegraded: state.signalDegraded,
+            telemetryLost: state.telemetryLost,
+            geofenceBreach: state.diversion !== null,
+          }
+        : null
+    },
     getGeofences: () =>
       DEMO_GEOFENCES.map((zone) => ({
         id: zone.id,
@@ -662,6 +719,21 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     },
     get fleetSize() {
       return fleetSize
+    },
+    get pristine() {
+      return (
+        mission === null &&
+        plannedMissions.size === 0 &&
+        scheduled.length === 0 &&
+        networkUp &&
+        uavs.every(
+          (u) =>
+            !u.telemetryLost &&
+            !u.signalDegraded &&
+            u.batteryBeforeLow === null &&
+            u.diversion === null,
+        )
+      )
     },
     subscribeNetwork(listener) {
       networkListeners.add(listener)

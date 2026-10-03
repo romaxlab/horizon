@@ -856,8 +856,10 @@ Demo controls send commands to the simulator. They never patch application store
 Implementation: `DemoControl` (`modules/demo-controls`) is provided only by the mock composition
 and only when `VITE_DEMO_CONTROLS` is on (default in dev). Presets: NORMAL (demo mission),
 INCIDENT (NORMAL plus a scheduled failure sequence on mission UAVs: signal → low battery →
-telemetry loss → backend outage → reconnect → restore), STRESS (480 UAVs). Targeted injections
-(battery, signal, telemetry, no-fly zone breach) apply to the selected UAV. Presets and reset
+telemetry loss → backend outage → reconnect → restore), STRESS (480 UAVs). Failures are reversible switches on the selected UAV (low battery, weak signal, telemetry
+loss, no-fly zone drift) plus a network outage switch; switching off restores the previous
+behavior (e.g. the battery level, the UAV's route), and the panel reads the injected state back
+from the simulator, so the scripted INCIDENT sequence is reflected too. Presets and reset
 replace backend state, so the app resyncs through the normal snapshot path. Diagnostics show
 incoming telemetry rate, store flush rate, fleet size and connection state.
 

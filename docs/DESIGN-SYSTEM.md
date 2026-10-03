@@ -214,6 +214,7 @@ BaseButton
 BaseIconButton
 BaseInput
 BaseSelect
+BaseSwitch
 
 BaseSurface
 BasePanel
