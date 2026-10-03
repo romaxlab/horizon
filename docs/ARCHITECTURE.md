@@ -238,18 +238,74 @@ Cesium is a significant application capability but does not need to be a workspa
 ```text
 modules/map/
 ├── ui/
-│   └── MapCanvas.vue
+│   ├── MapCanvas.vue        # mounts the scene; props in, `select` out
+│   └── MapControls.vue      # Follow / Reset view
 ├── model/
-│   └── useMap.ts
+│   └── map.store.ts         # camera intents (follow, focus, reset)
 ├── lib/
+│   ├── interpolation.ts     # Cesium-free pose interpolation (unit tested)
 │   └── cesium/
-│       ├── viewer.ts
+│       ├── map-scene.ts     # viewer, basemap, picking; lazy-loaded chunk
 │       ├── uav-layer.ts
-│       ├── mission-layer.ts
+│       ├── mission-layer.ts # with mission planning
 │       ├── camera-controller.ts
-│       └── interpolation.ts
+│       └── palette.ts       # Cesium colors resolved from design tokens
 └── index.ts
 ```
+
+The map receives fleet state and the selected UAV id as props and reports picks; it does not
+import the fleet module. Cesium is loaded on demand so the shell renders before the 3D engine.
+
+Map controls have two independent settings:
+
+```text
+Map / Satellite   segmented control; Esri Canvas light/dark gray (follows the theme) or
+                  Esri World Imagery
+2D / 3D           single button above Follow / Reset view; top-down or tilted, both keyless
+```
+
+With `VITE_CESIUM_ION_TOKEN` (Cesium ion Community account) the 3D perspective adds buildings:
+
+```text
+3D + Satellite   Google Photorealistic 3D Tiles via Cesium ion (no Google key or billing)
+                 → fallback: Cesium World Terrain + Cesium OSM Buildings
+3D + Map         Cesium World Terrain + Cesium OSM Buildings
+                 → if nothing loads: the keyless tilted view stays
+```
+
+Switching perspective re-pitches the camera around the point at the screen center; basemaps
+cross-fade once incoming tiles are ready. The token goes in `apps/control-center/.env.local`,
+which is git-ignored. Attribution is always shown, including the Cesium ion logo whenever ion is
+used. Esri basemaps are free for development and demos; production use requires an ArcGIS account
+or another provider. Google tiles may only be used with the Google geocoder; Horizon uses no
+geocoder.
+
+Telemetry altitude is above ground level. On terrain or 3D tiles the map samples the ground height
+once at the operating site and lifts UAVs by it; the operating area is assumed flat.
+
+Rendering runs at device resolution (capped at 2×). UAV markers use the top-down drone glyph from
+`modules/map/assets/drone.svg` (≈20 px), drawn at 3× with a white halo and soft shadow and
+rotated to the compass heading. Colors: standby neutral, active accent, warning/stale warning,
+offline danger. The selected UAV is 1.15× with an accent focus ring; name labels (compact pills)
+appear only for the selected and the hovered UAV. Halo and shadow are design tokens
+(`--map-marker-halo`, `--map-marker-shadow`) so markers read on both the gray map and satellite.
+
+Decluttering (`lib/declutter.ts`, `lib/cesium/cluster-layer.ts`):
+
+```text
+camera < 1.2 km from a UAV   always an individual marker
+further out                  agglomerative screen-space clustering: the closest groups merge
+                             while closer than 44 px, so splits follow natural gaps and clusters
+                             break up gradually as the camera zooms in
+parking formation            standby UAVs aggregate or split as one unit: a single badge while
+                             neighbours would crowd, otherwise the full even grid
+```
+
+No two badges or markers end up closer than the threshold, so they never overlap. Badges are
+neutral with the count inside; only warning/offline members add a colored ring. Clicking a badge
+zooms in until its UAVs separate. The selected UAV is never clustered. Standby UAVs park in an
+even 6 × 4 grid on the pitch of the football stadium used as the base (15 m spacing, aligned
+with the pitch's long axis, all facing the same way).
 
 Cesium is presentation infrastructure.
 
@@ -680,7 +736,7 @@ Baseline:
 18 standby UAVs
 ```
 
-Initial state is idle: all 24 UAVs are parked in standby at the Abu Dhabi base. The prepared Area Scan mission (the baseline above) is started manually by a demo command, or automatically on startup when demo autostart is enabled through configuration.
+Initial state is idle: all 24 UAVs are parked in standby on the pitch of a football stadium in Abu Dhabi that serves as the base. The prepared Area Scan mission (the baseline above) is started manually by a demo command, or automatically on startup when demo autostart is enabled through configuration.
 
 Only one mission is active at a time. Multi-mission operation is out of MVP scope.
 

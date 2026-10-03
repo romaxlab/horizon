@@ -1,5 +1,5 @@
 export { AreaScanError, planAreaScan, type AreaScanRequest } from './area-scan'
-export { DEMO_BASE, DEMO_FLEET_SIZE, DEMO_MISSION } from './demo'
+export { DEMO_BASE, DEMO_FLEET_SIZE, DEMO_MISSION, DEMO_PARKING } from './demo'
 export type { FleetSnapshotDto, SimulatorMessage, TelemetryDto, UavDto } from './protocol'
 export {
   createSimulator,

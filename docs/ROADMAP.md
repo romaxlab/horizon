@@ -199,6 +199,9 @@ Implement:
 - route/waypoints;
 - completed trail.
 
+Mission polygon and route/waypoint rendering land with mission planning (Milestone 7), when
+mission data reaches the application. The completed trail is drawn from telemetry here.
+
 Performance rules:
 
 - update existing entities;

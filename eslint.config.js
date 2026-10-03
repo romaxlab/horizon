@@ -30,6 +30,8 @@ export default defineConfigWithVueTs(
       'vue/require-default-prop': 'off',
       // Misreports reactive props destructure defaults as useless.
       '@typescript-eslint/no-useless-default-assignment': 'off',
+      // Treats `generic="T extends string"` parameters as their constraint and strips them.
+      '@typescript-eslint/no-unnecessary-type-arguments': 'off',
     },
   },
   {

@@ -7,7 +7,7 @@ import {
   type Waypoint,
 } from '@horizon/domain'
 import { planAreaScan } from './area-scan'
-import { DEMO_BASE, DEMO_FLEET_SIZE, DEMO_MISSION } from './demo'
+import { DEMO_BASE, DEMO_FLEET_SIZE, DEMO_MISSION, DEMO_PARKING } from './demo'
 import { generateFleet } from './fleet'
 import type { FleetSnapshotDto, SimulatorMessage, TelemetryDto, UavDto } from './protocol'
 import { createRandom, type Random } from './random'
@@ -49,6 +49,8 @@ const CLIMB_RATE_MPS = 4
 const BATTERY_DRAIN_PCT_PER_SEC = 0.07
 const PARKED_TELEMETRY_EVERY_TICKS = 4
 const ARRIVAL_TOLERANCE_METERS = 0.5
+/** Parked UAVs all face along the parking rows so the formation reads as an even grid. */
+const PARKED_HEADING = (DEMO_PARKING.axisBearing + 180) % 360
 
 type Phase = 'parked' | 'mission' | 'returning'
 
@@ -95,20 +97,22 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   function init() {
     random = createRandom(seed)
     mission = null
-    uavs = generateFleet(fleetSize, DEMO_BASE, random).map(({ uav, home, battery }) => ({
-      uav,
-      home,
-      position: { ...home },
-      heading: 0,
-      speed: 0,
-      battery,
-      signal: 98,
-      gpsSatellites: Math.round(random.range(12, 17)),
-      phase: 'parked',
-      missionId: null,
-      route: [],
-      waypointIndex: 0,
-    }))
+    uavs = generateFleet(fleetSize, DEMO_BASE, DEMO_PARKING, random).map(
+      ({ uav, home, battery }) => ({
+        uav,
+        home,
+        position: { ...home },
+        heading: PARKED_HEADING,
+        speed: 0,
+        battery,
+        signal: 98,
+        gpsSatellites: Math.round(random.range(12, 17)),
+        phase: 'parked',
+        missionId: null,
+        route: [],
+        waypointIndex: 0,
+      }),
+    )
   }
 
   function toTelemetryDto(state: UavRuntime): TelemetryDto {
@@ -177,6 +181,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       if (moveToward(state, target, dt) && overHome) {
         state.phase = 'parked'
         state.speed = 0
+        state.heading = PARKED_HEADING
         state.missionId = null
         state.route = []
         state.waypointIndex = 0

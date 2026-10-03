@@ -19,6 +19,8 @@ export const useFleetStore = defineStore('fleet', () => {
   const uavIds = ref<string[]>([])
   const uavsById = ref<Record<string, UavState>>({})
   const connectionStatus = ref<ConnectionStatus>('connecting')
+  /** Single shared selection, stored by id rather than as a duplicated object. */
+  const selectedUavId = ref<string | null>(null)
 
   const uavs = computed(() =>
     uavIds.value.flatMap((id) => {
@@ -56,6 +58,7 @@ export const useFleetStore = defineStore('fleet', () => {
 
     uavIds.value = snapshot.uavs.map((uav) => uav.id)
     uavsById.value = next
+    if (selectedUavId.value !== null && !(selectedUavId.value in next)) selectedUavId.value = null
   }
 
   /** Applies a batch of ordered, coalesced telemetry. Unknown UAVs are ignored. */
@@ -72,6 +75,10 @@ export const useFleetStore = defineStore('fleet', () => {
     return ignored
   }
 
+  function selectUav(uavId: string | null) {
+    selectedUavId.value = uavId !== null && uavId in uavsById.value ? uavId : null
+  }
+
   function setConnectionStatus(status: ConnectionStatus) {
     connectionStatus.value = status
   }
@@ -81,7 +88,9 @@ export const useFleetStore = defineStore('fleet', () => {
     uavsById,
     uavs,
     connectionStatus,
+    selectedUavId,
     hydrate,
+    selectUav,
     applyTelemetry,
     setConnectionStatus,
   }

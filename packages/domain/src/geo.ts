@@ -4,7 +4,7 @@ export interface GeoPoint {
 }
 
 export interface GeoPosition extends GeoPoint {
-  /** Meters above the ellipsoid. */
+  /** Meters above ground level (AGL) at the operating site. */
   altitude: number
 }
 

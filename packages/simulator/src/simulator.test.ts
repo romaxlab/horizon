@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_MISSION } from './demo'
+import { distanceMeters } from '@horizon/domain'
+import { DEMO_BASE, DEMO_MISSION, DEMO_PARKING } from './demo'
 import type { SimulatorMessage, TelemetryDto } from './protocol'
 import { createSimulator, type SimulatorOptions } from './simulator'
 
@@ -33,6 +34,31 @@ describe('createSimulator', () => {
     expect(snapshot.uavs).toHaveLength(24)
     expect(new Set(snapshot.uavs.map((u) => u.id)).size).toBe(24)
     expect(snapshot.telemetry.every((t) => t.mission_id === null && t.speed_mps === 0)).toBe(true)
+  })
+
+  it('parks the fleet in an even grid on the stadium pitch, aligned with the pitch', () => {
+    const { telemetry } = createSimulator({ startTime: START }).getFleetSnapshot()
+    const at = (i: number) => telemetry[i] ?? telemetry[0]
+    const spacing = (a: number, b: number) =>
+      distanceMeters(
+        { latitude: at(a)?.lat ?? 0, longitude: at(a)?.lon ?? 0 },
+        {
+          latitude: at(b)?.lat ?? 0,
+          longitude: at(b)?.lon ?? 0,
+        },
+      )
+
+    // 6 columns × 4 rows, 15 m apart in both directions: 75 × 45 m, inside the ≈117 × 74 m pitch.
+    expect(spacing(0, 1)).toBeCloseTo(15, 0)
+    expect(spacing(0, 6)).toBeCloseTo(15, 0)
+    expect(spacing(7, 8)).toBeCloseTo(15, 0)
+    expect(spacing(0, 5)).toBeCloseTo(75, 0)
+    expect(spacing(0, 18)).toBeCloseTo(45, 0)
+    const meanLat = telemetry.reduce((sum, t) => sum + t.lat, 0) / telemetry.length
+    const meanLon = telemetry.reduce((sum, t) => sum + t.lon, 0) / telemetry.length
+    expect(distanceMeters({ latitude: meanLat, longitude: meanLon }, DEMO_BASE)).toBeLessThan(0.5)
+    const parkedHeading = (DEMO_PARKING.axisBearing + 180) % 360
+    expect(telemetry.every((t) => t.heading_deg === parkedHeading)).toBe(true)
   })
 
   it('replays identically for the same seed', () => {
@@ -103,7 +129,12 @@ describe('createSimulator', () => {
     expect(Math.min(...progress)).toBe(0)
     expect(progress).toEqual([...progress].sort((x, y) => x - y))
     const parked = simulator.getFleetSnapshot().telemetry.find((t) => t.uav_id === 'uav-01')
-    expect(parked).toMatchObject({ alt_m: 0, speed_mps: 0, waypoint_index: null })
+    expect(parked).toMatchObject({
+      alt_m: 0,
+      speed_mps: 0,
+      heading_deg: (DEMO_PARKING.axisBearing + 180) % 360,
+      waypoint_index: null,
+    })
   })
 
   it('allows a single active mission at a time', () => {

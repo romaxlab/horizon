@@ -62,4 +62,18 @@ describe('useFleetStore', () => {
     expect(store.uavsById.a).toMatchObject({ lastUpdatedAt: 100, status: 'standby' })
     expect(store.uavsById.ghost).toBeUndefined()
   })
+
+  it('keeps a single selection by id and clears it when the UAV disappears', () => {
+    const store = useFleetStore()
+    store.hydrate({ serverTime: 0, uavs: [uav('a'), uav('b')], telemetry: [] }, 0)
+
+    store.selectUav('b')
+    expect(store.selectedUavId).toBe('b')
+    store.selectUav('ghost')
+    expect(store.selectedUavId).toBeNull()
+
+    store.selectUav('a')
+    store.hydrate({ serverTime: 1, uavs: [uav('b')], telemetry: [] }, 1)
+    expect(store.selectedUavId).toBeNull()
+  })
 })

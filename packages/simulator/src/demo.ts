@@ -1,7 +1,13 @@
 import type { GeoPosition, MissionArea } from '@horizon/domain'
 
-/** Fleet base in Abu Dhabi. Parked UAVs are laid out on a grid starting here. */
-export const DEMO_BASE: GeoPosition = { latitude: 24.453, longitude: 54.38, altitude: 0 }
+/** Fleet base: the center of the football stadium pitch east of the demo mission area. */
+export const DEMO_BASE: GeoPosition = { latitude: 24.452756, longitude: 54.392171, altitude: 0 }
+
+/**
+ * Parking formation on the pitch (≈117 × 74 m): rows of `columns` UAVs run along the pitch's
+ * long axis (bearing `axisBearing`), rows stack across it. Measured from Esri World Imagery.
+ */
+export const DEMO_PARKING = { axisBearing: 140.7, spacingMeters: 15, columns: 6 } as const
 
 export const DEMO_FLEET_SIZE = 24
 

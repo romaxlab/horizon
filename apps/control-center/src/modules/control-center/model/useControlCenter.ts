@@ -1,6 +1,7 @@
 import type { BadgeVariant } from '@horizon/ui'
 import { computed } from 'vue'
 import { useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
+import { useMapStore } from '@/modules/map'
 import { useNow } from '@/shared/lib/useNow'
 
 const connectionPresentation: Record<ConnectionStatus, { label: string; variant: BadgeVariant }> = {
@@ -21,6 +22,7 @@ const clockFormat = new Intl.DateTimeFormat(undefined, {
 export function useControlCenter() {
   useFleetSync()
   const fleet = useFleetStore()
+  const map = useMapStore()
   const now = useNow()
 
   const connection = computed(() => connectionPresentation[fleet.connectionStatus])
@@ -38,5 +40,18 @@ export function useControlCenter() {
         }
   })
 
-  return { connection, clock, mission }
+  /** Selecting from the map keeps the camera; Follow switches to the new selection or stops. */
+  function selectUav(uavId: string | null) {
+    fleet.selectUav(uavId)
+    if (map.followUavId !== null) map.setFollow(fleet.selectedUavId)
+  }
+
+  return {
+    connection,
+    clock,
+    mission,
+    uavs: computed(() => fleet.uavs),
+    selectedUavId: computed(() => fleet.selectedUavId),
+    selectUav,
+  }
 }

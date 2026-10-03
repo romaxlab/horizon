@@ -7,6 +7,7 @@ describe('parseAppConfig', () => {
       demoControls: true,
       demoAutostart: false,
       simulatorMode: 'deterministic',
+      cesiumIonToken: null,
     })
     expect(parseAppConfig({}, false).demoControls).toBe(false)
   })
@@ -16,6 +17,8 @@ describe('parseAppConfig', () => {
     expect(parseAppConfig({ VITE_DEMO_CONTROLS: 'true' }, false).demoControls).toBe(true)
     expect(parseAppConfig({ VITE_DEMO_AUTOSTART: 'true' }, false).demoAutostart).toBe(true)
     expect(parseAppConfig({ VITE_SIMULATOR_MODE: 'random' }, false).simulatorMode).toBe('random')
+    expect(parseAppConfig({ VITE_CESIUM_ION_TOKEN: ' abc ' }, false).cesiumIonToken).toBe('abc')
+    expect(parseAppConfig({ VITE_CESIUM_ION_TOKEN: '' }, false).cesiumIonToken).toBeNull()
   })
 
   it('rejects invalid values', () => {

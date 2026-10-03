@@ -7,12 +7,15 @@ const appConfigSchema = z.object({
   VITE_DEMO_AUTOSTART: z.stringbool().default(false),
   /** `deterministic` replays the same simulation every run; `random` varies it. */
   VITE_SIMULATOR_MODE: z.enum(['deterministic', 'random']).default('deterministic'),
+  /** Optional Cesium ion access token; enables the photorealistic 3D map view. */
+  VITE_CESIUM_ION_TOKEN: z.string().trim().optional(),
 })
 
 export interface AppConfig {
   demoControls: boolean
   demoAutostart: boolean
   simulatorMode: 'deterministic' | 'random'
+  cesiumIonToken: string | null
 }
 
 export class AppConfigError extends Error {
@@ -29,6 +32,7 @@ export function parseAppConfig(env: Record<string, unknown>, isDev: boolean): Ap
     demoControls: result.data.VITE_DEMO_CONTROLS ?? isDev,
     demoAutostart: result.data.VITE_DEMO_AUTOSTART,
     simulatorMode: result.data.VITE_SIMULATOR_MODE,
+    cesiumIonToken: result.data.VITE_CESIUM_ION_TOKEN || null,
   }
 }
 

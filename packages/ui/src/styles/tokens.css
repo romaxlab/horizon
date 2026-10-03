@@ -85,6 +85,11 @@
 
   --elevation-floating: var(--shadow-hairline-light), var(--shadow-soft-light);
   --elevation-raised: var(--shadow-hairline-light), 0 2px 8px rgb(0 0 0 / 0.06);
+
+  /* Map overlays sit on arbitrary imagery: a white halo and soft shadow keep them legible on
+     both the gray map and satellite imagery, in either theme. */
+  --map-marker-halo: var(--white);
+  --map-marker-shadow: rgba(0, 0, 0, 0.35);
 }
 
 :root[data-theme='dark'] {
