@@ -1,0 +1,108 @@
+/*
+ * Token source. Raw design values are allowed only in this file.
+ *
+ * primitive tokens → semantic tokens (light on :root, dark overrides)
+ */
+
+:root {
+  /* Primitive: neutral ramp (cool slate) */
+  --neutral-0: #ffffff;
+  --neutral-50: #f6f7f9;
+  --neutral-100: #eceef2;
+  --neutral-200: #dde1e7;
+  --neutral-300: #c3c9d2;
+  --neutral-400: #9aa2ae;
+  --neutral-450: #848c98;
+  --neutral-500: #737c89;
+  --neutral-550: #646c78;
+  --neutral-600: #565e6a;
+  --neutral-700: #3c434d;
+  --neutral-800: #272c34;
+  --neutral-850: #1d2128;
+  --neutral-900: #15181d;
+  --neutral-950: #0e1014;
+
+  /* Primitive: accent */
+  --blue-300: #8db8ff;
+  --blue-400: #5f97f5;
+  --blue-500: #3b7be6;
+  --blue-600: #2563cc;
+  --blue-700: #1d4fa3;
+
+  /* Primitive: status hues */
+  --green-400: #4cc38a;
+  --green-700: #176f45;
+  --amber-400: #f2b84b;
+  --amber-700: #875703;
+  --red-400: #f2706b;
+  --red-700: #b22b26;
+
+  /* Primitive: shadow tints */
+  --shadow-color-light: rgb(14 16 20 / 0.12);
+  --shadow-color-dark: rgb(0 0 0 / 0.45);
+
+  /* Semantic: light theme */
+  color-scheme: light;
+
+  --bg-canvas: var(--neutral-100);
+  --bg-surface: var(--neutral-0);
+  --bg-surface-raised: var(--neutral-0);
+  --bg-surface-hover: var(--neutral-100);
+  --bg-surface-sunken: var(--neutral-50);
+  --bg-overlay: color-mix(in oklab, var(--neutral-0) 92%, transparent);
+
+  --text-primary: var(--neutral-900);
+  --text-secondary: var(--neutral-700);
+  --text-muted: var(--neutral-600);
+  --text-inverse: var(--neutral-0);
+
+  --border-default: var(--neutral-200);
+  --border-subtle: var(--neutral-100);
+  --border-control: var(--neutral-450);
+  --border-focus: var(--blue-500);
+
+  --action-primary: var(--blue-600);
+  --action-primary-hover: var(--blue-700);
+  --action-primary-text: var(--neutral-0);
+
+  --status-success: var(--green-700);
+  --status-warning: var(--amber-700);
+  --status-danger: var(--red-700);
+  --status-info: var(--blue-600);
+  --status-neutral: var(--neutral-500);
+
+  --elevation-floating: 0 8px 24px var(--shadow-color-light);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg-canvas: var(--neutral-950);
+  --bg-surface: var(--neutral-900);
+  --bg-surface-raised: var(--neutral-850);
+  --bg-surface-hover: var(--neutral-800);
+  --bg-surface-sunken: var(--neutral-950);
+  --bg-overlay: color-mix(in oklab, var(--neutral-900) 88%, transparent);
+
+  --text-primary: var(--neutral-50);
+  --text-secondary: var(--neutral-300);
+  --text-muted: var(--neutral-400);
+  --text-inverse: var(--neutral-950);
+
+  --border-default: var(--neutral-800);
+  --border-subtle: var(--neutral-850);
+  --border-control: var(--neutral-550);
+  --border-focus: var(--blue-400);
+
+  --action-primary: var(--blue-600);
+  --action-primary-hover: var(--blue-700);
+  --action-primary-text: var(--neutral-0);
+
+  --status-success: var(--green-400);
+  --status-warning: var(--amber-400);
+  --status-danger: var(--red-400);
+  --status-info: var(--blue-300);
+  --status-neutral: var(--neutral-400);
+
+  --elevation-floating: 0 8px 24px var(--shadow-color-dark);
+}

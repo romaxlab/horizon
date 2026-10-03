@@ -123,6 +123,8 @@ Theme switching happens at the semantic-token layer:
 
 Components do not branch on theme to choose colors.
 
+The theme is applied once during bootstrap with `initTheme()` from `@horizon/ui`, using the stored choice or the system preference. `useTheme()` exposes the current theme and `setTheme`/`toggleTheme` for a theme control.
+
 Bad:
 
 ```ts
@@ -166,6 +168,29 @@ Feature components may use Tailwind directly for layout/composition:
 - sizing tied to approved scales.
 
 Reusable visual chrome should come from UI primitives.
+
+Token sources live in `packages/ui/src/styles`:
+
+```text
+tokens.css   primitive tokens + light/dark semantic tokens
+theme.css    Tailwind @theme mapping of semantic tokens to utilities
+```
+
+Tailwind's default color palette, shadows, radii, font sizes, font weights, tracking and leading are reset there. Only named token utilities exist, so classes such as `bg-red-500`, `text-sm` or `font-bold` do not compile. Semantic text/background pairs meet WCAG AA in both themes; control borders meet 3:1.
+
+Utility naming:
+
+```text
+bg-canvas / bg-surface / bg-surface-raised / bg-surface-hover / bg-overlay
+text-text-primary / text-text-secondary / text-text-muted
+border-border-default / border-border-subtle / border-border-control / border-border-focus
+bg-action-primary / text-action-primary-text
+text-status-{success|warning|danger|info|neutral}
+bg-status-{...}-subtle
+text-{display|heading-*|body-*|label-*|caption}
+h-control-{sm|md} / size-control-{sm|md}
+rounded-{sm|md|lg|full} / shadow-floating
+```
 
 ---
 
@@ -458,6 +483,8 @@ Runtime values are allowed where genuinely dynamic:
 - progress widths;
 - Cesium positioning;
 - dynamic canvas/layout measurements.
+
+`pnpm lint` runs `scripts/check-styles.mjs`, which rejects raw colors outside `packages/ui/src/styles` and Tailwind arbitrary values (`w-[13px]`, `bg-[#fff]`) in application code.
 
 ---
 
