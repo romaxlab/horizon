@@ -53,6 +53,12 @@ importers:
       '@horizon/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@horizon/realtime':
+        specifier: workspace:*
+        version: link:../../packages/realtime
+      '@horizon/simulator':
+        specifier: workspace:*
+        version: link:../../packages/simulator
       '@horizon/ui':
         specifier: workspace:*
         version: link:../../packages/ui

@@ -643,6 +643,17 @@ RemoteVideoProvider
 
 Modules consume contracts, not concrete implementations.
 
+Placement:
+
+```text
+FleetRepository            modules/fleet (contract owned by the consuming module)
+RealtimeTransport          @horizon/realtime
+AppServices + injection    app/providers/services.ts
+mock composition           app/bootstrap/mock-services.ts
+```
+
+Contracts are added to `AppServices` as their features are implemented.
+
 Configuration is validated centrally:
 
 ```text
