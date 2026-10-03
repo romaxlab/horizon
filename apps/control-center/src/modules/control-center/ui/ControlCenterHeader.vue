@@ -7,7 +7,9 @@ import { HorizonLogo } from '@/shared/brand'
 defineProps<{
   connection: { label: string; variant: BadgeVariant }
   clock: string
-  missionTitle: string
+  /** Active mission name; null hides the mission context. */
+  missionTitle: string | null
+  missionContext: string
   canCreateMission: boolean
 }>()
 
@@ -21,11 +23,14 @@ const { theme, toggleTheme } = useTheme()
     <BaseSurface
       variant="floating"
       shape="pill"
-      class="pointer-events-auto flex h-10 min-w-0 items-center gap-1.5 pr-4 pl-2"
+      class="pointer-events-auto flex h-10 min-w-0 items-center gap-1.5 pr-1 pl-2"
     >
       <!-- The logo carries its own clear space (~8px each side), hence the tight padding. -->
       <HorizonLogo />
-      <BaseText variant="body-md" tone="muted" truncate>{{ missionTitle }}</BaseText>
+      <template v-if="missionTitle">
+        <BaseText variant="body-md" truncate>{{ missionTitle }}</BaseText>
+        <BaseBadge variant="info">{{ missionContext }}</BaseBadge>
+      </template>
       <BaseButton
         size="sm"
         variant="primary"

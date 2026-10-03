@@ -57,6 +57,7 @@ watch(selectedUavId, (id) => {
         :connection="connection"
         :clock="clock"
         :mission-title="mission.title"
+        :mission-context="mission.state"
         :can-create-mission="canCreateMission"
         @new-mission="builder.start()"
       />

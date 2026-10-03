@@ -55,12 +55,8 @@ export function useControlCenter() {
     const progress = missionProgress.value
     if (!current || !progress || current.status !== 'active') {
       return {
-        title:
-          current?.status === 'completed'
-            ? `${current.name} · completed`
-            : current?.status === 'aborted'
-              ? `${current.name} · stopped`
-              : 'No active mission',
+        // The header only names a mission while it is active.
+        title: null,
         state: 'Standing by',
         detail: `${fleet.statusCounts.standby} UAVs ready`,
         progress: null,
