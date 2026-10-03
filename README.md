@@ -1,4 +1,4 @@
-<h1>
+<h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="apps/control-center/src/shared/brand/horizon-logo-dark.svg" />
     <img src="apps/control-center/src/shared/brand/horizon-logo.svg" alt="Horizon" height="96" />
