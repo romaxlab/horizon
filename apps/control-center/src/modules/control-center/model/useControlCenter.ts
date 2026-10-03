@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { useAppServices } from '@/app/providers/services'
 import { healthIssues, useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
+import { useDemoControls } from '@/modules/demo-controls'
 import { useIncidentCenter, type Observation } from '@/modules/incidents'
 import { useMapStore, type MissionOverlay } from '@/modules/map'
 import {
@@ -31,7 +32,7 @@ const clockFormat = new Intl.DateTimeFormat(undefined, {
 
 /** Route-level composition for the Control Center: starts live sync and coordinates modules. */
 export function useControlCenter() {
-  useFleetSync()
+  const fleetSync = useFleetSync()
   const fleet = useFleetStore()
   const map = useMapStore()
   const now = useNow()
@@ -39,7 +40,7 @@ export function useControlCenter() {
   const connection = computed(() => connectionPresentation[fleet.connectionStatus])
   const clock = computed(() => clockFormat.format(now.value))
 
-  useMissionSync()
+  const missionSync = useMissionSync()
   const missions = useMissionStore()
 
   const missionProgress = computed(() => {
@@ -83,7 +84,7 @@ export function useControlCenter() {
     () => missions.current?.status !== 'active' && !builder.open.value,
   )
 
-  const { missionPlanner } = useAppServices()
+  const { missionPlanner, demoControl } = useAppServices()
   const abortMutation = useMutation({
     mutationFn: (missionId: string) => missionPlanner.abort(missionId),
   })
@@ -118,6 +119,31 @@ export function useControlCenter() {
     if (incidentId) incidents.acknowledge(incidentId)
     selectUav(uavId, { focus: true })
   }
+
+  /** Demo controls (mock backend + config only): commands go to the simulator, never to stores. */
+  const demoTarget = computed(() => {
+    const state =
+      fleet.selectedUav ?? fleet.uavs.find((s) => s.status === 'active') ?? fleet.uavs[0] ?? null
+    return state ? { id: state.uav.id, name: state.uav.name } : null
+  })
+  const demo = demoControl
+    ? useDemoControls({
+        control: demoControl,
+        target: demoTarget,
+        diagnostics: {
+          stats: fleetSync.stats,
+          fleetSize: computed(() => fleet.uavs.length),
+          connection: computed(() => connectionPresentation[fleet.connectionStatus].label),
+        },
+        // The backend state was replaced: resync through the normal snapshot path.
+        onResync: () => {
+          builder.close()
+          incidents.clearHistory()
+          void fleetSync.resync()
+          void missionSync.reload()
+        },
+      })
+    : null
 
   /** Camera feed inputs for the selected UAV; the video module only sees pose and link. */
   const selectedFeed = computed(() => {
@@ -187,6 +213,7 @@ export function useControlCenter() {
     selectedFeed,
     incidents,
     inspectIncident,
+    demo,
     canCreateMission,
     missionActive,
     stopMission,

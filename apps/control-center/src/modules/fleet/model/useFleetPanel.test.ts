@@ -66,4 +66,20 @@ describe('useFleetPanel', () => {
     const { rows } = useFleetPanel(ref(100_000))
     expect(rows.value.filter((r) => r.selected).map((r) => r.id)).toEqual(['uav-03'])
   })
+
+  it('keeps row identity when visible values do not change', () => {
+    const store = useFleetStore()
+    const { rows } = useFleetPanel(ref(100_000))
+    const before = rows.value.find((r) => r.id === 'uav-01')
+
+    // Same rounded battery: no visible change, same row object.
+    store.applyTelemetry(
+      [telemetry('uav-01', 100_250, { missionId: 'm-1', battery: 90.2 })],
+      100_250,
+    )
+    expect(rows.value.find((r) => r.id === 'uav-01')).toBe(before)
+
+    store.applyTelemetry([telemetry('uav-01', 100_500, { missionId: 'm-1', battery: 80 })], 100_500)
+    expect(rows.value.find((r) => r.id === 'uav-01')).not.toBe(before)
+  })
 })

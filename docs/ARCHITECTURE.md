@@ -798,6 +798,13 @@ STRESS
 
 Demo controls send commands to the simulator. They never patch application stores directly.
 
+Implementation: `DemoControl` (`modules/demo-controls`) is provided only by the mock composition
+and only when `VITE_DEMO_CONTROLS` is on (default in dev). Presets: NORMAL (demo mission),
+INCIDENT (NORMAL plus a scheduled failure sequence on mission UAVs: signal → low battery →
+telemetry loss → backend outage → reconnect → restore), STRESS (240 UAVs). Presets and reset
+replace backend state, so the app resyncs through the normal snapshot path. Diagnostics show
+incoming telemetry rate, store flush rate, fleet size and connection state.
+
 Example incident sequence:
 
 ```text

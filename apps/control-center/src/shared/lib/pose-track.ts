@@ -9,17 +9,25 @@ export interface Pose {
 export interface PoseTrack {
   /**
    * Adds a telemetry sample. `timestamp` is the source clock; `receivedAt` is the local clock.
-   * Samples are placed on the local timeline by a per-track offset so motion follows the
-   * source cadence instead of batch-arrival jitter.
+   * Samples are placed on the local timeline by a linear clock (anchor + rate) so motion follows
+   * the source cadence instead of batch-arrival jitter, also when simulated time runs faster
+   * than real time (the rate is estimated from arrivals).
    */
   push(timestamp: number, receivedAt: number, pose: Pose): void
   /** Pose at local time `time`; holds the last known pose beyond the newest sample. */
   sampleAt(time: number): Pose | null
 }
 
-/** Re-anchor the source→local offset when it drifts further than this (e.g. time scaling). */
-const MAX_OFFSET_DRIFT_MS = 1_000
-const MAX_SAMPLES = 6
+/** Hard re-anchor when the mapped time drifts further than this from arrival time. */
+const MAX_DRIFT_MS = 1_000
+/** Local time over which the source→local clock rate is re-estimated. */
+const RATE_WINDOW_MS = 1_000
+/** Rate changes smaller than this are ignored (arrival jitter). */
+const RATE_TOLERANCE = 0.05
+const MIN_RATE = 0.02
+const MAX_RATE = 4
+/** Enough samples to cover the render delay even when time runs 8× faster. */
+const MAX_SAMPLES = 16
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
@@ -31,19 +39,49 @@ export function lerpHeading(from: number, to: number, t: number): number {
 
 export function createPoseTrack(): PoseTrack {
   const samples: { time: number; pose: Pose }[] = []
-  let offset: number | null = null
+  /** Source→local clock: local = anchor.local + (source - anchor.source) · rate. */
+  let anchor: { local: number; source: number } | null = null
+  let rate = 1
+  let windowStart: { local: number; source: number } | null = null
+  let previousRaw: { local: number; source: number } | null = null
+
+  const toLocal = (timestamp: number) =>
+    anchor ? anchor.local + (timestamp - anchor.source) * rate : timestamp
+  const clampRate = (value: number) => Math.min(MAX_RATE, Math.max(MIN_RATE, value))
 
   return {
     push(timestamp, receivedAt, pose) {
-      const last = samples.at(-1)
-      if (offset === null || Math.abs(timestamp + offset - receivedAt) > MAX_OFFSET_DRIFT_MS) {
-        offset = receivedAt - timestamp
-        // A new anchor invalidates the old timeline; continue from the last rendered pose.
-        samples.length = 0
-        if (last) samples.push({ time: receivedAt - 1, pose: last.pose })
+      if (previousRaw && timestamp <= previousRaw.source) return
+
+      if (!anchor) {
+        anchor = { local: receivedAt, source: timestamp }
+        windowStart = { local: receivedAt, source: timestamp }
+      } else if (Math.abs(toLocal(timestamp) - receivedAt) > MAX_DRIFT_MS) {
+        // The source clock speed changed (time scaling, reconnect): re-estimate the rate from
+        // the latest arrivals and re-anchor at this sample.
+        if (previousRaw && receivedAt > previousRaw.local) {
+          rate = clampRate((receivedAt - previousRaw.local) / (timestamp - previousRaw.source))
+        }
+        anchor = { local: receivedAt, source: timestamp }
+        windowStart = { local: receivedAt, source: timestamp }
+      } else if (windowStart && receivedAt - windowStart.local >= RATE_WINDOW_MS) {
+        // Refine the rate continuously, keeping the mapped timeline continuous.
+        const observed = clampRate(
+          (receivedAt - windowStart.local) / (timestamp - windowStart.source),
+        )
+        if (Math.abs(observed - rate) / rate > RATE_TOLERANCE) {
+          anchor = { local: toLocal(timestamp), source: timestamp }
+          rate = observed
+        }
+        windowStart = { local: receivedAt, source: timestamp }
       }
-      const time = timestamp + offset
-      if (last && time <= last.time) return
+      previousRaw = { local: receivedAt, source: timestamp }
+
+      const time = toLocal(timestamp)
+      // Never jump: drop samples that would sit after this one on the new timeline.
+      while (samples.length > 1 && (samples.at(-1)?.time ?? -Infinity) >= time) samples.pop()
+      const last = samples.at(-1)
+      if (last && last.time >= time) samples.length = 0
       samples.push({ time, pose })
       if (samples.length > MAX_SAMPLES) samples.shift()
     },

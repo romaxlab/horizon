@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { distanceMeters } from '@horizon/domain'
-import { DEMO_BASE, DEMO_MISSION, DEMO_PARKING } from './demo'
+import { DEMO_BASE, DEMO_MISSION, DEMO_PARKING, STRESS_FLEET_SIZE } from './demo'
 import type { MissionDto, SimulatorMessage, TelemetryDto } from './protocol'
 import { createSimulator, type SimulatorOptions } from './simulator'
 
@@ -371,6 +371,48 @@ describe('createSimulator', () => {
     )
     expect(simulator.getFleetSnapshot().telemetry.every((t) => t.flight_phase === 'parked')).toBe(
       true,
+    )
+  })
+
+  it('applies presets: NORMAL starts the demo mission, STRESS uses a large fleet', () => {
+    const simulator = createSimulator({ startTime: START })
+    expect(simulator.dispatch({ type: 'applyPreset', preset: 'normal' })).toEqual({ ok: true })
+    expect(simulator.getActiveMission()?.status).toBe('active')
+
+    simulator.dispatch({ type: 'applyPreset', preset: 'stress' })
+    expect(simulator.fleetSize).toBe(STRESS_FLEET_SIZE)
+    expect(simulator.getFleetSnapshot().uavs).toHaveLength(STRESS_FLEET_SIZE)
+    expect(simulator.getActiveMission()?.status).toBe('active')
+  })
+
+  it('runs the INCIDENT preset as a deterministic failure sequence', () => {
+    const run = () => {
+      const { simulator, messages } = record()
+      const network: boolean[] = []
+      simulator.subscribeNetwork((up) => network.push(up))
+      simulator.dispatch({ type: 'applyPreset', preset: 'incident' })
+      simulator.step(90_000)
+      const [first] = simulator.getActiveMission()?.assigned_uav_ids ?? []
+      return { simulator, messages, network, first }
+    }
+    const a = run()
+    expect(a.network).toEqual([false, true])
+    const signal = telemetryOf(a.messages, a.first ?? '').map((t) => t.signal_pct)
+    expect(Math.min(...signal)).toBeLessThan(35)
+    expect(a.messages).toEqual(run().messages)
+  })
+
+  it('completes the active mission on demand; UAVs return and land', () => {
+    const simulator = createSimulator({ startTime: START })
+    simulator.dispatch({ type: 'startDemoMission' })
+    simulator.step(30_000)
+    expect(simulator.dispatch({ type: 'completeMission' })).toEqual({ ok: true })
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      30 * 60,
     )
   })
 })

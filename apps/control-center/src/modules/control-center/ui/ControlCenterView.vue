@@ -4,6 +4,7 @@ import { BaseButton, BaseIconButton, BaseSurface, BaseText } from '@horizon/ui'
 import { ref, watch } from 'vue'
 import { FleetPanel, UavInspector } from '@/modules/fleet'
 import { MapCanvas, MapControls } from '@/modules/map'
+import { DemoControlsPanel } from '@/modules/demo-controls'
 import { EventFeed, IncidentAlerts } from '@/modules/incidents'
 import { MissionBuilderPanel } from '@/modules/mission-planning'
 import { VideoFeed } from '@/modules/video-monitoring'
@@ -28,6 +29,7 @@ const {
   selectedFeed,
   incidents,
   inspectIncident,
+  demo,
   missionActive,
   stopMission,
   stoppingMission,
@@ -196,15 +198,20 @@ watch(selectedUavId, (id) => {
         </div>
       </div>
 
-      <!-- In the overlay flow so the panels above end at the regular gap instead of overlapping. -->
-      <MissionStatusBar
-        :state="mission.state"
-        :detail="mission.detail"
-        :progress="mission.progress"
-        :can-stop="missionActive"
-        :stopping="stoppingMission"
-        @stop="stopMission"
-      />
+      <!-- Bottom row in the overlay flow, so the panels above end at the regular gap. -->
+      <div class="relative flex justify-center">
+        <div v-if="demo" class="absolute bottom-0 left-0">
+          <DemoControlsPanel :controls="demo" />
+        </div>
+        <MissionStatusBar
+          :state="mission.state"
+          :detail="mission.detail"
+          :progress="mission.progress"
+          :can-stop="missionActive"
+          :stopping="stoppingMission"
+          @stop="stopMission"
+        />
+      </div>
     </div>
 
     <!-- Alerts: top center, below the header. -->

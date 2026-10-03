@@ -1,5 +1,12 @@
 export { AreaScanError, planAreaScan, type AreaScanRequest } from './area-scan'
-export { DEMO_BASE, DEMO_FLEET_SIZE, DEMO_MISSION, DEMO_PARKING } from './demo'
+export {
+  DEMO_BASE,
+  DEMO_FLEET_SIZE,
+  DEMO_MISSION,
+  DEMO_PARKING,
+  STRESS_FLEET_SIZE,
+  type DemoPreset,
+} from './demo'
 export type {
   FleetSnapshotDto,
   GeoPointDto,

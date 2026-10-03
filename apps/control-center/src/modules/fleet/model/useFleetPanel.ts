@@ -1,11 +1,31 @@
 import type { UavState, UavStatus } from '@horizon/domain'
-import type { SegmentOption } from '@horizon/ui'
+import type { BadgeVariant, SegmentOption } from '@horizon/ui'
 import { computed, ref, type Ref } from 'vue'
 import { formatAge } from '@/shared/lib/format'
 import { useNow } from '@/shared/lib/useNow'
 import { uavStatusPresentation } from './fleet.presentation'
 import { LOW_BATTERY_PCT } from './fleet.status'
 import { useFleetStore } from './fleet.store'
+
+export interface FleetRow {
+  id: string
+  name: string
+  model: string
+  status: { label: string; variant: BadgeVariant }
+  battery: string
+  batteryLow: boolean
+  lastSeen: string | null
+  selected: boolean
+}
+
+const sameRow = (a: FleetRow, b: FleetRow) =>
+  a.name === b.name &&
+  a.model === b.model &&
+  a.status === b.status &&
+  a.battery === b.battery &&
+  a.batteryLow === b.batteryLow &&
+  a.lastSeen === b.lastSeen &&
+  a.selected === b.selected
 
 export type FleetFilter = 'all' | 'active' | 'alerts' | 'standby'
 
@@ -44,6 +64,12 @@ export function useFleetPanel(now: Readonly<Ref<number>> = useNow()) {
     ]
   })
 
+  /**
+   * Rows keep their identity while their visible values are unchanged, so a telemetry flush only
+   * re-renders the rows that actually changed (not the whole list of up to hundreds of UAVs).
+   */
+  const rowCache = new Map<string, FleetRow>()
+
   const rows = computed(() =>
     store.uavs
       .filter(
@@ -53,7 +79,7 @@ export function useFleetPanel(now: Readonly<Ref<number>> = useNow()) {
       .map((state) => {
         const { uav, telemetry, status, lastUpdatedAt } = state
         const battery = telemetry ? Math.round(telemetry.battery) : null
-        return {
+        const next: FleetRow = {
           id: uav.id,
           name: uav.name,
           model: uav.model,
@@ -67,6 +93,10 @@ export function useFleetPanel(now: Readonly<Ref<number>> = useNow()) {
               : null,
           selected: uav.id === store.selectedUavId,
         }
+        const previous = rowCache.get(uav.id)
+        if (previous && sameRow(previous, next)) return previous
+        rowCache.set(uav.id, next)
+        return next
       }),
   )
 

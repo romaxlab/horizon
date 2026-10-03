@@ -24,9 +24,19 @@ export interface FleetSyncOptions {
   logger?: Pick<Console, 'warn'>
 }
 
+export interface FleetSyncStats {
+  /** Cumulative realtime messages received. */
+  messages: number
+  /** Cumulative batched flushes applied to the store. */
+  flushes: number
+}
+
 export interface FleetSync {
   start(): Promise<void>
   stop(): void
+  /** Reloads a fresh snapshot (e.g. after the backend was reset); reconnects on failure. */
+  resync(): Promise<void>
+  stats(): FleetSyncStats
 }
 
 /**
@@ -55,15 +65,18 @@ export function createFleetSync({
   let reconnectAttempt = 0
   /** Incremented on every start/stop so async work from a stopped session is discarded. */
   let session = 0
+  const counters: FleetSyncStats = { messages: 0, flushes: 0 }
 
   function flush() {
     const batch = buffer.drain()
     if (batch.length === 0) return
+    counters.flushes += 1
     const ignored = target.applyTelemetry(batch, now())
     if (ignored > 0) logger.warn(`[fleet-sync] ignored telemetry for ${ignored} unknown UAV(s)`)
   }
 
   function handleMessage(payload: unknown) {
+    counters.messages += 1
     const result = parseTelemetryMessage(payload)
     if (result.kind === 'invalid')
       logger.warn('[fleet-sync] invalid telemetry message', result.error)
@@ -145,5 +158,17 @@ export function createFleetSync({
     buffer.clear()
   }
 
-  return { start, stop }
+  async function resync() {
+    if (unsubscribe === null) return
+    const current = session
+    try {
+      await sync(current)
+    } catch (error) {
+      if (current !== session) return
+      logger.warn('[fleet-sync] resync failed', error)
+      scheduleReconnect()
+    }
+  }
+
+  return { start, stop, resync, stats: () => ({ ...counters }) }
 }

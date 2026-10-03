@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { PanelLeftClose } from '@lucide/vue'
-import { BaseBadge, BaseIconButton, BaseInput, BaseSegmentedControl, BaseText } from '@horizon/ui'
+import { BaseIconButton, BaseInput, BaseSegmentedControl, BaseText } from '@horizon/ui'
 import { useFleetPanel } from '../model/useFleetPanel'
+import FleetPanelRow from './FleetPanelRow.vue'
 
 const emit = defineEmits<{ select: [uavId: string]; collapse: [] }>()
 
@@ -46,30 +47,7 @@ const { query, filter, filterOptions, rows, isLoading } = useFleetPanel()
     </BaseText>
     <ul v-else class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
       <li v-for="row in rows" :key="row.id">
-        <button
-          type="button"
-          :aria-pressed="row.selected"
-          class="flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-fill aria-pressed:bg-fill-strong"
-          @click="emit('select', row.id)"
-        >
-          <span class="flex min-w-0 flex-1 flex-col">
-            <BaseText variant="label-lg" truncate>{{ row.name }}</BaseText>
-            <BaseText variant="caption" tone="muted" truncate>
-              {{ row.lastSeen ? `Last seen ${row.lastSeen}` : row.model }}
-            </BaseText>
-          </span>
-          <BaseBadge :variant="row.status.variant" appearance="plain" class="w-16">
-            {{ row.status.label }}
-          </BaseBadge>
-          <BaseText
-            variant="body-md"
-            :tone="row.batteryLow ? 'danger' : 'secondary'"
-            numeric
-            class="w-10 text-right"
-          >
-            {{ row.battery }}
-          </BaseText>
-        </button>
+        <FleetPanelRow :row="row" @select="emit('select', $event)" />
       </li>
     </ul>
   </section>

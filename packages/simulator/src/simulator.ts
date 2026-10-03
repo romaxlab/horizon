@@ -8,8 +8,16 @@ import {
   type Waypoint,
 } from '@horizon/domain'
 import { planAreaScan } from './area-scan'
-import { DEMO_BASE, DEMO_FLEET_SIZE, DEMO_MISSION, DEMO_PARKING } from './demo'
-import { generateFleet } from './fleet'
+import {
+  DEMO_BASE,
+  DEMO_FLEET_SIZE,
+  DEMO_MISSION,
+  DEMO_PARKING,
+  STRESS_FLEET_SIZE,
+  STRESS_PARKING,
+  type DemoPreset,
+} from './demo'
+import { generateFleet, type ParkingLayout } from './fleet'
 import type {
   FleetSnapshotDto,
   GeoPointDto,
@@ -46,6 +54,14 @@ export type SimulatorCommand =
   | { type: 'setSignalDegraded'; uavId: string; degraded: boolean }
   /** Demo/test control: backend ↔ client network outage (snapshot and stream unreachable). */
   | { type: 'setNetwork'; up: boolean }
+  /** Demo control: finishes the active mission's scan now; UAVs return and land. */
+  | { type: 'completeMission' }
+  /** Demo control: simulation speed (1 = real time). */
+  | { type: 'setTimeScale'; scale: number }
+  /** Demo control: clears all injected failures and restores the network. */
+  | { type: 'restoreAll' }
+  /** Demo control: resets to a preset (NORMAL / INCIDENT / STRESS). */
+  | { type: 'applyPreset'; preset: DemoPreset }
   | { type: 'reset' }
 
 export type PlanResult = { ok: true; mission: MissionDto } | { ok: false; reason: string }
@@ -65,6 +81,8 @@ export interface Simulator {
   subscribe(listener: (message: SimulatorMessage) => void): () => void
   /** Whether the backend is reachable from the client (fake network). */
   readonly networkUp: boolean
+  readonly timeScale: number
+  readonly fleetSize: number
   subscribeNetwork(listener: (up: boolean) => void): () => void
   dispatch(command: SimulatorCommand): CommandResult
   /** Advances simulated time deterministically. */
@@ -118,7 +136,11 @@ const round = (value: number, digits: number) => Number(value.toFixed(digits))
 export function createSimulator(options: SimulatorOptions = {}): Simulator {
   const mode = options.mode ?? 'deterministic'
   const seed = options.seed ?? (mode === 'random' ? Math.floor(Math.random() * 2 ** 32) : 1)
-  const fleetSize = options.fleetSize ?? DEMO_FLEET_SIZE
+  let fleetSize = options.fleetSize ?? DEMO_FLEET_SIZE
+  let parking: ParkingLayout = DEMO_PARKING
+  let timeScale = 1
+  /** Deterministic scripted commands, by simulated time (INCIDENT preset). */
+  let scheduled: { at: number; command: SimulatorCommand }[] = []
   const tickMs = options.tickMs ?? 250
 
   let now = options.startTime ?? Date.now()
@@ -140,26 +162,25 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     mission = null
     plannedMissions.clear()
     missionSeq = 0
-    uavs = generateFleet(fleetSize, DEMO_BASE, DEMO_PARKING, random).map(
-      ({ uav, home, battery }) => ({
-        uav,
-        home,
-        position: { ...home },
-        heading: PARKED_HEADING,
-        speed: 0,
-        battery,
-        signal: 98,
-        gpsSatellites: Math.round(random.range(12, 17)),
-        phase: 'parked',
-        returnReason: null,
-        telemetryLost: false,
-        lastReported: null,
-        signalDegraded: false,
-        missionId: null,
-        route: [],
-        waypointIndex: 0,
-      }),
-    )
+    scheduled = []
+    uavs = generateFleet(fleetSize, DEMO_BASE, parking, random).map(({ uav, home, battery }) => ({
+      uav,
+      home,
+      position: { ...home },
+      heading: PARKED_HEADING,
+      speed: 0,
+      battery,
+      signal: 98,
+      gpsSatellites: Math.round(random.range(12, 17)),
+      phase: 'parked',
+      returnReason: null,
+      telemetryLost: false,
+      lastReported: null,
+      signalDegraded: false,
+      missionId: null,
+      route: [],
+      waypointIndex: 0,
+    }))
   }
 
   function toTelemetryDto(state: UavRuntime): TelemetryDto {
@@ -310,6 +331,10 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       }
     })
     updateMissionCompletion()
+    while (scheduled[0] && scheduled[0].at <= now) {
+      const next = scheduled.shift()
+      if (next) dispatch(next.command)
+    }
   }
 
   const missionActive = () => mission?.status === 'active'
@@ -429,6 +454,57 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     return { ok: true }
   }
 
+  function completeMission(): CommandResult {
+    if (!mission || !missionActive()) return { ok: false, reason: 'No active mission' }
+    for (const state of uavs) {
+      if (state.missionId === mission.id && state.phase === 'mission') {
+        state.waypointIndex = state.route.length
+        returnHome(state, 'completed')
+      }
+    }
+    return { ok: true }
+  }
+
+  function restoreAll(): CommandResult {
+    for (const state of uavs) {
+      state.telemetryLost = false
+      state.signalDegraded = false
+    }
+    scheduled = []
+    return setNetwork(true)
+  }
+
+  /**
+   * INCIDENT: a deterministic failure sequence on mission UAVs, relative to now —
+   * signal degraded → low battery (returns home) → telemetry loss (stale → offline) →
+   * backend outage → reconnect and resync → telemetry restored.
+   */
+  function scheduleIncidentSequence() {
+    const [first, second, third] = mission?.assigned_uav_ids ?? []
+    if (!first || !second || !third) return
+    const at = (seconds: number) => now + seconds * 1000
+    scheduled = [
+      { at: at(20), command: { type: 'setSignalDegraded', uavId: first, degraded: true } },
+      { at: at(30), command: { type: 'setBattery', uavId: second, batteryPct: 19 } },
+      { at: at(40), command: { type: 'setTelemetryLoss', uavId: third, lost: true } },
+      { at: at(65), command: { type: 'setNetwork', up: false } },
+      { at: at(75), command: { type: 'setNetwork', up: true } },
+      { at: at(80), command: { type: 'setTelemetryLoss', uavId: third, lost: false } },
+      { at: at(85), command: { type: 'setSignalDegraded', uavId: first, degraded: false } },
+    ]
+  }
+
+  function applyPreset(preset: DemoPreset): CommandResult {
+    const stress = preset === 'stress'
+    fleetSize = stress ? STRESS_FLEET_SIZE : DEMO_FLEET_SIZE
+    parking = stress ? STRESS_PARKING : DEMO_PARKING
+    init()
+    setNetwork(true)
+    const started = startDemoMission()
+    if (started.ok && preset === 'incident') scheduleIncidentSequence()
+    return started
+  }
+
   function startDemoMission(): CommandResult {
     if (missionActive()) return { ok: false, reason: 'A mission is already active' }
     const plan = planMission(
@@ -443,6 +519,49 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       DEMO_MISSION.id,
     )
     return plan.ok ? launchMission(plan.mission.id) : plan
+  }
+
+  function dispatch(command: SimulatorCommand): CommandResult {
+    switch (command.type) {
+      case 'startDemoMission':
+        return startDemoMission()
+      case 'launchMission':
+        return launchMission(command.missionId)
+      case 'abortMission':
+        return abortMission(command.missionId)
+      case 'setBattery':
+        return setBattery(command.uavId, command.batteryPct)
+      case 'setTelemetryLoss':
+        return updateUav(command.uavId, (state) => {
+          state.telemetryLost = command.lost
+        })
+      case 'setSignalDegraded':
+        return updateUav(command.uavId, (state) => {
+          state.signalDegraded = command.degraded
+        })
+      case 'setNetwork':
+        return setNetwork(command.up)
+      case 'completeMission':
+        return completeMission()
+      case 'setTimeScale':
+        timeScale = clamp(Math.round(command.scale), 1, 16)
+        if (timer !== null) startTimer()
+        return { ok: true }
+      case 'restoreAll':
+        return restoreAll()
+      case 'applyPreset':
+        return applyPreset(command.preset)
+      case 'reset':
+        init()
+        setNetwork(true)
+        return { ok: true }
+    }
+  }
+
+  /** Real-time loop; faster time scales tick more often instead of bursting ticks together. */
+  function startTimer() {
+    if (timer !== null) clearInterval(timer)
+    timer = setInterval(runTick, tickMs / timeScale)
   }
 
   init()
@@ -468,36 +587,17 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     get networkUp() {
       return networkUp
     },
+    get timeScale() {
+      return timeScale
+    },
+    get fleetSize() {
+      return fleetSize
+    },
     subscribeNetwork(listener) {
       networkListeners.add(listener)
       return () => networkListeners.delete(listener)
     },
-    dispatch(command) {
-      switch (command.type) {
-        case 'startDemoMission':
-          return startDemoMission()
-        case 'launchMission':
-          return launchMission(command.missionId)
-        case 'abortMission':
-          return abortMission(command.missionId)
-        case 'setBattery':
-          return setBattery(command.uavId, command.batteryPct)
-        case 'setTelemetryLoss':
-          return updateUav(command.uavId, (state) => {
-            state.telemetryLost = command.lost
-          })
-        case 'setSignalDegraded':
-          return updateUav(command.uavId, (state) => {
-            state.signalDegraded = command.degraded
-          })
-        case 'setNetwork':
-          return setNetwork(command.up)
-        case 'reset':
-          init()
-          setNetwork(true)
-          return { ok: true }
-      }
-    },
+    dispatch,
     step(ms) {
       pendingMs += ms
       while (pendingMs >= tickMs) {
@@ -506,9 +606,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       }
     },
     start() {
-      timer ??= setInterval(() => {
-        runTick()
-      }, tickMs)
+      if (timer === null) startTimer()
     },
     stop() {
       if (timer !== null) clearInterval(timer)

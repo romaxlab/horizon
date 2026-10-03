@@ -33,4 +33,6 @@ export function useFleetSync() {
   onBeforeUnmount(() => {
     sync.stop()
   })
+
+  return { resync: () => sync.resync(), stats: () => sync.stats() }
 }

@@ -1,5 +1,5 @@
 import { createMockRealtimeTransport } from '@horizon/realtime'
-import { createSimulator, type Simulator } from '@horizon/simulator'
+import { createSimulator, type Simulator, type SimulatorCommand } from '@horizon/simulator'
 import type { AppServices } from '@/app/providers/services'
 import { parseFleetSnapshot, type FleetRepository } from '@/modules/fleet'
 import {
@@ -9,6 +9,7 @@ import {
   type MissionPlanner,
 } from '@/modules/mission-planning'
 import type { VideoProvider } from '@/modules/video-monitoring'
+import type { DemoCommand, DemoControl } from '@/modules/demo-controls'
 import type { AppConfig } from '@/shared/config'
 import { HttpError } from '@/shared/http'
 
@@ -97,8 +98,47 @@ export function createMockServices(config: AppConfig): AppServices {
     },
   }
 
+  const toSimulatorCommand = (command: DemoCommand): SimulatorCommand => {
+    switch (command.type) {
+      case 'preset':
+        return { type: 'applyPreset', preset: command.preset }
+      case 'lowBattery':
+        return { type: 'setBattery', uavId: command.uavId, batteryPct: 18 }
+      case 'degradeSignal':
+        return { type: 'setSignalDegraded', uavId: command.uavId, degraded: true }
+      case 'loseTelemetry':
+        return { type: 'setTelemetryLoss', uavId: command.uavId, lost: true }
+      case 'networkOutage':
+        return { type: 'setNetwork', up: false }
+      case 'restoreAll':
+        return { type: 'restoreAll' }
+      case 'completeMission':
+        return { type: 'completeMission' }
+      case 'reset':
+        return { type: 'reset' }
+      case 'setTimeScale':
+        return { type: 'setTimeScale', scale: command.scale }
+    }
+  }
+  const demoControl: DemoControl | null = config.demoControls
+    ? {
+        dispatch(command) {
+          const result = simulator.dispatch(toSimulatorCommand(command))
+          return {
+            ok: result.ok,
+            reason: result.ok ? undefined : result.reason,
+            resync: command.type === 'preset' || command.type === 'reset',
+          }
+        },
+        get timeScale() {
+          return simulator.timeScale
+        },
+      }
+    : null
+
   return {
     fleetRepository,
+    demoControl,
     videoProvider,
     missionPlanner,
     realtimeTransport: createMockRealtimeTransport(simulator),

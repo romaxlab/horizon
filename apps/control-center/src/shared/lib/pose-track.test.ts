@@ -50,14 +50,28 @@ describe('createPoseTrack', () => {
     expect(track.sampleAt(2_000)).toEqual(pose(25))
   })
 
-  it('re-anchors after a long gap without jumping backwards', () => {
+  it('re-anchors after a clock jump and glides to the new position instead of snapping', () => {
     const track = createPoseTrack()
     track.push(0, 1_000, pose(24))
     track.push(250, 1_250, pose(24.5))
     // Source clock jumps ahead relative to the local clock (e.g. reconnect or time scaling).
     track.push(20_000, 3_000, pose(26))
 
-    expect(track.sampleAt(2_999)).toEqual(pose(24.5))
+    expect(track.sampleAt(1_250)).toEqual(pose(24.5))
+    expect(track.sampleAt(2_125)?.latitude).toBeCloseTo(25.25)
     expect(track.sampleAt(3_000)).toEqual(pose(26))
+  })
+
+  it('moves evenly when simulated time runs 8× faster than real time', () => {
+    const track = createPoseTrack()
+    // Source ticks of 800 ms arrive every 100 ms of local time (8× time scale, 10 Hz flushes).
+    for (let i = 0; i <= 40; i++) track.push(i * 800, 10_000 + i * 100, pose(24 + i * 0.001))
+
+    const positions: number[] = []
+    for (let t = 12_600; t <= 13_900; t += 16) positions.push(track.sampleAt(t)?.latitude ?? 0)
+    const steps = positions.slice(1).map((p, i) => p - (positions[i] ?? p))
+    expect(Math.min(...steps)).toBeGreaterThan(0)
+    // Every frame advances by about the same amount: no stalls and no jumps.
+    expect(Math.max(...steps) / Math.min(...steps)).toBeLessThan(1.5)
   })
 })

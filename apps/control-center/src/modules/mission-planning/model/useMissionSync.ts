@@ -13,24 +13,28 @@ export function useMissionSync() {
   let unsubscribe: (() => void) | null = null
   const controller = new AbortController()
 
+  /** Loads the current mission; after a backend reset there may be none. */
+  async function reload() {
+    try {
+      store.replace(await missionPlanner.getActiveMission(controller.signal))
+    } catch (error) {
+      if (!controller.signal.aborted) console.warn('[mission-sync] failed to load mission', error)
+    }
+  }
+
   onMounted(() => {
     unsubscribe = realtimeTransport.subscribe((event) => {
       if (event.type !== 'message') return
       const mission = parseMissionMessage(event.payload)
       if (mission) store.apply(mission)
     })
-    missionPlanner
-      .getActiveMission(controller.signal)
-      .then((mission) => {
-        if (mission) store.apply(mission)
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) console.warn('[mission-sync] failed to load mission', error)
-      })
+    void reload()
   })
 
   onBeforeUnmount(() => {
     controller.abort()
     unsubscribe?.()
   })
+
+  return { reload }
 }

@@ -41,8 +41,12 @@ interface UavEntry {
   pose: () => Pose | null
   lastTimestamp: number
   status: UavStatus
-  /** Telemetry poses flown during the current mission (converted at render time). */
+  /** Telemetry poses flown during the current mission. */
   trail: Pose[]
+  /** Trail points converted once (ground height applied at push time). */
+  trailPositions: Cartesian3[]
+  /** `airborne`: only then the drop line is drawn (parked UAVs skip it entirely). */
+  flags: { airborne: boolean }
 }
 
 export interface UavLayer {
@@ -163,9 +167,22 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
 
   function createEntry(state: UavState): UavEntry {
     const track = createPoseTrack()
-    const pose = () => track.sampleAt(Date.now() - RENDER_DELAY_MS)
+    // Several properties read the pose every frame; interpolate once per millisecond.
+    let cachedAt = -1
+    let cached: Pose | null = null
+    const pose = () => {
+      const now = Date.now()
+      if (now !== cachedAt) {
+        cachedAt = now
+        cached = track.sampleAt(now - RENDER_DELAY_MS)
+      }
+      return cached
+    }
     const trail: Pose[] = []
+    const trailPositions: Cartesian3[] = []
     const id = state.uav.id
+    // Filled in below; callbacks only run after the entry exists.
+    const flags = { airborne: false }
 
     const entity = viewer.entities.add({
       id: `${ENTITY_PREFIX}${id}`,
@@ -186,12 +203,13 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
       // Drop line to the ground: altitude cue in a tilted view.
+      // Hidden lines skip position evaluation and geometry updates in Cesium.
       polyline: {
         width: 1,
-        show: new CallbackProperty(() => !clustered.has(id), false),
+        show: new CallbackProperty(() => flags.airborne && !clustered.has(id), false),
         positions: new CallbackProperty(() => {
           const current = pose()
-          if (!current || current.altitude < 2) return []
+          if (!current) return []
           return [toCartesian({ ...current, altitude: 0 }), toCartesian(current)]
         }, false),
       },
@@ -200,11 +218,10 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const trailEntity = viewer.entities.add({
       polyline: {
         width: 1.5,
+        show: new CallbackProperty(() => trail.length > 0, false),
         positions: new CallbackProperty(() => {
           const current = pose()
-          return current && trail.length > 0
-            ? [...trail.map((point) => toCartesian(point)), toCartesian(current)]
-            : []
+          return current ? [...trailPositions, toCartesian(current)] : trailPositions
         }, false),
       },
     })
@@ -219,6 +236,8 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       lastTimestamp: -Infinity,
       status: state.status,
       trail,
+      trailPositions,
+      flags,
     }
     applyStyle(entry)
     return entry
@@ -226,13 +245,18 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
 
   function updateTrail(entry: UavEntry, state: UavState) {
     const telemetry = state.telemetry
+    entry.flags.airborne = (telemetry?.position.altitude ?? 0) >= 2
     if (!telemetry?.missionId) {
       entry.trail.length = 0
+      entry.trailPositions.length = 0
       return
     }
     const point: Pose = { ...telemetry.position, heading: telemetry.heading }
     const last = entry.trail.at(-1)
-    if (!last || distanceMeters(last, point) >= TRAIL_MIN_SPACING_METERS) entry.trail.push(point)
+    if (!last || distanceMeters(last, point) >= TRAIL_MIN_SPACING_METERS) {
+      entry.trail.push(point)
+      entry.trailPositions.push(toCartesian(point))
+    }
   }
 
   return {
@@ -283,6 +307,9 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
 
     setGroundHeight(meters) {
       groundHeight = meters
+      for (const entry of entries.values()) {
+        entry.trailPositions.splice(0, Infinity, ...entry.trail.map((point) => toCartesian(point)))
+      }
     },
 
     setPalette(next) {

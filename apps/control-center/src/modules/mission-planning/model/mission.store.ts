@@ -27,5 +27,11 @@ export const useMissionStore = defineStore('mission', () => {
     current.value = mission
   }
 
-  return { current, apply }
+  /** Replaces the current mission with the backend's view (snapshot), e.g. after a reset. */
+  function replace(mission: Mission | null) {
+    if (mission && current.value?.id === mission.id) apply(mission)
+    else current.value = mission
+  }
+
+  return { current, apply, replace }
 })
