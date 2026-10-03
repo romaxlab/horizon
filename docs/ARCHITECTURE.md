@@ -876,6 +876,14 @@ Event behavior:
 
 Incident actions should update/focus the real application state rather than remain disconnected log entries.
 
+Implementation (`modules/incidents`): `detectIncidents` compares consecutive observations of the
+fleet, the backend link and the current mission (provided by `useControlCenter`, so the module
+does not read fleet state) and records events in an incidents store. Warning/critical events are
+alerts until acknowledged or resolved by the opposite transition (e.g. connection restored).
+During a backend outage one `CONNECTION_LOST` replaces per-UAV link events. `WAYPOINT_REACHED` is
+not emitted (too noisy for the feed); `MISSION_ABORTED` was added for operator stops. Inspect
+selects the UAV, focuses the map and opens the inspector through the normal selection path.
+
 ---
 
 ## 17. Testing

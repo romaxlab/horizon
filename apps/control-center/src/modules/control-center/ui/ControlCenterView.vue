@@ -4,6 +4,7 @@ import { BaseButton, BaseIconButton, BaseSurface, BaseText } from '@horizon/ui'
 import { ref, watch } from 'vue'
 import { FleetPanel, UavInspector } from '@/modules/fleet'
 import { MapCanvas, MapControls } from '@/modules/map'
+import { EventFeed, IncidentAlerts } from '@/modules/incidents'
 import { MissionBuilderPanel } from '@/modules/mission-planning'
 import { VideoFeed } from '@/modules/video-monitoring'
 import { useControlCenter } from '../model/useControlCenter'
@@ -25,6 +26,8 @@ const {
   canCreateMission,
   missionOverlay,
   selectedFeed,
+  incidents,
+  inspectIncident,
   missionActive,
   stopMission,
   stoppingMission,
@@ -33,6 +36,21 @@ const {
 /** Local presentation state: fleet panel expansion and the large video focus view. */
 const fleetOpen = ref(true)
 const videoFocus = ref(false)
+const eventsOpen = ref(false)
+const {
+  alerts,
+  hiddenAlertCount,
+  unreadCount,
+  unreadAlerts,
+  feed,
+  acknowledge,
+  clearHistory,
+  markSeen,
+} = incidents
+// Opening the history (and new events while it is open) counts as seen.
+watch([eventsOpen, unreadCount], ([open, unread]) => {
+  if (open && unread > 0) markSeen()
+})
 watch(selectedUavId, (id) => {
   if (id === null) videoFocus.value = false
 })
@@ -59,7 +77,11 @@ watch(selectedUavId, (id) => {
         :mission-title="mission.title"
         :mission-context="mission.state"
         :can-create-mission="canCreateMission"
+        :unread-count="unreadCount"
+        :unread-alerts="unreadAlerts"
+        :events-open="eventsOpen"
         @new-mission="builder.start()"
+        @toggle-events="eventsOpen = !eventsOpen"
       />
 
       <div class="flex min-h-0 flex-1 items-start justify-between gap-3">
@@ -184,5 +206,38 @@ watch(selectedUavId, (id) => {
         @stop="stopMission"
       />
     </div>
+
+    <!-- Alerts: top center, below the header. -->
+    <div class="pointer-events-none absolute inset-x-0 top-16 flex justify-center">
+      <IncidentAlerts
+        :alerts="alerts"
+        :hidden-count="hiddenAlertCount"
+        @inspect="inspectIncident"
+        @dismiss="acknowledge"
+      />
+    </div>
+
+    <!-- Event history, opened from the header bell. -->
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="-translate-y-1 opacity-0"
+      leave-active-class="transition duration-150 ease-in"
+      leave-to-class="-translate-y-1 opacity-0"
+    >
+      <BaseSurface
+        v-if="eventsOpen"
+        as="aside"
+        variant="floating"
+        class="absolute top-16 right-3 flex max-h-96 w-80 flex-col overflow-hidden"
+        aria-label="Event history"
+      >
+        <EventFeed
+          :events="feed"
+          @inspect="inspectIncident(null, $event)"
+          @close="eventsOpen = false"
+          @clear="clearHistory"
+        />
+      </BaseSurface>
+    </Transition>
   </div>
 </template>

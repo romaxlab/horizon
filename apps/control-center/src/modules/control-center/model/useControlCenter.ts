@@ -2,7 +2,8 @@ import type { BadgeVariant } from '@horizon/ui'
 import { useMutation } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { useAppServices } from '@/app/providers/services'
-import { useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
+import { healthIssues, useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
+import { useIncidentCenter, type Observation } from '@/modules/incidents'
 import { useMapStore, type MissionOverlay } from '@/modules/map'
 import {
   computeMissionProgress,
@@ -63,10 +64,13 @@ export function useControlCenter() {
       }
     }
     const eta = progress.etaSec === null ? '' : ` · ETA ${formatDuration(progress.etaSec)}`
+    const scanning = progress.activeUavCount > 0
     return {
       title: current.name,
       state: `${Math.round(progress.ratio * 100)}%`,
-      detail: `${progress.activeUavCount} UAVs scanning${eta}`,
+      detail: scanning
+        ? `${progress.activeUavCount} UAVs scanning${eta}`
+        : `${progress.returningUavCount} UAVs returning`,
       progress: progress.ratio,
     }
   })
@@ -88,6 +92,32 @@ export function useControlCenter() {
     if (current?.status === 'active') abortMutation.mutate(current.id)
   }
   const missionActive = computed(() => missions.current?.status === 'active')
+
+  /** What incident detection observes; the incidents module never reads fleet state directly. */
+  const observation = computed<Observation>(() => ({
+    backendLive: fleet.connectionStatus !== 'reconnecting',
+    mission: missions.current
+      ? { id: missions.current.id, name: missions.current.name, status: missions.current.status }
+      : null,
+    uavs: fleet.uavs.map((state) => {
+      const issues = state.telemetry ? healthIssues(state.telemetry) : []
+      return {
+        id: state.uav.id,
+        name: state.uav.name,
+        link: state.status === 'offline' ? 'offline' : state.status === 'stale' ? 'stale' : 'fresh',
+        battery: state.telemetry?.battery ?? null,
+        lowBattery: issues.includes('low-battery'),
+        weakSignal: issues.includes('weak-signal'),
+      }
+    }),
+  }))
+  const incidents = useIncidentCenter(observation)
+
+  /** Incident "Inspect": the same path as selecting from the list, plus dismissing the alert. */
+  function inspectIncident(incidentId: string | null, uavId: string) {
+    if (incidentId) incidents.acknowledge(incidentId)
+    selectUav(uavId, { focus: true })
+  }
 
   /** Camera feed inputs for the selected UAV; the video module only sees pose and link. */
   const selectedFeed = computed(() => {
@@ -155,6 +185,8 @@ export function useControlCenter() {
     following: computed(() => map.followUavId !== null),
     builder,
     selectedFeed,
+    incidents,
+    inspectIncident,
     canCreateMission,
     missionActive,
     stopMission,

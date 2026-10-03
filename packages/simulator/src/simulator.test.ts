@@ -347,4 +347,30 @@ describe('createSimulator', () => {
     expect(messages.length).toBeGreaterThan(count)
     expect(states).toEqual([false, true])
   })
+
+  it('completes a mission only after all its UAVs have landed', () => {
+    const { simulator } = record()
+    simulator.dispatch({ type: 'startDemoMission' })
+    const phases = () =>
+      simulator.getFleetSnapshot().telemetry.filter((t) => t.mission_id === DEMO_MISSION.id)
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => phases().every((t) => t.flight_phase === 'returning'),
+      60 * 60,
+    )
+    expect(simulator.getActiveMission()?.status).toBe('active')
+
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      60 * 60,
+    )
+    expect(simulator.getFleetSnapshot().telemetry.every((t) => t.flight_phase === 'parked')).toBe(
+      true,
+    )
+  })
 })

@@ -7,6 +7,8 @@ export interface MissionProgress {
   ratio: number
   /** UAVs still flying their scan route. */
   activeUavCount: number
+  /** UAVs of this mission flying home (finished, stopped or low battery). */
+  returningUavCount: number
   /** Remaining time of the slowest route, seconds; null when not running. */
   etaSec: number | null
 }
@@ -22,6 +24,7 @@ export function computeMissionProgress(
   let completed = 0
   let total = 0
   let activeUavCount = 0
+  let returningUavCount = 0
   let etaSec = 0
 
   for (const route of mission.routes) {
@@ -36,6 +39,7 @@ export function computeMissionProgress(
           ? Math.min(telemetry.currentWaypoint ?? 0, count)
           : 0
     completed += reached
+    if (onThisMission && telemetry.flightPhase === 'returning') returningUavCount += 1
     if (mission.status !== 'active' || !onThisMission || reached >= count) continue
 
     activeUavCount += 1
@@ -56,6 +60,7 @@ export function computeMissionProgress(
     totalWaypoints: total,
     ratio: total > 0 ? completed / total : 0,
     activeUavCount,
+    returningUavCount,
     etaSec: mission.status === 'active' ? Math.round(etaSec) : null,
   }
 }

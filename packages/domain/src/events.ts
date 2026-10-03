@@ -9,6 +9,7 @@ export type OperationalEventType =
   | 'CONNECTION_LOST'
   | 'CONNECTION_RESTORED'
   | 'MISSION_COMPLETED'
+  | 'MISSION_ABORTED'
 
 export interface OperationalEvent {
   id: string

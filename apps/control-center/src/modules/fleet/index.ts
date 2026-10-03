@@ -4,3 +4,4 @@ export type { ConnectionStatus, FleetRepository, FleetSnapshot } from './model/f
 export { useFleetSync } from './model/useFleetSync'
 export { default as FleetPanel } from './ui/FleetPanel.vue'
 export { default as UavInspector } from './ui/UavInspector.vue'
+export { healthIssues, type HealthIssue } from './model/fleet.status'

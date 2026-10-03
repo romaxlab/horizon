@@ -278,9 +278,10 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
 
   function updateMissionCompletion() {
     if (!mission || mission.status !== 'active') return
+    // Complete once every assigned UAV is back on its parking spot, not when scanning ends.
     const done = mission.assigned_uav_ids.every((id) => {
       const state = uavs.find((u) => u.uav.id === id)
-      return !state || state.phase !== 'mission'
+      return !state || state.phase === 'parked'
     })
     if (!done) return
     mission = { ...mission, status: 'completed', completed_at: now }

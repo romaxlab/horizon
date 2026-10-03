@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Moon, Plus, Sun } from '@lucide/vue'
+import { Bell, Moon, Plus, Sun } from '@lucide/vue'
 import { BaseBadge, BaseButton, BaseIconButton, BaseSurface, BaseText, useTheme } from '@horizon/ui'
 import type { BadgeVariant } from '@horizon/ui'
 import { HorizonLogo } from '@/shared/brand'
@@ -11,9 +11,14 @@ defineProps<{
   missionTitle: string | null
   missionContext: string
   canCreateMission: boolean
+  /** New events since the history was last viewed. */
+  unreadCount: number
+  /** Whether any unread event is a warning/critical alert. */
+  unreadAlerts: boolean
+  eventsOpen: boolean
 }>()
 
-const emit = defineEmits<{ newMission: [] }>()
+const emit = defineEmits<{ newMission: []; toggleEvents: [] }>()
 
 const { theme, toggleTheme } = useTheme()
 </script>
@@ -54,6 +59,26 @@ const { theme, toggleTheme } = useTheme()
       <BaseText variant="body-md" tone="secondary" numeric>
         <time>{{ clock }}</time>
       </BaseText>
+      <BaseIconButton
+        :label="unreadCount > 0 ? `Events, ${unreadCount} new` : 'Events'"
+        :pressed="eventsOpen"
+        class="relative"
+        @click="emit('toggleEvents')"
+      >
+        <Bell />
+        <span
+          v-if="unreadCount > 0"
+          class="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-label-sm ring-2 ring-surface"
+          :class="
+            unreadAlerts
+              ? 'bg-status-danger text-text-inverse'
+              : 'bg-action-primary text-action-primary-text'
+          "
+          aria-hidden="true"
+        >
+          {{ unreadCount > 9 ? '9+' : unreadCount }}
+        </span>
+      </BaseIconButton>
       <BaseIconButton
         :label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
         @click="toggleTheme"
