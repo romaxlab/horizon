@@ -11,6 +11,7 @@ import {
 } from '@horizon/ui'
 import { computed, ref } from 'vue'
 import type { DemoPreset } from '../model/demo.types'
+import DemoDiagnostics from './DemoDiagnostics.vue'
 import type { DemoControls } from '../model/useDemoControls'
 
 const { controls } = defineProps<{ controls: DemoControls }>()
@@ -25,7 +26,7 @@ const presets: { id: DemoPreset; label: string; hint: string }[] = [
     label: 'Incident',
     hint: 'Demo Area Scan + scripted failures: signal, low battery, telemetry loss, outage',
   },
-  { id: 'stress', label: 'Stress', hint: '240 UAVs for performance profiling' },
+  { id: 'stress', label: 'Stress', hint: '480 UAVs for performance profiling' },
 ]
 const activeHint = computed(
   () =>
@@ -131,14 +132,7 @@ const activeHint = computed(
         />
 
         <BaseDivider />
-        <dl class="grid grid-cols-2 gap-x-3 gap-y-1">
-          <template v-for="row in controls.diagnosticsRows.value" :key="row.label">
-            <BaseText as="dt" variant="caption" tone="muted">{{ row.label }}</BaseText>
-            <BaseText as="dd" variant="body-sm" numeric class="text-right">{{
-              row.value
-            }}</BaseText>
-          </template>
-        </dl>
+        <DemoDiagnostics :rows="controls.diagnosticsRows" />
       </BaseSurface>
     </Transition>
 

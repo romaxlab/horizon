@@ -14,9 +14,8 @@ import MissionStatusBar from './MissionStatusBar.vue'
 
 const {
   connection,
-  clock,
   mission,
-  uavs,
+  fleetFeed,
   selectedUavId,
   inspectorOpen,
   following,
@@ -62,7 +61,7 @@ watch(selectedUavId, (id) => {
   <div class="relative h-full overflow-hidden bg-canvas">
     <main class="absolute inset-0" aria-label="Operational map">
       <MapCanvas
-        :uavs="uavs"
+        :fleet="fleetFeed"
         :selected-uav-id="selectedUavId"
         :mission-overlay="missionOverlay"
         :drawing="builder.drawing.value"
@@ -75,7 +74,6 @@ watch(selectedUavId, (id) => {
     <div class="pointer-events-none absolute inset-0 flex flex-col gap-3 p-3">
       <ControlCenterHeader
         :connection="connection"
-        :clock="clock"
         :mission-title="mission.title"
         :mission-context="mission.state"
         :can-create-mission="canCreateMission"

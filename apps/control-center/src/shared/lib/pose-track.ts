@@ -18,6 +18,12 @@ export interface PoseTrack {
   sampleAt(time: number): Pose | null
 }
 
+/**
+ * Interpolated consumers (map, video) render this far in the past, so there is always a newer
+ * sample to interpolate toward. One value for every view of the same telemetry.
+ */
+export const RENDER_DELAY_MS = 500
+
 /** Hard re-anchor when the mapped time drifts further than this from arrival time. */
 const MAX_DRIFT_MS = 1_000
 /** Local time over which the source→local clock rate is re-estimated. */

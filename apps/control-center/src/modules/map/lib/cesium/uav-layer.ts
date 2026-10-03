@@ -6,6 +6,7 @@ import {
   Cartesian3,
   Math as CesiumMath,
   ColorMaterialProperty,
+  ConstantPositionProperty,
   ConstantProperty,
   HorizontalOrigin,
   NearFarScalar,
@@ -14,12 +15,15 @@ import {
   type Entity,
   type Viewer,
 } from 'cesium'
-import { createPoseTrack, type Pose, type PoseTrack } from '@/shared/lib/pose-track'
+import {
+  createPoseTrack,
+  RENDER_DELAY_MS,
+  type Pose,
+  type PoseTrack,
+} from '@/shared/lib/pose-track'
 import { getLabelPill, getUavMarker, MARKER_SIZE } from './marker-images'
 import type { MapPalette } from './palette'
 
-/** Render slightly in the past so there is always a newer sample to interpolate toward. */
-const RENDER_DELAY_MS = 500
 const TRAIL_MIN_SPACING_METERS = 15
 const ENTITY_PREFIX = 'uav:'
 /** Name labels belong to their UAV for picking purposes. */
@@ -45,12 +49,28 @@ interface UavEntry {
   trail: Pose[]
   /** Trail points converted once (ground height applied at push time). */
   trailPositions: Cartesian3[]
-  /** `airborne`: only then the drop line is drawn (parked UAVs skip it entirely). */
-  flags: { airborne: boolean }
+  /**
+   * Per-frame cost control: `moving` UAVs use per-frame callbacks; parked ones get constant
+   * properties Cesium never re-evaluates. Visibility flags are pushed only when they change.
+   */
+  flags: {
+    airborne: boolean
+    moving: boolean
+    parkedSamples: number
+    shown: VisibilityState | null
+  }
+  /** Position of a stationary UAV (no per-frame interpolation needed). */
+  stationaryPosition: Cartesian3 | null
+  /** Per-frame properties used while moving. */
+  dynamic: { position: CallbackPositionProperty; rotation: CallbackProperty }
 }
 
 export interface UavLayer {
-  sync(states: readonly UavState[], selectedUavId: string | null): void
+  /** Full fleet: creates/updates entities and removes UAVs that are gone. */
+  sync(states: readonly UavState[]): void
+  /** Only the UAVs whose state changed since the last update (realtime deltas). */
+  update(changed: readonly UavState[]): void
+  select(uavId: string | null): void
   /**
    * Ellipsoidal height of the ground at the operating site. Telemetry altitude is above ground
    * level; this lifts it onto terrain or 3D tiles (0 on the bare ellipsoid).
@@ -64,11 +84,22 @@ export interface UavLayer {
   clusterableMarkers(): { id: string; status: UavStatus; position: Cartesian3 }[]
   /** UAVs currently represented by a cluster; their individual markers are hidden. */
   setClustered(uavIds: ReadonlySet<string>): void
+  /** True while any UAV is moving (interpolated): the scene must keep rendering. */
+  isAnimating(): boolean
   /** UAV under the pointer; it gets a name label like the selected one. */
   setHovered(uavId: string | null): void
   uavIdFromPick(picked: unknown): string | null
   destroy(): void
 }
+
+interface VisibilityState {
+  marker: boolean
+  dropLine: boolean
+  trail: boolean
+}
+
+/** Consecutive parked samples after which a UAV is treated as stationary. */
+const STATIONARY_AFTER_SAMPLES = 2
 
 /** Renders UAVs as heading-aware markers with smooth interpolation, drop lines and trails. */
 export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavLayer {
@@ -78,6 +109,8 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
   let groundHeight = 0
   let clustered: ReadonlySet<string> = new Set()
   let hoveredId: string | null = null
+  /** UAVs with interpolated (per-frame) motion; new entries start moving until parked. */
+  let movingCount = 0
 
   function toCartesian(pose: Pose, result?: Cartesian3): Cartesian3 {
     const height = groundHeight + pose.altitude
@@ -181,20 +214,22 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const trail: Pose[] = []
     const trailPositions: Cartesian3[] = []
     const id = state.uav.id
-    // Filled in below; callbacks only run after the entry exists.
-    const flags = { airborne: false }
-
-    const entity = viewer.entities.add({
-      id: `${ENTITY_PREFIX}${id}`,
+    const flags = { airborne: false, moving: true, parkedSamples: 0, shown: null }
+    const dynamic = {
       position: new CallbackPositionProperty((_time, result) => {
         const current = pose()
         return current ? toCartesian(current, result) : undefined
       }, false),
+      rotation: new CallbackProperty(() => -CesiumMath.toRadians(pose()?.heading ?? 0), false),
+    }
+
+    const entity = viewer.entities.add({
+      id: `${ENTITY_PREFIX}${id}`,
+      position: dynamic.position,
       billboard: {
-        show: new CallbackProperty(() => !clustered.has(id), false),
         // Aligned to the globe's north so rotation is a true compass heading in any camera view.
         alignedAxis: Cartesian3.UNIT_Z,
-        rotation: new CallbackProperty(() => -CesiumMath.toRadians(pose()?.heading ?? 0), false),
+        rotation: dynamic.rotation,
         width: MARKER_SIZE,
         height: MARKER_SIZE,
         horizontalOrigin: HorizontalOrigin.CENTER,
@@ -206,7 +241,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       // Hidden lines skip position evaluation and geometry updates in Cesium.
       polyline: {
         width: 1,
-        show: new CallbackProperty(() => flags.airborne && !clustered.has(id), false),
+        show: false,
         positions: new CallbackProperty(() => {
           const current = pose()
           if (!current) return []
@@ -218,7 +253,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const trailEntity = viewer.entities.add({
       polyline: {
         width: 1.5,
-        show: new CallbackProperty(() => trail.length > 0, false),
+        show: false,
         positions: new CallbackProperty(() => {
           const current = pose()
           return current ? [...trailPositions, toCartesian(current)] : trailPositions
@@ -238,9 +273,63 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       trail,
       trailPositions,
       flags,
+      dynamic,
+      stationaryPosition: null,
     }
     applyStyle(entry)
+    refreshVisibility(entry)
     return entry
+  }
+
+  /** Pushes marker/line visibility to Cesium only when it actually changes. */
+  function refreshVisibility(entry: UavEntry) {
+    const marker = !clustered.has(entry.id)
+    const next: VisibilityState = {
+      marker,
+      dropLine: marker && entry.flags.airborne,
+      trail: entry.trail.length > 0,
+    }
+    const shown = entry.flags.shown
+    if (
+      shown?.marker === next.marker &&
+      shown.dropLine === next.dropLine &&
+      shown.trail === next.trail
+    ) {
+      return
+    }
+    entry.flags.shown = next
+    if (entry.entity.billboard) entry.entity.billboard.show = new ConstantProperty(next.marker)
+    if (entry.entity.polyline) entry.entity.polyline.show = new ConstantProperty(next.dropLine)
+    if (entry.trailEntity.polyline) {
+      entry.trailEntity.polyline.show = new ConstantProperty(next.trail)
+    }
+  }
+
+  /**
+   * Parked UAVs switch to constant position/rotation (no per-frame work); any movement switches
+   * back to interpolated callbacks. Waiting for a few parked samples lets the interpolation
+   * (rendered slightly in the past) finish landing first.
+   */
+  function updateMotion(entry: UavEntry, state: UavState) {
+    const telemetry = state.telemetry
+    if (!telemetry) return
+    const parked = telemetry.flightPhase === 'parked' && telemetry.speed === 0
+    entry.flags.parkedSamples = parked ? entry.flags.parkedSamples + 1 : 0
+    const moving = entry.flags.parkedSamples < STATIONARY_AFTER_SAMPLES
+    if (moving === entry.flags.moving) return
+    entry.flags.moving = moving
+    movingCount += moving ? 1 : -1
+    const { billboard } = entry.entity
+    if (moving) {
+      entry.stationaryPosition = null
+      entry.entity.position = entry.dynamic.position
+      if (billboard) billboard.rotation = entry.dynamic.rotation
+      return
+    }
+    const pose: Pose = { ...telemetry.position, heading: telemetry.heading }
+    entry.stationaryPosition = toCartesian(pose)
+    entry.entity.position = new ConstantPositionProperty(entry.stationaryPosition)
+    if (billboard) billboard.rotation = new ConstantProperty(-CesiumMath.toRadians(pose.heading))
   }
 
   function updateTrail(entry: UavEntry, state: UavState) {
@@ -259,54 +348,75 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     }
   }
 
-  return {
-    sync(states, nextSelectedId) {
-      const previousSelectedId = selectedId
-      selectedId = nextSelectedId
-      const seen = new Set<string>()
+  /** Creates or updates one UAV's entities; only what changed is touched. */
+  function upsert(state: UavState) {
+    const existing = entries.get(state.uav.id)
+    const entry = existing ?? createEntry(state)
+    if (!existing) {
+      entries.set(state.uav.id, entry)
+      movingCount += 1
+    }
 
+    const telemetry = state.telemetry
+    if (telemetry && state.lastUpdatedAt !== null && telemetry.timestamp > entry.lastTimestamp) {
+      entry.lastTimestamp = telemetry.timestamp
+      entry.track.push(telemetry.timestamp, state.lastUpdatedAt, {
+        ...telemetry.position,
+        heading: telemetry.heading,
+      })
+      updateTrail(entry, state)
+      updateMotion(entry, state)
+      refreshVisibility(entry)
+    }
+    if (entry.status !== state.status) {
+      entry.status = state.status
+      applyStyle(entry)
+    }
+  }
+
+  return {
+    sync(states) {
+      const seen = new Set<string>()
       for (const state of states) {
         seen.add(state.uav.id)
-        const entry = entries.get(state.uav.id) ?? createEntry(state)
-        entries.set(state.uav.id, entry)
-
-        const telemetry = state.telemetry
-        if (
-          telemetry &&
-          state.lastUpdatedAt !== null &&
-          telemetry.timestamp > entry.lastTimestamp
-        ) {
-          entry.lastTimestamp = telemetry.timestamp
-          entry.track.push(telemetry.timestamp, state.lastUpdatedAt, {
-            ...telemetry.position,
-            heading: telemetry.heading,
-          })
-          updateTrail(entry, state)
-        }
-
-        const selectionChanged =
-          previousSelectedId !== selectedId &&
-          (entry.id === selectedId || entry.id === previousSelectedId)
-        if (selectionChanged || entry.status !== state.status) {
-          entry.status = state.status
-          applyStyle(entry)
-        }
+        upsert(state)
       }
-
       for (const [id, entry] of entries) {
         if (seen.has(id)) continue
+        if (entry.flags.moving) movingCount -= 1
         viewer.entities.remove(entry.entity)
         viewer.entities.remove(entry.trailEntity)
         entries.delete(id)
       }
-      if (previousSelectedId !== selectedId) {
-        selectionLabel.update()
-        hoverLabel.update()
-      }
+      selectionLabel.update()
+      hoverLabel.update()
+    },
+
+    update(changed) {
+      for (const state of changed) upsert(state)
+    },
+
+    select(nextSelectedId) {
+      if (nextSelectedId === selectedId) return
+      const previous = selectedId ? entries.get(selectedId) : undefined
+      selectedId = nextSelectedId
+      const next = nextSelectedId ? entries.get(nextSelectedId) : undefined
+      if (previous) applyStyle(previous)
+      if (next) applyStyle(next)
+      selectionLabel.update()
+      hoverLabel.update()
     },
 
     setGroundHeight(meters) {
       groundHeight = meters
+      // Constant (parked) positions bake the ground height in: re-place them.
+      for (const entry of entries.values()) {
+        if (entry.flags.moving) continue
+        const latest = entry.pose()
+        if (!latest) continue
+        entry.stationaryPosition = toCartesian(latest)
+        entry.entity.position = new ConstantPositionProperty(entry.stationaryPosition)
+      }
       for (const entry of entries.values()) {
         entry.trailPositions.splice(0, Infinity, ...entry.trail.map((point) => toCartesian(point)))
       }
@@ -322,7 +432,10 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     getEntity: (uavId) => entries.get(uavId)?.entity,
 
     positionOf(uavId) {
-      const pose = entries.get(uavId)?.pose()
+      const entry = entries.get(uavId)
+      if (!entry) return undefined
+      if (entry.stationaryPosition) return entry.stationaryPosition
+      const pose = entry.pose()
       return pose ? toCartesian(pose) : undefined
     },
 
@@ -330,15 +443,18 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       const markers: { id: string; status: UavStatus; position: Cartesian3 }[] = []
       for (const entry of entries.values()) {
         if (entry.id === selectedId) continue
-        const pose = entry.pose()
-        if (pose) markers.push({ id: entry.id, status: entry.status, position: toCartesian(pose) })
+        const position = this.positionOf(entry.id)
+        if (position) markers.push({ id: entry.id, status: entry.status, position })
       }
       return markers
     },
 
     setClustered(uavIds) {
       clustered = uavIds
+      entries.forEach(refreshVisibility)
     },
+
+    isAnimating: () => movingCount > 0,
 
     setHovered(uavId) {
       if (uavId === hoveredId) return
@@ -362,6 +478,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
         viewer.entities.remove(entry.trailEntity)
       })
       entries.clear()
+      movingCount = 0
       viewer.entities.remove(selectionLabel.entity)
       viewer.entities.remove(hoverLabel.entity)
     },

@@ -2,11 +2,12 @@
 import { Bell, Moon, Plus, Sun } from '@lucide/vue'
 import { BaseBadge, BaseButton, BaseIconButton, BaseSurface, BaseText, useTheme } from '@horizon/ui'
 import type { BadgeVariant } from '@horizon/ui'
+import { computed } from 'vue'
 import { HorizonLogo } from '@/shared/brand'
+import { useNow } from '@/shared/lib/useNow'
 
 defineProps<{
   connection: { label: string; variant: BadgeVariant }
-  clock: string
   /** Active mission name; null hides the mission context. */
   missionTitle: string | null
   missionContext: string
@@ -21,6 +22,17 @@ defineProps<{
 const emit = defineEmits<{ newMission: []; toggleEvents: [] }>()
 
 const { theme, toggleTheme } = useTheme()
+
+// The clock ticks here, so only the header updates every second, not the whole view.
+const clockFormat = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+  timeZoneName: 'short',
+})
+const now = useNow()
+const clock = computed(() => clockFormat.format(now.value))
 </script>
 
 <template>

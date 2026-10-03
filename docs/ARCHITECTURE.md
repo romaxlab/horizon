@@ -617,6 +617,25 @@ Simulator / WebSocket
 
 Incoming telemetry frequency and rendering frequency are separate concerns.
 
+Rendering paths (`modules/fleet`, `modules/map`):
+
+- the fleet store keeps immutable per-UAV snapshots in a shallow ref: one reactive trigger and one
+  change notification per flushed batch, no deep proxies;
+- the map consumes a `FleetFeed` (snapshot + per-batch deltas of changed UAVs) outside component
+  rendering; the control-center view does not depend on telemetry;
+- parked UAVs get constant Cesium properties; only moving UAVs are evaluated per frame;
+- derived UI state (mission summary, fleet rows, filter counts) is stable: unchanged values keep
+  their identity, so components update only when what they show changes;
+- incident detection runs on its own 500 ms cadence, not per telemetry flush.
+- the telemetry flush interval is configured once (`VITE_TELEMETRY_FLUSH_MS`, default 100 ms) and
+  the interpolation render delay once (`RENDER_DELAY_MS`, shared by map and video);
+- discrete events (mission state, connection) are never coalesced; they are classified by `type`
+  before any full validation, so telemetry does not pay for parsing other event types;
+- Cesium runs with `requestRenderMode`: an idle scene renders only on change (camera input, tiles,
+  app state), and keeps rendering every frame while any UAV is moving;
+- mission routes/waypoints are static geometry, rebuilt only when the overlay or ground height
+  changes; demo diagnostics show coalesced and stale-dropped telemetry per second.
+
 Example target:
 
 ```text
@@ -801,7 +820,7 @@ Demo controls send commands to the simulator. They never patch application store
 Implementation: `DemoControl` (`modules/demo-controls`) is provided only by the mock composition
 and only when `VITE_DEMO_CONTROLS` is on (default in dev). Presets: NORMAL (demo mission),
 INCIDENT (NORMAL plus a scheduled failure sequence on mission UAVs: signal → low battery →
-telemetry loss → backend outage → reconnect → restore), STRESS (240 UAVs). Presets and reset
+telemetry loss → backend outage → reconnect → restore), STRESS (480 UAVs). Presets and reset
 replace backend state, so the app resyncs through the normal snapshot path. Diagnostics show
 incoming telemetry rate, store flush rate, fleet size and connection state.
 

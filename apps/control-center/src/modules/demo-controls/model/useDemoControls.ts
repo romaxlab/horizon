@@ -4,7 +4,13 @@ import type { DemoCommand, DemoControl, DemoPreset } from './demo.types'
 
 export interface DemoDiagnosticsSource {
   /** Cumulative realtime counters from the ingestion pipeline. */
-  stats(): { messages: number; flushes: number }
+  stats(): {
+    messages: number
+    flushes: number
+    applied: number
+    coalesced: number
+    dropped: number
+  }
   fleetSize: Readonly<Ref<number>>
   connection: Readonly<Ref<string>>
 }
@@ -64,27 +70,66 @@ export function useDemoControls({
   }
 
   // Diagnostics: rates sampled once per second from cumulative counters.
-  const rates = ref({ messagesPerSec: 0, flushesPerSec: 0 })
+  const rates = ref({
+    messagesPerSec: 0,
+    flushesPerSec: 0,
+    appliedPerSec: 0,
+    coalescedPerSec: 0,
+    droppedPerSec: 0,
+  })
   let last = diagnostics.stats()
   let lastAt = performance.now()
   const timer = setInterval(() => {
     const next = diagnostics.stats()
     const at = performance.now()
     const seconds = (at - lastAt) / 1000
+    const rate = (key: keyof typeof next) => Math.round((next[key] - last[key]) / seconds)
     rates.value = {
-      messagesPerSec: Math.round((next.messages - last.messages) / seconds),
-      flushesPerSec: Math.round((next.flushes - last.flushes) / seconds),
+      messagesPerSec: rate('messages'),
+      flushesPerSec: rate('flushes'),
+      appliedPerSec: rate('applied'),
+      coalescedPerSec: rate('coalesced'),
+      droppedPerSec: rate('dropped'),
     }
     last = next
     lastAt = at
   }, 1_000)
+  // Render diagnostics: frames per second and the slow-frame time (p95) over the last second.
+  const frames = ref({ fps: 0, p95: 0 })
+  let frameTimes: number[] = []
+  let lastFrame = performance.now()
+  let frameWindowStart = lastFrame
+  let raf = requestAnimationFrame(function onFrame(time) {
+    frameTimes.push(time - lastFrame)
+    lastFrame = time
+    if (time - frameWindowStart >= 1_000) {
+      const sorted = [...frameTimes].sort((a, b) => a - b)
+      frames.value = {
+        fps: Math.round((frameTimes.length * 1_000) / (time - frameWindowStart)),
+        p95: Math.round(sorted[Math.floor(sorted.length * 0.95)] ?? 0),
+      }
+      frameTimes = []
+      frameWindowStart = time
+    }
+    raf = requestAnimationFrame(onFrame)
+  })
+
   onBeforeUnmount(() => {
     clearInterval(timer)
+    cancelAnimationFrame(raf)
   })
 
   const diagnosticsRows = computed(() => [
+    { label: 'Render', value: `${frames.value.fps} fps · p95 ${frames.value.p95} ms` },
     { label: 'Telemetry in', value: `${rates.value.messagesPerSec} msg/s` },
-    { label: 'State flushes', value: `${rates.value.flushesPerSec} /s` },
+    {
+      label: 'State flushes',
+      value: `${rates.value.flushesPerSec} /s · ${rates.value.appliedPerSec} UAV upd/s`,
+    },
+    {
+      label: 'Coalesced',
+      value: `${rates.value.coalescedPerSec} /s · stale ${rates.value.droppedPerSec} /s`,
+    },
     { label: 'Fleet size', value: String(diagnostics.fleetSize.value) },
     { label: 'Connection', value: diagnostics.connection.value },
   ])

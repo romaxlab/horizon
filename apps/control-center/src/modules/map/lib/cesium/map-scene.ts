@@ -83,7 +83,9 @@ export interface MapSceneOptions {
 
 /** Public surface of the 3D map, independent of Vue. */
 export interface MapScene {
-  sync(states: readonly UavState[], selectedUavId: string | null): void
+  sync(states: readonly UavState[]): void
+  update(changed: readonly UavState[]): void
+  select(uavId: string | null): void
   setTheme(theme: MapTheme): void
   setBasemap(basemap: MapBasemap): void
   setPerspective(perspective: MapPerspective): void
@@ -138,6 +140,10 @@ export function createMapScene({
     selectionIndicator: false,
     skyBox: false,
     shouldAnimate: true,
+    // Render on demand: an idle scene (nothing moving) stops redrawing at 60 fps. Camera input,
+    // tile loading and flights still render automatically; motion keeps frames coming below.
+    requestRenderMode: true,
+    maximumRenderTimeChange: Number.POSITIVE_INFINITY,
   })
 
   const { scene } = viewer
@@ -179,6 +185,7 @@ export function createMapScene({
     const startedAt = performance.now()
     let frames = 0
     const remove = scene.postRender.addEventListener(() => {
+      scene.requestRender()
       frames += 1
       const loaded = frames > 2 && scene.globe.tilesLoaded
       if (loaded || performance.now() - startedAt > TILE_WAIT_MS) {
@@ -204,6 +211,7 @@ export function createMapScene({
       const fadeMs = reducedMotion() ? 0 : BASEMAP_FADE_MS
       const fadeStart = performance.now()
       const removeFade = scene.preRender.addEventListener(() => {
+        scene.requestRender()
         const progress = fadeMs === 0 ? 1 : Math.min(1, (performance.now() - fadeStart) / fadeMs)
         next.alpha = progress
         if (progress < 1) return
@@ -374,6 +382,7 @@ export function createMapScene({
     }
     onSelect(target?.uavId ?? null)
   }, ScreenSpaceEventType.LEFT_CLICK)
+  let lastHovered: string | null = null
   handler.setInputAction((event: { endPosition: Cartesian2 }) => {
     if (drawing) {
       scene.canvas.style.cursor = 'crosshair'
@@ -381,14 +390,38 @@ export function createMapScene({
     }
     const target = pick(event.endPosition)
     scene.canvas.style.cursor = target ? 'pointer' : ''
-    layer.setHovered(target?.kind === 'uav' ? target.uavId : null)
+    const hovered = target?.kind === 'uav' ? target.uavId : null
+    if (hovered !== lastHovered) {
+      lastHovered = hovered
+      layer.setHovered(hovered)
+      scene.requestRender()
+    }
   }, ScreenSpaceEventType.MOUSE_MOVE)
 
+  // While any UAV moves (interpolated), keep Cesium's own render loop producing frames.
+  const removeAnimationLoop = scene.postRender.addEventListener(() => {
+    if (layer.isAnimating()) scene.requestRender()
+  })
+
+  /** Any app-driven change (fleet, selection, theme, overlays) needs a frame in on-demand mode. */
+  const withRender =
+    <A extends unknown[]>(fn: (...args: A) => void) =>
+    (...args: A) => {
+      fn(...args)
+      scene.requestRender()
+    }
+
   return {
-    sync: (states, selectedUavId) => {
-      layer.sync(states, selectedUavId)
-    },
-    setTheme(next) {
+    sync: withRender((states: readonly UavState[]) => {
+      layer.sync(states)
+    }),
+    update: withRender((changed: readonly UavState[]) => {
+      layer.update(changed)
+    }),
+    select: withRender((uavId: string | null) => {
+      layer.select(uavId)
+    }),
+    setTheme: withRender((next: MapTheme) => {
       theme = next
       palette = readMapPalette()
       applySceneColors()
@@ -396,37 +429,39 @@ export function createMapScene({
       clusters.setPalette(palette)
       missionLayer.setPalette(palette)
       if (basemap === 'map') replaceBasemap()
-    },
-    setBasemap(next) {
+    }),
+    setBasemap: withRender((next: MapBasemap) => {
       if (next === basemap) return
       basemap = next
       replaceBasemap()
       updateContent()
-    },
-    setPerspective(next) {
+    }),
+    setPerspective: withRender((next: MapPerspective) => {
       if (next === perspective) return
       perspective = next
       camera.setTilted(perspective === '3d')
       updateContent()
-    },
+    }),
+    // Camera flights render on their own (camera changes trigger frames).
     home: () => {
       camera.home(true)
     },
     focusUav: (uavId) => {
       camera.focusUav(uavId)
     },
-    follow: (uavId) => {
+    follow: withRender((uavId: string | null) => {
       camera.follow(uavId)
-    },
-    setMissionOverlay(overlay) {
+    }),
+    setMissionOverlay: withRender((overlay: MissionOverlay | null) => {
       missionLayer.set(overlay)
-    },
-    setDrawing(next) {
+    }),
+    setDrawing: withRender((next: boolean) => {
       drawing = next
       scene.canvas.style.cursor = next ? 'crosshair' : ''
       if (next) layer.setHovered(null)
-    },
+    }),
     destroy() {
+      removeAnimationLoop()
       contentRequest += 1
       basemapTransition += 1
       handler.destroy()

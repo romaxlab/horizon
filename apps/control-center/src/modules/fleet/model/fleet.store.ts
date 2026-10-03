@@ -1,8 +1,8 @@
 import type { UavState, UavStatus, UavTelemetry } from '@horizon/domain'
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef, triggerRef } from 'vue'
 import { deriveMissionState, deriveUavStatus } from './fleet.status'
-import type { ConnectionStatus, FleetSnapshot } from './fleet.types'
+import type { ConnectionStatus, FleetChange, FleetSnapshot } from './fleet.types'
 
 function withTelemetry(
   state: UavState,
@@ -22,7 +22,18 @@ function withTelemetry(
 /** Current live fleet state, normalized by UAV id. Hydrated from snapshots, updated by realtime. */
 export const useFleetStore = defineStore('fleet', () => {
   const uavIds = ref<string[]>([])
-  const uavsById = ref<Record<string, UavState>>({})
+  /**
+   * Shallow on purpose: UAV states are immutable snapshots replaced per update, so deep proxies
+   * and per-key triggers would only add cost. One trigger per batch notifies dependents.
+   */
+  const uavsById = shallowRef<Record<string, UavState>>({})
+  /** Non-reactive change stream for high-frequency consumers (map); see `subscribe`. */
+  const listeners = new Set<(change: FleetChange) => void>()
+  const notify = (change: FleetChange) => {
+    listeners.forEach((listener) => {
+      listener(change)
+    })
+  }
   const connectionStatus = ref<ConnectionStatus>('connecting')
   /** Single shared selection, stored by id rather than as a duplicated object. */
   const selectedUavId = ref<string | null>(null)
@@ -69,20 +80,38 @@ export const useFleetStore = defineStore('fleet', () => {
     uavIds.value = snapshot.uavs.map((uav) => uav.id)
     uavsById.value = next
     if (selectedUavId.value !== null && !(selectedUavId.value in next)) selectedUavId.value = null
+    notify({ kind: 'reset' })
   }
 
   /** Applies a batch of ordered, coalesced telemetry. Unknown UAVs are ignored. */
   function applyTelemetry(batch: UavTelemetry[], receivedAt: number): number {
     let ignored = 0
+    const record = uavsById.value
+    const changed: UavState[] = []
     for (const telemetry of batch) {
-      const current = uavsById.value[telemetry.uavId]
+      const current = record[telemetry.uavId]
       if (!current) {
         ignored += 1
         continue
       }
-      uavsById.value[telemetry.uavId] = withTelemetry(current, telemetry, receivedAt, receivedAt)
+      const next = withTelemetry(current, telemetry, receivedAt, receivedAt)
+      record[telemetry.uavId] = next
+      changed.push(next)
     }
+    if (changed.length > 0) commit(changed)
     return ignored
+  }
+
+  /** One reactive trigger and one change notification per batch. */
+  function commit(changed: UavState[]) {
+    triggerRef(uavsById)
+    notify({ kind: 'update', changed })
+  }
+
+  /** Subscribe to fleet changes without going through component rendering. */
+  function subscribe(listener: (change: FleetChange) => void): () => void {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
   }
 
   /**
@@ -90,12 +119,18 @@ export const useFleetStore = defineStore('fleet', () => {
    * status actually changes are replaced, so idle ticks don't trigger re-renders.
    */
   function refreshStatuses(now: number) {
+    const record = uavsById.value
+    const changed: UavState[] = []
     for (const id of uavIds.value) {
-      const state = uavsById.value[id]
+      const state = record[id]
       if (!state) continue
       const status = deriveUavStatus(state.telemetry, state.lastUpdatedAt, now)
-      if (status !== state.status) uavsById.value[id] = { ...state, status }
+      if (status === state.status) continue
+      const next = { ...state, status }
+      record[id] = next
+      changed.push(next)
     }
+    if (changed.length > 0) commit(changed)
   }
 
   /** Counts by status for summaries and filters. */
@@ -133,6 +168,7 @@ export const useFleetStore = defineStore('fleet', () => {
     statusCounts,
     hydrate,
     refreshStatuses,
+    subscribe,
     selectUav,
     applyTelemetry,
     setConnectionStatus,

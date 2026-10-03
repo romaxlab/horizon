@@ -181,4 +181,36 @@ describe('createFleetSync', () => {
     expect(store.statusCounts.offline).toBe(0)
     sync.stop()
   })
+
+  it('coalesces a burst per UAV, drops stale samples and counts both', async () => {
+    const listeners = new Set<(message: unknown) => void>()
+    const push = (message: unknown) => {
+      listeners.forEach((listener) => {
+        listener(message)
+      })
+    }
+    const { simulator, store, sync, applyTelemetry } = setup({
+      subscribe(listener) {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+    })
+    await sync.start()
+    const [a, b] = simulator.getFleetSnapshot().telemetry
+    if (!a || !b) throw new Error('expected telemetry')
+
+    // 10 samples per UAV within one flush window, plus one stale and one duplicate.
+    for (let i = 1; i <= 10; i++) {
+      push({ type: 'telemetry', data: { ...a, ts: a.ts + i * 100, battery_pct: 90 - i } })
+      push({ type: 'telemetry', data: { ...b, ts: b.ts + i * 100 } })
+    }
+    push({ type: 'telemetry', data: { ...a, ts: a.ts + 500 } })
+    push({ type: 'telemetry', data: { ...a, ts: a.ts + 1_000, battery_pct: 1 } })
+    vi.advanceTimersByTime(100)
+
+    expect(applyTelemetry).toHaveBeenCalledTimes(1)
+    expect(applyTelemetry.mock.calls[0]?.[0]).toHaveLength(2)
+    expect(store.uavsById[a.uav_id]?.telemetry?.battery).toBe(80)
+    expect(sync.stats()).toMatchObject({ applied: 2, coalesced: 18, dropped: 2, flushes: 1 })
+  })
 })

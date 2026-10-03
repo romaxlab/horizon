@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/vue-query'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useAppServices } from '@/app/providers/services'
+import { appConfig } from '@/shared/config'
 import { fleetQueryKeys } from '../api/fleet.queries'
 import { createFleetSync } from './fleet-sync'
 import { useFleetStore } from './fleet.store'
@@ -16,6 +17,7 @@ export function useFleetSync() {
 
   const sync = createFleetSync({
     transport: realtimeTransport,
+    flushIntervalMs: appConfig.telemetryFlushMs,
     target: store,
     loadSnapshot: () =>
       queryClient.query({

@@ -12,8 +12,8 @@ export const DEMO_PARKING = { axisBearing: 140.7, spacingMeters: 15, columns: 6 
 export const DEMO_FLEET_SIZE = 24
 
 /** Large fleet for performance profiling; parked in a wider grid next to the pitch. */
-export const STRESS_FLEET_SIZE = 240
-export const STRESS_PARKING = { axisBearing: 140.7, spacingMeters: 8, columns: 20 } as const
+export const STRESS_FLEET_SIZE = 480
+export const STRESS_PARKING = { axisBearing: 140.7, spacingMeters: 8, columns: 24 } as const
 
 export type DemoPreset = 'normal' | 'incident' | 'stress'
 

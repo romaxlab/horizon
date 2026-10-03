@@ -1,6 +1,11 @@
 export { FleetPayloadError, parseFleetSnapshot } from './api/fleet.parsers'
 export { useFleetStore } from './model/fleet.store'
-export type { ConnectionStatus, FleetRepository, FleetSnapshot } from './model/fleet.types'
+export type {
+  ConnectionStatus,
+  FleetChange,
+  FleetRepository,
+  FleetSnapshot,
+} from './model/fleet.types'
 export { useFleetSync } from './model/useFleetSync'
 export { default as FleetPanel } from './ui/FleetPanel.vue'
 export { default as UavInspector } from './ui/UavInspector.vue'

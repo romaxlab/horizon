@@ -14,7 +14,7 @@ import {
   useMissionSync,
 } from '@/modules/mission-planning'
 import { formatDuration } from '@/shared/lib/format'
-import { useNow } from '@/shared/lib/useNow'
+import { stableComputed, shallowEqual } from '@/shared/lib/stable-computed'
 
 const connectionPresentation: Record<ConnectionStatus, { label: string; variant: BadgeVariant }> = {
   connecting: { label: 'Connecting', variant: 'neutral' },
@@ -22,23 +22,13 @@ const connectionPresentation: Record<ConnectionStatus, { label: string; variant:
   reconnecting: { label: 'Reconnecting', variant: 'warning' },
 }
 
-const clockFormat = new Intl.DateTimeFormat(undefined, {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-  hour12: false,
-  timeZoneName: 'short',
-})
-
 /** Route-level composition for the Control Center: starts live sync and coordinates modules. */
 export function useControlCenter() {
   const fleetSync = useFleetSync()
   const fleet = useFleetStore()
   const map = useMapStore()
-  const now = useNow()
 
   const connection = computed(() => connectionPresentation[fleet.connectionStatus])
-  const clock = computed(() => clockFormat.format(now.value))
 
   const missionSync = useMissionSync()
   const missions = useMissionStore()
@@ -46,13 +36,18 @@ export function useControlCenter() {
   const missionProgress = computed(() => {
     const current = missions.current
     if (!current) return null
+    // Only the mission's UAVs matter; don't walk the whole fleet on every flush.
     const telemetry = new Map(
-      fleet.uavs.flatMap((s) => (s.telemetry ? [[s.uav.id, s.telemetry] as const] : [])),
+      current.assignedUavIds.flatMap((id) => {
+        const sample = fleet.uavsById[id]?.telemetry
+        return sample ? [[id, sample] as const] : []
+      }),
     )
     return computeMissionProgress(current, telemetry)
   })
 
-  const mission = computed(() => {
+  // Stable: the view only updates when the visible summary changes, not on every flush.
+  const mission = stableComputed(() => {
     const current = missions.current
     const progress = missionProgress.value
     if (!current || !progress || current.status !== 'active') {
@@ -74,7 +69,7 @@ export function useControlCenter() {
         : `${progress.returningUavCount} UAVs returning`,
       progress: progress.ratio,
     }
-  })
+  }, shallowEqual)
 
   const builder = useMissionBuilder({
     availableUavs: computed(() => fleet.statusCounts.standby),
@@ -95,6 +90,7 @@ export function useControlCenter() {
   const missionActive = computed(() => missions.current?.status === 'active')
 
   /** What incident detection observes; the incidents module never reads fleet state directly. */
+  // Read on the incident center's own cadence (a few times per second), not on every flush.
   const observation = computed<Observation>(() => ({
     backendLive: fleet.connectionStatus !== 'reconnecting',
     mission: missions.current
@@ -112,7 +108,7 @@ export function useControlCenter() {
       }
     }),
   }))
-  const incidents = useIncidentCenter(observation)
+  const incidents = useIncidentCenter(() => observation.value)
 
   /** Incident "Inspect": the same path as selecting from the list, plus dismissing the alert. */
   function inspectIncident(incidentId: string | null, uavId: string) {
@@ -121,11 +117,14 @@ export function useControlCenter() {
   }
 
   /** Demo controls (mock backend + config only): commands go to the simulator, never to stores. */
-  const demoTarget = computed(() => {
-    const state =
-      fleet.selectedUav ?? fleet.uavs.find((s) => s.status === 'active') ?? fleet.uavs[0] ?? null
-    return state ? { id: state.uav.id, name: state.uav.name } : null
-  })
+  const demoTarget = stableComputed(
+    () => {
+      const state =
+        fleet.selectedUav ?? fleet.uavs.find((s) => s.status === 'active') ?? fleet.uavs[0] ?? null
+      return state ? { id: state.uav.id, name: state.uav.name } : null
+    },
+    (a, b) => a?.id === b?.id,
+  )
   const demo = demoControl
     ? useDemoControls({
         control: demoControl,
@@ -203,9 +202,9 @@ export function useControlCenter() {
 
   return {
     connection,
-    clock,
     mission,
-    uavs: computed(() => fleet.uavs),
+    /** Live fleet stream for the map: deltas bypass component rendering. */
+    fleetFeed: { current: () => fleet.uavs, subscribe: fleet.subscribe },
     selectedUavId: computed(() => fleet.selectedUavId),
     inspectorOpen: computed(() => fleet.selectedUav !== null),
     following: computed(() => map.followUavId !== null),

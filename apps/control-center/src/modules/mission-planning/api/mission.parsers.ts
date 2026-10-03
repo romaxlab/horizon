@@ -17,6 +17,8 @@ export function parseMission(payload: unknown): Mission {
 
 /** Mission realtime message → domain mission; null for other message types or invalid data. */
 export function parseMissionMessage(payload: unknown): Mission | null {
+  // Classify cheaply first: telemetry dominates the stream and must not pay for mission parsing.
+  if ((payload as { type?: unknown } | null)?.type !== 'mission') return null
   const result = missionMessageSchema.safeParse(payload)
   return result.success ? mapMission(result.data.data) : null
 }

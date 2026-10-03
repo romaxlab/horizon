@@ -1,7 +1,5 @@
 import type { GeoPoint, GeoPosition } from '@horizon/domain'
 import {
-  CallbackPositionProperty,
-  CallbackProperty,
   Cartesian3,
   ClassificationType,
   ColorMaterialProperty,
@@ -97,12 +95,9 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
     }
 
     for (const route of routes) {
-      const positions = new CallbackProperty(
-        () =>
-          route.waypoints.map((w) =>
-            Cartesian3.fromDegrees(w.longitude, w.latitude, groundHeight + w.altitude),
-          ),
-        false,
+      // Static geometry: rebuilt only when the overlay or ground height changes, never per frame.
+      const positions = route.waypoints.map((w) =>
+        Cartesian3.fromDegrees(w.longitude, w.latitude, groundHeight + w.altitude),
       )
       add({
         polyline: {
@@ -117,16 +112,10 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
       if (phase === 'completed') continue
       for (const waypoint of route.waypoints) {
         add({
-          position: new CallbackPositionProperty(
-            (_time, result) =>
-              Cartesian3.fromDegrees(
-                waypoint.longitude,
-                waypoint.latitude,
-                groundHeight + waypoint.altitude,
-                undefined,
-                result,
-              ),
-            false,
+          position: Cartesian3.fromDegrees(
+            waypoint.longitude,
+            waypoint.latitude,
+            groundHeight + waypoint.altitude,
           ),
           point: { pixelSize: 4, color: accent.withAlpha(phase === 'planned' ? 0.9 : 0.5) },
         })
@@ -144,7 +133,9 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
       render()
     },
     setGroundHeight(meters) {
+      if (meters === groundHeight) return
       groundHeight = meters
+      render()
     },
     destroy: clear,
   }

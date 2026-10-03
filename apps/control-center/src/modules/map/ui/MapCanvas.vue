@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { GeoPoint, UavState } from '@horizon/domain'
+import type { GeoPoint } from '@horizon/domain'
+import type { FleetFeed } from '../model/fleet-feed'
 import { BaseSurface, BaseText, useTheme } from '@horizon/ui'
 import { storeToRefs } from 'pinia'
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -9,7 +10,8 @@ import type { MissionOverlay } from '../lib/cesium/mission-layer'
 import { useMapStore } from '../model/map.store'
 
 const props = defineProps<{
-  uavs: readonly UavState[]
+  /** Live fleet stream; the map applies deltas without component re-renders. */
+  fleet: FleetFeed
   selectedUavId: string | null
   missionOverlay: MissionOverlay | null
   /** Clicks add mission area points instead of selecting UAVs. */
@@ -27,6 +29,8 @@ const { theme } = useTheme()
 const map = useMapStore()
 const { followUavId, focusRequest, homeRequest, basemap, perspective } = storeToRefs(map)
 const ionToken = appConfig.cesiumIonToken
+
+let unsubscribeFleet: (() => void) | null = null
 
 onMounted(async () => {
   try {
@@ -47,7 +51,13 @@ onMounted(async () => {
         emit('draw', point)
       },
     })
-    scene.value.sync(props.uavs, props.selectedUavId)
+    const created = scene.value
+    created.sync(props.fleet.current())
+    created.select(props.selectedUavId)
+    unsubscribeFleet = props.fleet.subscribe((change) => {
+      if (change.kind === 'reset') created.sync(props.fleet.current())
+      else created.update(change.changed)
+    })
     scene.value.setMissionOverlay(props.missionOverlay)
     scene.value.setDrawing(props.drawing)
   } catch (error) {
@@ -57,13 +67,14 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  unsubscribeFleet?.()
   scene.value?.destroy()
 })
 
 watch(
-  () => [props.uavs, props.selectedUavId] as const,
-  ([uavs, selectedUavId]) => {
-    scene.value?.sync(uavs, selectedUavId)
+  () => props.selectedUavId,
+  (selectedUavId) => {
+    scene.value?.select(selectedUavId)
   },
 )
 watch(

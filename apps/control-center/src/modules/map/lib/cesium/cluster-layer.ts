@@ -59,6 +59,7 @@ export function createClusterLayer(
   let membership = new Map<string, string>()
   let statuses = new Map<string, UavStatus>()
   let lastRun = 0
+  let clusteredIds: ReadonlySet<string> = new Set()
 
   /** Badges stay neutral; only problems inside a cluster earn a colored ring. */
   function alertColor(memberIds: readonly string[]): Color | undefined {
@@ -146,7 +147,14 @@ export function createClusterLayer(
     )
 
     membership = new Map(clusters.flatMap((c) => c.memberIds.map((id) => [id, c.key] as const)))
-    uavs.setClustered(new Set(membership.keys()))
+    const nextClustered = new Set(membership.keys())
+    const changed =
+      nextClustered.size !== clusteredIds.size ||
+      [...nextClustered].some((id) => !clusteredIds.has(id))
+    clusteredIds = nextClustered
+    uavs.setClustered(nextClustered)
+    // On-demand rendering: show the new grouping (only when it actually changed).
+    if (changed) scene.requestRender()
 
     clusters.forEach((cluster, index) => {
       const slot = slotAt(index)
@@ -173,6 +181,12 @@ export function createClusterLayer(
     recluster()
   })
 
+  // The throttle may skip the last frames of a camera move; settle clusters once it stops.
+  const removeMoveEnd = scene.camera.moveEnd.addEventListener(() => {
+    lastRun = performance.now()
+    recluster()
+  })
+
   return {
     membersFromPick(picked) {
       const id = (picked as { id?: { id?: unknown } } | undefined)?.id?.id
@@ -193,6 +207,7 @@ export function createClusterLayer(
 
     destroy() {
       removeListener()
+      removeMoveEnd()
       slots.forEach((slot) => viewer.entities.remove(slot.entity))
       slots.length = 0
       uavs.setClustered(new Set())

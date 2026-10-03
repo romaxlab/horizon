@@ -1,9 +1,7 @@
 import type { FeedPose, VideoSource } from '../model/video.types'
-import { createPoseTrack, type Pose } from '@/shared/lib/pose-track'
+import { createPoseTrack, RENDER_DELAY_MS, type Pose } from '@/shared/lib/pose-track'
 import { nadirView, TILE_SIZE, visibleTiles, worldPixel } from './nadir-camera'
 
-/** Render slightly in the past so there is always a newer sample to interpolate toward (as the map). */
-const RENDER_DELAY_MS = 500
 /** Gentle handheld-like drift: amplitude in canvas px and degrees, slow periods. */
 const DRIFT_PX = 1.6
 const DRIFT_DEGREES = 0.35

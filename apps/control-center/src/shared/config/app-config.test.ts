@@ -8,6 +8,7 @@ describe('parseAppConfig', () => {
       demoAutostart: false,
       simulatorMode: 'deterministic',
       cesiumIonToken: null,
+      telemetryFlushMs: 100,
     })
     expect(parseAppConfig({}, false).demoControls).toBe(false)
   })
@@ -24,5 +25,6 @@ describe('parseAppConfig', () => {
   it('rejects invalid values', () => {
     expect(() => parseAppConfig({ VITE_DEMO_CONTROLS: 'maybe' }, true)).toThrow(AppConfigError)
     expect(() => parseAppConfig({ VITE_SIMULATOR_MODE: 'chaos' }, true)).toThrow(AppConfigError)
+    expect(() => parseAppConfig({ VITE_TELEMETRY_FLUSH_MS: '5' }, true)).toThrow(AppConfigError)
   })
 })

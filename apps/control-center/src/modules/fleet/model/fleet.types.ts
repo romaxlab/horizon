@@ -1,4 +1,4 @@
-import type { Uav, UavTelemetry } from '@horizon/domain'
+import type { Uav, UavState, UavTelemetry } from '@horizon/domain'
 
 export interface FleetSnapshot {
   serverTime: number
@@ -13,3 +13,6 @@ export interface FleetRepository {
 
 /** Backend link: `reconnecting` keeps last known state while the stream is re-established. */
 export type ConnectionStatus = 'connecting' | 'live' | 'reconnecting'
+
+/** Fleet change notification: a full reset (snapshot) or the UAVs updated in one batch. */
+export type FleetChange = { kind: 'reset' } | { kind: 'update'; changed: readonly UavState[] }

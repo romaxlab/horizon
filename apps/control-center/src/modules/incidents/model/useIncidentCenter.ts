@@ -1,6 +1,6 @@
 import type { OperationalEventType } from '@horizon/domain'
 import type { AlertVariant, BadgeVariant } from '@horizon/ui'
-import { computed, watch, type Ref } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 import { detectIncidents } from './detect-incidents'
 import type { Incident, Observation } from './incident.types'
 import { useIncidentsStore } from './incidents.store'
@@ -38,27 +38,32 @@ const subjectOf = (incident: Incident) =>
 
 /** Max alerts shown at once; the rest are summarised. */
 const VISIBLE_ALERTS = 3
+/** Incident conditions change on a seconds scale; checking twice a second is plenty. */
+const DETECTION_INTERVAL_MS = 500
 
 /**
  * Turns observations of fleet, link and mission into operational events and alerts.
  * Inputs come from the route-level composition, so this module stays independent of fleet state.
  */
 export function useIncidentCenter(
-  observation: Readonly<Ref<Observation>>,
-  now: () => number = Date.now,
+  observe: () => Observation,
+  { intervalMs = DETECTION_INTERVAL_MS, now = Date.now } = {},
 ) {
   const store = useIncidentsStore()
   let previous: Observation | null = null
 
-  watch(
-    observation,
-    (next) => {
-      const { incidents, resolutions } = detectIncidents(previous, next)
-      previous = next
-      store.record(incidents, resolutions, now())
-    },
-    { immediate: true },
-  )
+  // Detection runs on its own cadence, decoupled from telemetry flush frequency.
+  function detect() {
+    const next = observe()
+    const { incidents, resolutions } = detectIncidents(previous, next)
+    previous = next
+    store.record(incidents, resolutions, now())
+  }
+  detect()
+  const timer = setInterval(detect, intervalMs)
+  onBeforeUnmount(() => {
+    clearInterval(timer)
+  })
 
   const alerts = computed(() =>
     store.alerts.slice(0, VISIBLE_ALERTS).map((incident) => ({

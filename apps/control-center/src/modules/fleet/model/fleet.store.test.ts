@@ -73,4 +73,22 @@ describe('useFleetStore', () => {
     expect(store.uavsById.a?.status).toBe('active')
     expect(store.uavsById.a?.telemetry?.position).toBeDefined()
   })
+
+  it('notifies one delta per batch with only the changed UAVs, and a reset on hydrate', () => {
+    const store = useFleetStore()
+    const changes: { kind: string; ids?: string[] }[] = []
+    store.subscribe((change) =>
+      changes.push(
+        change.kind === 'reset'
+          ? { kind: 'reset' }
+          : { kind: 'update', ids: change.changed.map((s) => s.uav.id) },
+      ),
+    )
+
+    store.hydrate({ serverTime: 0, uavs: [uav('a'), uav('b'), uav('c')], telemetry: [] }, 0)
+    store.applyTelemetry([telemetry('a', 1), telemetry('c', 1)], 1)
+    store.applyTelemetry([telemetry('ghost', 2)], 2)
+
+    expect(changes).toEqual([{ kind: 'reset' }, { kind: 'update', ids: ['a', 'c'] }])
+  })
 })

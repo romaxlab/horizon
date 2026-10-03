@@ -25,9 +25,15 @@ export interface FleetSyncOptions {
 }
 
 export interface FleetSyncStats {
-  /** Cumulative realtime messages received. */
+  /** Cumulative realtime messages received (any type). */
   messages: number
-  /** Cumulative batched flushes applied to the store. */
+  /** Telemetry rejected as out-of-order or duplicate. */
+  dropped: number
+  /** Telemetry superseded by a newer sample of the same UAV before a flush (latest wins). */
+  coalesced: number
+  /** UAV updates applied to the store. */
+  applied: number
+  /** Batched flushes applied to the store. */
   flushes: number
 }
 
@@ -65,12 +71,17 @@ export function createFleetSync({
   let reconnectAttempt = 0
   /** Incremented on every start/stop so async work from a stopped session is discarded. */
   let session = 0
-  const counters: FleetSyncStats = { messages: 0, flushes: 0 }
+  const counters: FleetSyncStats = { messages: 0, dropped: 0, coalesced: 0, applied: 0, flushes: 0 }
+  /** Accepted telemetry since the last flush, to count what the buffer coalesced. */
+  let acceptedSinceFlush = 0
 
   function flush() {
     const batch = buffer.drain()
     if (batch.length === 0) return
     counters.flushes += 1
+    counters.applied += batch.length
+    counters.coalesced += acceptedSinceFlush - batch.length
+    acceptedSinceFlush = 0
     const ignored = target.applyTelemetry(batch, now())
     if (ignored > 0) logger.warn(`[fleet-sync] ignored telemetry for ${ignored} unknown UAV(s)`)
   }
@@ -80,7 +91,9 @@ export function createFleetSync({
     const result = parseTelemetryMessage(payload)
     if (result.kind === 'invalid')
       logger.warn('[fleet-sync] invalid telemetry message', result.error)
-    if (result.kind === 'telemetry') buffer.push(result.telemetry)
+    if (result.kind !== 'telemetry') return
+    if (buffer.push(result.telemetry)) acceptedSinceFlush += 1
+    else counters.dropped += 1
   }
 
   /**
@@ -96,6 +109,7 @@ export function createFleetSync({
     snapshot.telemetry.forEach((t) => {
       buffer.setBaseline(t.uavId, t.timestamp)
     })
+    acceptedSinceFlush = buffer.pendingCount
     reconnectAttempt = 0
     target.setConnectionStatus('live')
     return true
@@ -156,6 +170,7 @@ export function createFleetSync({
     reconnectAttempt = 0
     transport.disconnect()
     buffer.clear()
+    acceptedSinceFlush = 0
   }
 
   async function resync() {
