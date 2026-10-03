@@ -5,6 +5,10 @@
   </picture>
 </h1>
 
+<p align="center">
+  <a href="https://github.com/romaxlab/horizon/actions/workflows/ci.yml"><img src="https://github.com/romaxlab/horizon/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+</p>
+
 Horizon is a browser-based 3D mission-control interface for planning and monitoring autonomous UAV operations.
 
 The product combines mission planning, realtime fleet telemetry, 3D situational awareness, UAV inspection, simulated video and incident handling in a single operator workspace.
