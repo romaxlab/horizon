@@ -17,7 +17,7 @@ import { useNow } from '@/shared/lib/useNow'
 const connectionPresentation: Record<ConnectionStatus, { label: string; variant: BadgeVariant }> = {
   connecting: { label: 'Connecting', variant: 'neutral' },
   live: { label: 'Live', variant: 'success' },
-  offline: { label: 'Offline', variant: 'danger' },
+  reconnecting: { label: 'Reconnecting', variant: 'warning' },
 }
 
 const clockFormat = new Intl.DateTimeFormat(undefined, {

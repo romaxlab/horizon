@@ -55,4 +55,46 @@ describe('createMockRealtimeTransport', () => {
     expect(received).toEqual(original)
     expect(received).not.toBe(original)
   })
+
+  it('drops on network outage and refuses to connect until the network is back', async () => {
+    const { source } = createSource()
+    let up = true
+    const networkListeners = new Set<(value: boolean) => void>()
+    const setNetwork = (value: boolean) => {
+      up = value
+      networkListeners.forEach((listener) => {
+        listener(value)
+      })
+    }
+    const transport = createMockRealtimeTransport({
+      ...source,
+      get networkUp() {
+        return up
+      },
+      subscribeNetwork(listener) {
+        networkListeners.add(listener)
+        return () => networkListeners.delete(listener)
+      },
+    })
+    const statuses: string[] = []
+    transport.subscribe((event) => {
+      if (event.type === 'status') statuses.push(event.status)
+    })
+
+    await transport.connect()
+    setNetwork(false)
+    await expect(transport.connect()).rejects.toThrow('unreachable')
+    setNetwork(true)
+    await transport.connect()
+
+    expect(statuses).toEqual([
+      'connecting',
+      'open',
+      'closed',
+      'connecting',
+      'closed',
+      'connecting',
+      'open',
+    ])
+  })
 })

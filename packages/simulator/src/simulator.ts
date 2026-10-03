@@ -40,6 +40,12 @@ export type SimulatorCommand =
   | { type: 'abortMission'; missionId: string }
   /** Demo/test control: sets a UAV's battery level. */
   | { type: 'setBattery'; uavId: string; batteryPct: number }
+  /** Demo/test control: the UAV keeps flying but its telemetry stops reaching the backend. */
+  | { type: 'setTelemetryLoss'; uavId: string; lost: boolean }
+  /** Demo/test control: degrades a UAV's radio link quality. */
+  | { type: 'setSignalDegraded'; uavId: string; degraded: boolean }
+  /** Demo/test control: backend ↔ client network outage (snapshot and stream unreachable). */
+  | { type: 'setNetwork'; up: boolean }
   | { type: 'reset' }
 
 export type PlanResult = { ok: true; mission: MissionDto } | { ok: false; reason: string }
@@ -57,6 +63,9 @@ export interface Simulator {
   planMission(request: MissionPlanRequestDto): PlanResult
   /** Fake realtime stream. */
   subscribe(listener: (message: SimulatorMessage) => void): () => void
+  /** Whether the backend is reachable from the client (fake network). */
+  readonly networkUp: boolean
+  subscribeNetwork(listener: (up: boolean) => void): () => void
   dispatch(command: SimulatorCommand): CommandResult
   /** Advances simulated time deterministically. */
   step(ms: number): void
@@ -74,6 +83,8 @@ const ARRIVAL_TOLERANCE_METERS = 0.5
 const RETURN_LAYER_OFFSET_METERS = 20
 /** Battery kept in reserve on top of the estimated cost of flying home. */
 const RETURN_RESERVE_PCT = 8
+/** Signal penalty applied to a UAV with a degraded link (pushes it below the warning threshold). */
+const DEGRADED_SIGNAL_PENALTY = 75
 /** Parked UAVs all face along the parking rows so the formation reads as an even grid. */
 const PARKED_HEADING = (DEMO_PARKING.axisBearing + 180) % 360
 
@@ -90,6 +101,10 @@ interface UavRuntime {
   gpsSatellites: number
   phase: Phase
   returnReason: ReturnReason | null
+  telemetryLost: boolean
+  /** Last telemetry that reached the backend; what snapshots report while telemetry is lost. */
+  lastReported: TelemetryDto | null
+  signalDegraded: boolean
   missionId: string | null
   route: Waypoint[]
   waypointIndex: number
@@ -117,6 +132,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   const plannedMissions = new Map<string, MissionDto>()
   let missionSeq = 0
   const listeners = new Set<(message: SimulatorMessage) => void>()
+  const networkListeners = new Set<(up: boolean) => void>()
+  let networkUp = true
 
   function init() {
     random = createRandom(seed)
@@ -135,6 +152,9 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
         gpsSatellites: Math.round(random.range(12, 17)),
         phase: 'parked',
         returnReason: null,
+        telemetryLost: false,
+        lastReported: null,
+        signalDegraded: false,
         missionId: null,
         route: [],
         waypointIndex: 0,
@@ -249,7 +269,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       state.battery = Math.max(0, state.battery - BATTERY_DRAIN_PCT_PER_SEC * dt)
     }
     const distanceKm = distanceMeters(state.position, DEMO_BASE) / 1000
-    state.signal = clamp(98 - distanceKm * 4 + random.range(-1.5, 1.5), 0, 100)
+    const penalty = state.signalDegraded ? DEGRADED_SIGNAL_PENALTY : 0
+    state.signal = clamp(98 - distanceKm * 4 - penalty + random.range(-1.5, 1.5), 0, 100)
     if (random.next() < 0.01) {
       state.gpsSatellites = clamp(state.gpsSatellites + (random.next() < 0.5 ? -1 : 1), 9, 19)
     }
@@ -267,6 +288,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   }
 
   function emit(message: SimulatorMessage) {
+    // During a network outage nothing reaches the client.
+    if (!networkUp) return
     listeners.forEach((listener) => {
       listener(message)
     })
@@ -279,8 +302,10 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     uavs.forEach((state, index) => {
       advanceUav(state, dt)
       const flying = state.phase !== 'parked'
+      if (state.telemetryLost) return
       if (flying || (tick + index) % PARKED_TELEMETRY_EVERY_TICKS === 0) {
-        emit({ type: 'telemetry', data: toTelemetryDto(state) })
+        state.lastReported = toTelemetryDto(state)
+        emit({ type: 'telemetry', data: state.lastReported })
       }
     })
     updateMissionCompletion()
@@ -380,6 +405,22 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     return { ok: true }
   }
 
+  function updateUav(uavId: string, update: (state: UavRuntime) => void): CommandResult {
+    const state = uavs.find((u) => u.uav.id === uavId)
+    if (!state) return { ok: false, reason: 'Unknown UAV' }
+    update(state)
+    return { ok: true }
+  }
+
+  function setNetwork(up: boolean): CommandResult {
+    if (up === networkUp) return { ok: true }
+    networkUp = up
+    networkListeners.forEach((listener) => {
+      listener(up)
+    })
+    return { ok: true }
+  }
+
   function setBattery(uavId: string, batteryPct: number): CommandResult {
     const state = uavs.find((u) => u.uav.id === uavId)
     if (!state) return { ok: false, reason: 'Unknown UAV' }
@@ -412,13 +453,23 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     getFleetSnapshot: () => ({
       server_time: now,
       uavs: uavs.map(toUavDto),
-      telemetry: uavs.map(toTelemetryDto),
+      telemetry: uavs.flatMap((state) => {
+        if (!state.telemetryLost) return [toTelemetryDto(state)]
+        return state.lastReported ? [state.lastReported] : []
+      }),
     }),
     getActiveMission: () => (mission ? structuredClone(mission) : null),
     planMission: (request) => planMission(request),
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+    get networkUp() {
+      return networkUp
+    },
+    subscribeNetwork(listener) {
+      networkListeners.add(listener)
+      return () => networkListeners.delete(listener)
     },
     dispatch(command) {
       switch (command.type) {
@@ -430,8 +481,19 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
           return abortMission(command.missionId)
         case 'setBattery':
           return setBattery(command.uavId, command.batteryPct)
+        case 'setTelemetryLoss':
+          return updateUav(command.uavId, (state) => {
+            state.telemetryLost = command.lost
+          })
+        case 'setSignalDegraded':
+          return updateUav(command.uavId, (state) => {
+            state.signalDegraded = command.degraded
+          })
+        case 'setNetwork':
+          return setNetwork(command.up)
         case 'reset':
           init()
+          setNetwork(true)
           return { ok: true }
       }
     },

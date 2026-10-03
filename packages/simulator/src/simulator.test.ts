@@ -304,4 +304,47 @@ describe('createSimulator', () => {
     expect(returning.length).toBeGreaterThan(0)
     expect(returning.every((t) => t.alt_m >= DEMO_MISSION.altitude + 19.9)).toBe(true)
   })
+
+  it('stops telemetry for a lost UAV; snapshots keep its last reported state', () => {
+    const { simulator, messages } = record()
+    simulator.step(2_000)
+    simulator.dispatch({ type: 'setTelemetryLoss', uavId: 'uav-05', lost: true })
+    const before = telemetryOf(messages, 'uav-05').length
+    simulator.step(5_000)
+
+    expect(telemetryOf(messages, 'uav-05')).toHaveLength(before)
+    const lastTs = telemetryOf(messages, 'uav-05').at(-1)?.ts
+    expect(simulator.getFleetSnapshot().telemetry.find((t) => t.uav_id === 'uav-05')?.ts).toBe(
+      lastTs,
+    )
+
+    simulator.dispatch({ type: 'setTelemetryLoss', uavId: 'uav-05', lost: false })
+    simulator.step(2_000)
+    expect(telemetryOf(messages, 'uav-05').length).toBeGreaterThan(before)
+  })
+
+  it('degrades a UAV signal below the warning threshold', () => {
+    const simulator = createSimulator({ startTime: START })
+    simulator.dispatch({ type: 'setSignalDegraded', uavId: 'uav-02', degraded: true })
+    simulator.step(1_000)
+    const signal = simulator.getFleetSnapshot().telemetry.find((t) => t.uav_id === 'uav-02')
+    expect(signal?.signal_pct).toBeLessThan(35)
+  })
+
+  it('drops all messages during a network outage and notifies listeners', () => {
+    const { simulator, messages } = record()
+    const states: boolean[] = []
+    simulator.subscribeNetwork((up) => states.push(up))
+
+    simulator.dispatch({ type: 'setNetwork', up: false })
+    const count = messages.length
+    simulator.step(3_000)
+    expect(messages).toHaveLength(count)
+    expect(simulator.networkUp).toBe(false)
+
+    simulator.dispatch({ type: 'setNetwork', up: true })
+    simulator.step(1_000)
+    expect(messages.length).toBeGreaterThan(count)
+    expect(states).toEqual([false, true])
+  })
 })

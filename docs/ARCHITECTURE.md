@@ -678,6 +678,12 @@ LIVE
 
 The application does not assume every event was received while disconnected.
 
+Implementation (`modules/fleet/model/fleet-sync.ts`): an unexpected transport close switches to
+`reconnecting` and retries with backoff (1 s, 2 s, 4 s, then every 8 s). Each attempt reconnects
+the stream and then loads a fresh snapshot to reconcile. Statuses keep ageing while disconnected,
+so UAVs go stale/offline but keep their last known positions. The simulator's fake network
+(`setNetwork`) drives outages through the same transport and repository contracts.
+
 ---
 
 ## 13. Infrastructure composition

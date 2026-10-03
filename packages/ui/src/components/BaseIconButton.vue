@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { cva } from 'class-variance-authority'
 
-export type IconButtonVariant = 'ghost' | 'secondary'
+export type IconButtonVariant = 'ghost' | 'secondary' | 'media'
 export type IconButtonSize = 'sm' | 'md'
 
 const {
@@ -25,6 +25,9 @@ const iconButton = cva(
       variant: {
         ghost: 'text-text-secondary hover:bg-fill hover:text-text-primary',
         secondary: 'bg-fill text-text-primary hover:bg-fill-strong',
+        // On top of video/imagery: light glyph on a dark translucent disc, legible on any frame.
+        media:
+          'bg-media-scrim text-on-media ring-1 ring-on-media/30 backdrop-blur-sm hover:bg-on-media/25',
       },
       size: {
         sm: 'size-control-sm',

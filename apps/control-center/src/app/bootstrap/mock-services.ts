@@ -1,5 +1,5 @@
 import { createMockRealtimeTransport } from '@horizon/realtime'
-import { createSimulator } from '@horizon/simulator'
+import { createSimulator, type Simulator } from '@horizon/simulator'
 import type { AppServices } from '@/app/providers/services'
 import { parseFleetSnapshot, type FleetRepository } from '@/modules/fleet'
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/modules/mission-planning'
 import type { VideoProvider } from '@/modules/video-monitoring'
 import type { AppConfig } from '@/shared/config'
+import { HttpError } from '@/shared/http'
 
 /** Simulated network latency for the fake REST endpoints. */
 const MOCK_LATENCY_MS = 150
@@ -24,6 +25,15 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
+/** Fake REST call: network latency, then fails while the simulated network is down. */
+function createRequest(simulator: Simulator) {
+  return async (signal?: AbortSignal) => {
+    await delay(MOCK_LATENCY_MS, signal)
+    if (!simulator.networkUp)
+      throw new HttpError('network', 'mock://backend', null, 'Backend unreachable')
+  }
+}
+
 /**
  * Mock composition: the simulator acts as the backend behind the same contracts a remote
  * backend would implement. Payloads cross the boundary as untyped data and are validated.
@@ -31,6 +41,7 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 export function createMockServices(config: AppConfig): AppServices {
   const simulator = createSimulator({ mode: config.simulatorMode })
   simulator.start()
+  const backendCall = createRequest(simulator)
   if (config.demoAutostart) {
     const result = simulator.dispatch({ type: 'startDemoMission' })
     if (!result.ok) console.warn('[bootstrap] demo autostart failed:', result.reason)
@@ -38,30 +49,30 @@ export function createMockServices(config: AppConfig): AppServices {
 
   const fleetRepository: FleetRepository = {
     async getSnapshot(signal) {
-      await delay(MOCK_LATENCY_MS, signal)
+      await backendCall(signal)
       return parseFleetSnapshot(structuredClone(simulator.getFleetSnapshot()))
     },
   }
 
   const missionPlanner: MissionPlanner = {
-    async plan(request, signal) {
-      await delay(MOCK_LATENCY_MS, signal)
-      const result = simulator.planMission(toPlanRequestDto(request))
+    async plan(planRequest, signal) {
+      await backendCall(signal)
+      const result = simulator.planMission(toPlanRequestDto(planRequest))
       if (!result.ok) throw new MissionPlanningError(result.reason)
       return parseMission(structuredClone(result.mission))
     },
     async launch(missionId) {
-      await delay(MOCK_LATENCY_MS)
+      await backendCall()
       const result = simulator.dispatch({ type: 'launchMission', missionId })
       if (!result.ok) throw new MissionPlanningError(result.reason)
     },
     async abort(missionId) {
-      await delay(MOCK_LATENCY_MS)
+      await backendCall()
       const result = simulator.dispatch({ type: 'abortMission', missionId })
       if (!result.ok) throw new MissionPlanningError(result.reason)
     },
     async getActiveMission(signal) {
-      await delay(MOCK_LATENCY_MS, signal)
+      await backendCall(signal)
       const mission = simulator.getActiveMission()
       return mission ? parseMission(structuredClone(mission)) : null
     },
@@ -70,7 +81,7 @@ export function createMockServices(config: AppConfig): AppServices {
   // Simulated nadir camera rendered from keyless Esri World Imagery under each UAV.
   const videoProvider: VideoProvider = {
     async getSource(uavId) {
-      await delay(MOCK_LATENCY_MS)
+      await backendCall()
       const hasCamera = simulator
         .getFleetSnapshot()
         .uavs.some((u) => u.id === uavId && u.has_camera)

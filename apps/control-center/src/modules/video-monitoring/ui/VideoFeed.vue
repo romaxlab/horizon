@@ -142,7 +142,8 @@ const message = computed(() => {
             v-if="variant === 'focus'"
             size="sm"
             label="Close video"
-            class="-my-1 bg-media-scrim text-on-media hover:bg-media-scrim hover:text-on-media"
+            variant="media"
+            class="-my-1"
             @click="emit('close')"
           >
             <X />
@@ -189,7 +190,8 @@ const message = computed(() => {
       v-if="variant !== 'focus'"
       size="sm"
       label="Expand video"
-      class="absolute top-7 right-1.5 bg-media-scrim text-on-media"
+      variant="media"
+      class="absolute top-7 right-1.5"
       @click="emit('expand')"
     >
       <Maximize2 />

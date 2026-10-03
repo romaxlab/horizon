@@ -18,6 +18,8 @@ export interface FleetSyncOptions {
   flushIntervalMs?: number
   /** How often time-dependent status (stale/offline) is re-evaluated. */
   statusIntervalMs?: number
+  /** Backoff between reconnect attempts; the last value repeats. */
+  reconnectDelaysMs?: readonly number[]
   now?: () => number
   logger?: Pick<Console, 'warn'>
 }
@@ -38,6 +40,7 @@ export function createFleetSync({
   target,
   flushIntervalMs = 100,
   statusIntervalMs = 1_000,
+  reconnectDelaysMs = [1_000, 2_000, 4_000, 8_000],
   now = Date.now,
   logger = console,
 }: FleetSyncOptions): FleetSync {
@@ -48,7 +51,8 @@ export function createFleetSync({
   let unsubscribe: (() => void) | null = null
   let flushTimer: ReturnType<typeof setInterval> | null = null
   let statusTimer: ReturnType<typeof setInterval> | null = null
-  let hydrated = false
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let reconnectAttempt = 0
   /** Incremented on every start/stop so async work from a stopped session is discarded. */
   let session = 0
 
@@ -66,38 +70,63 @@ export function createFleetSync({
     if (result.kind === 'telemetry') buffer.push(result.telemetry)
   }
 
+  /**
+   * (Re)establishes the stream, then reconciles with a fresh snapshot: events missed while
+   * disconnected are never assumed to have arrived. Older buffered telemetry is discarded
+   * through snapshot baselines.
+   */
+  async function sync(current: number): Promise<boolean> {
+    await transport.connect()
+    const snapshot = await loadSnapshot()
+    if (current !== session) return false
+    target.hydrate(snapshot, now())
+    snapshot.telemetry.forEach((t) => {
+      buffer.setBaseline(t.uavId, t.timestamp)
+    })
+    reconnectAttempt = 0
+    target.setConnectionStatus('live')
+    return true
+  }
+
+  function scheduleReconnect() {
+    if (unsubscribe === null || reconnectTimer !== null) return
+    target.setConnectionStatus('reconnecting')
+    const delay =
+      reconnectDelaysMs[Math.min(reconnectAttempt, reconnectDelaysMs.length - 1)] ?? 1_000
+    reconnectAttempt += 1
+    const current = session
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      sync(current).catch((error: unknown) => {
+        if (current !== session) return
+        logger.warn('[fleet-sync] reconnect failed', error)
+        scheduleReconnect()
+      })
+    }, delay)
+  }
+
   async function start() {
     if (unsubscribe) return
     const current = ++session
-    hydrated = false
     target.setConnectionStatus('connecting')
 
-    // Subscribe before loading the snapshot so no update is missed in between;
-    // anything older than the snapshot is discarded through buffer baselines.
+    // Subscribe before loading the snapshot so no update is missed in between.
     unsubscribe = transport.subscribe((event) => {
       if (event.type === 'message') handleMessage(event.payload)
-      else if (event.status === 'closed') target.setConnectionStatus('offline')
-      else if (event.status === 'open' && hydrated) target.setConnectionStatus('live')
+      else if (event.status === 'closed') scheduleReconnect()
     })
+    flushTimer = setInterval(flush, flushIntervalMs)
+    // Keeps aging UAVs to stale/offline while disconnected; last known state stays visible.
+    statusTimer = setInterval(() => {
+      target.refreshStatuses(now())
+    }, statusIntervalMs)
 
     try {
-      await transport.connect()
-      const snapshot = await loadSnapshot()
-      if (current !== session) return
-      target.hydrate(snapshot, now())
-      snapshot.telemetry.forEach((t) => {
-        buffer.setBaseline(t.uavId, t.timestamp)
-      })
-      hydrated = true
-      flushTimer = setInterval(flush, flushIntervalMs)
-      statusTimer = setInterval(() => {
-        target.refreshStatuses(now())
-      }, statusIntervalMs)
-      target.setConnectionStatus('live')
+      await sync(current)
     } catch (error) {
       if (current !== session) return
-      logger.warn('[fleet-sync] failed to start', error)
-      target.setConnectionStatus('offline')
+      logger.warn('[fleet-sync] failed to connect', error)
+      scheduleReconnect()
     }
   }
 
@@ -107,8 +136,11 @@ export function createFleetSync({
     unsubscribe = null
     if (flushTimer !== null) clearInterval(flushTimer)
     if (statusTimer !== null) clearInterval(statusTimer)
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer)
     flushTimer = null
     statusTimer = null
+    reconnectTimer = null
+    reconnectAttempt = 0
     transport.disconnect()
     buffer.clear()
   }

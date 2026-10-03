@@ -88,7 +88,7 @@ describe('createFleetSync', () => {
     expect(logger.warn).toHaveBeenCalledTimes(1)
   })
 
-  it('reports offline when the snapshot cannot be loaded', async () => {
+  it('keeps retrying when the snapshot cannot be loaded', async () => {
     const store = useFleetStore()
     const logger = { warn: vi.fn() }
     const target: FleetSyncTarget = store
@@ -101,7 +101,7 @@ describe('createFleetSync', () => {
 
     await sync.start()
 
-    expect(store.connectionStatus).toBe('offline')
+    expect(store.connectionStatus).toBe('reconnecting')
     expect(logger.warn).toHaveBeenCalled()
   })
 
@@ -139,5 +139,46 @@ describe('createFleetSync', () => {
     vi.advanceTimersByTime(500)
 
     expect(applyTelemetry).not.toHaveBeenCalled()
+  })
+
+  it('recovers from a network outage: reconnecting, ages state, resyncs and goes live', async () => {
+    const simulator = createSimulator({ startTime: START })
+    const store = useFleetStore()
+    const sync = createFleetSync({
+      transport: createMockRealtimeTransport(simulator),
+      target: store,
+      loadSnapshot: () =>
+        simulator.networkUp
+          ? Promise.resolve(parseFleetSnapshot(simulator.getFleetSnapshot()))
+          : Promise.reject(new Error('unreachable')),
+      now: () => simulator.now,
+      logger: { warn: vi.fn() },
+      reconnectDelaysMs: [1_000],
+    })
+    await sync.start()
+    simulator.dispatch({ type: 'startDemoMission' })
+    simulator.step(2_000)
+    vi.advanceTimersByTime(100)
+    expect(store.connectionStatus).toBe('live')
+
+    simulator.dispatch({ type: 'setNetwork', up: false })
+    expect(store.connectionStatus).toBe('reconnecting')
+    const lastKnown = store.uavsById['uav-01']?.telemetry?.position
+
+    // 20 s without data: UAVs age to offline but keep their last known position.
+    for (let i = 0; i < 20; i++) {
+      simulator.step(1_000)
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+    expect(store.connectionStatus).toBe('reconnecting')
+    expect(store.uavsById['uav-01']).toMatchObject({ status: 'offline' })
+    expect(store.uavsById['uav-01']?.telemetry?.position).toEqual(lastKnown)
+
+    simulator.dispatch({ type: 'setNetwork', up: true })
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(store.connectionStatus).toBe('live')
+    expect(store.uavsById['uav-01']?.telemetry?.timestamp).toBe(simulator.now)
+    expect(store.statusCounts.offline).toBe(0)
+    sync.stop()
   })
 })

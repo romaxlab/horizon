@@ -11,4 +11,5 @@ export interface FleetRepository {
   getSnapshot(signal?: AbortSignal): Promise<FleetSnapshot>
 }
 
-export type ConnectionStatus = 'connecting' | 'live' | 'offline'
+/** Backend link: `reconnecting` keeps last known state while the stream is re-established. */
+export type ConnectionStatus = 'connecting' | 'live' | 'reconnecting'
