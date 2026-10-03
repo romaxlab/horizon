@@ -669,6 +669,12 @@ Baseline:
 18 standby UAVs
 ```
 
+Initial state is idle: all 24 UAVs are parked in standby at the Abu Dhabi base. The prepared Area Scan mission (the baseline above) is started manually by a demo command, or automatically on startup when demo autostart is enabled through configuration.
+
+Only one mission is active at a time. Multi-mission operation is out of MVP scope.
+
+The simulator speaks a backend-style wire format (snake_case DTOs). The application validates and maps these payloads exactly as it would for a remote backend and never imports simulator DTO types.
+
 Primary deterministic mission:
 
 ```text

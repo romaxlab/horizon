@@ -92,7 +92,11 @@ importers:
 
   packages/realtime: {}
 
-  packages/simulator: {}
+  packages/simulator:
+    dependencies:
+      '@horizon/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/ui:
     dependencies:

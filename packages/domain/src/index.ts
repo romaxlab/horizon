@@ -1,5 +1,12 @@
 export type { OperationalEvent, OperationalEventType, EventSeverity } from './events'
-export type { GeoPoint, GeoPosition } from './geo'
+export {
+  bearingDegrees,
+  destinationPoint,
+  distanceMeters,
+  EARTH_RADIUS_METERS,
+  type GeoPoint,
+  type GeoPosition,
+} from './geo'
 export type {
   Mission,
   MissionArea,
