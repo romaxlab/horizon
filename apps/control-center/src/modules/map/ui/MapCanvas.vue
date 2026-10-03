@@ -111,7 +111,8 @@ watch(homeRequest, () => {
 
 <template>
   <div class="absolute inset-0">
-    <div ref="container" class="absolute inset-0" />
+    <!-- data-map-ready: the 3D scene is interactive (also a stable hook for E2E). -->
+    <div ref="container" class="absolute inset-0" :data-map-ready="scene !== undefined" />
     <div v-if="failed" class="absolute inset-0 grid place-items-center">
       <BaseText variant="body-md" tone="muted">3D map is unavailable</BaseText>
     </div>

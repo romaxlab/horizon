@@ -4,6 +4,8 @@ import { demoControls, openControlCenter } from './control-center'
 test('create an Area Scan mission, generate the plan, launch and observe execution', async ({
   page,
 }) => {
+  // The full plan → launch → progress flow is the longest scenario (slow WebGL on CI).
+  test.setTimeout(180_000)
   await openControlCenter(page)
 
   await page.getByRole('button', { name: 'New Mission' }).click()
