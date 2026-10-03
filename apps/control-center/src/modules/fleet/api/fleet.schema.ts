@@ -26,6 +26,8 @@ export const telemetryDtoSchema = z.object({
   gps_sats: z.number().int().nonnegative(),
   mission_id: z.string().nullable(),
   waypoint_index: z.number().int().nonnegative().nullable(),
+  flight_phase: z.enum(['parked', 'mission', 'returning']),
+  return_reason: z.enum(['completed', 'aborted', 'low-battery']).nullable(),
 })
 
 export const fleetSnapshotDtoSchema = z.object({

@@ -54,6 +54,11 @@ export function createMockServices(config: AppConfig): AppServices {
       const result = simulator.dispatch({ type: 'launchMission', missionId })
       if (!result.ok) throw new MissionPlanningError(result.reason)
     },
+    async abort(missionId) {
+      await delay(MOCK_LATENCY_MS)
+      const result = simulator.dispatch({ type: 'abortMission', missionId })
+      if (!result.ok) throw new MissionPlanningError(result.reason)
+    },
     async getActiveMission(signal) {
       await delay(MOCK_LATENCY_MS, signal)
       const mission = simulator.getActiveMission()

@@ -18,6 +18,8 @@ export interface MissionPlanner {
   /** Generates UAV routes for an Area Scan; the plan is not executed until launched. */
   plan(request: MissionPlanRequest, signal?: AbortSignal): Promise<Mission>
   launch(missionId: string): Promise<void>
+  /** Stops an active mission; its UAVs return home. */
+  abort(missionId: string): Promise<void>
   /** Current mission (active or most recent), used on start and after reconnect. */
   getActiveMission(signal?: AbortSignal): Promise<Mission | null>
 }

@@ -27,6 +27,9 @@ export interface TelemetryDto {
   gps_sats: number
   mission_id: string | null
   waypoint_index: number | null
+  flight_phase: 'parked' | 'mission' | 'returning'
+  /** Why a returning UAV is heading home; null otherwise. */
+  return_reason: 'completed' | 'aborted' | 'low-battery' | null
 }
 
 export interface FleetSnapshotDto {

@@ -24,6 +24,8 @@ export function mapTelemetry(dto: TelemetryDto): UavTelemetry {
     gpsSatellites: dto.gps_sats,
     missionId: dto.mission_id,
     currentWaypoint: dto.waypoint_index,
+    flightPhase: dto.flight_phase,
+    returnReason: dto.return_reason,
   }
 }
 

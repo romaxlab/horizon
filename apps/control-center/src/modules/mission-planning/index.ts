@@ -8,3 +8,10 @@ export {
   type MissionPlanRequest,
 } from './model/mission.types'
 export { useMissionSync } from './model/useMissionSync'
+export {
+  provideMissionBuilder,
+  useMissionBuilder,
+  type BuilderStep,
+  type MissionBuilder,
+} from './model/useMissionBuilder'
+export { default as MissionBuilderPanel } from './ui/MissionBuilderPanel.vue'

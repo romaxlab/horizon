@@ -754,6 +754,16 @@ Initial state is idle: all 24 UAVs are parked in standby on the pitch of a footb
 
 Only one mission is active at a time. Multi-mission operation is out of MVP scope.
 
+Return-to-home rules (simulator):
+
+- mission completed, mission stopped (`abortMission` → status `aborted`) or low battery all send
+  UAVs home; telemetry carries `flight_phase` and `return_reason`;
+- low battery: a UAV returns as soon as its battery covers only the climb, the flight home and the
+  landing plus an 8 % reserve; the rest of the mission continues;
+- deconfliction: returning UAVs first climb vertically to a return layer 20 m above the scan
+  altitude, so return paths never cross active scan lines. Scan strips and parking spots never
+  overlap by construction. Full collision avoidance is out of MVP scope.
+
 The simulator speaks a backend-style wire format (snake_case DTOs). The application validates and maps these payloads exactly as it would for a remote backend and never imports simulator DTO types.
 
 Primary deterministic mission:

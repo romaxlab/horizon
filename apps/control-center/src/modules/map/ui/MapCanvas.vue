@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import type { UavState } from '@horizon/domain'
+import type { GeoPoint, UavState } from '@horizon/domain'
 import { BaseSurface, BaseText, useTheme } from '@horizon/ui'
 import { storeToRefs } from 'pinia'
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { appConfig } from '@/shared/config'
 import type { MapScene } from '../lib/cesium/map-scene'
+import type { MissionOverlay } from '../lib/cesium/mission-layer'
 import { useMapStore } from '../model/map.store'
 
 const props = defineProps<{
   uavs: readonly UavState[]
   selectedUavId: string | null
+  missionOverlay: MissionOverlay | null
+  /** Clicks add mission area points instead of selecting UAVs. */
+  drawing: boolean
 }>()
 
-const emit = defineEmits<{ select: [uavId: string | null] }>()
+const emit = defineEmits<{ select: [uavId: string | null]; draw: [point: GeoPoint] }>()
 
 const container = ref<HTMLElement>()
 const credits = ref<HTMLElement>()
@@ -39,8 +43,13 @@ onMounted(async () => {
       onSelect: (uavId) => {
         emit('select', uavId)
       },
+      onDraw: (point) => {
+        emit('draw', point)
+      },
     })
     scene.value.sync(props.uavs, props.selectedUavId)
+    scene.value.setMissionOverlay(props.missionOverlay)
+    scene.value.setDrawing(props.drawing)
   } catch (error) {
     console.error('[map] failed to initialize', error)
     failed.value = true
@@ -55,6 +64,18 @@ watch(
   () => [props.uavs, props.selectedUavId] as const,
   ([uavs, selectedUavId]) => {
     scene.value?.sync(uavs, selectedUavId)
+  },
+)
+watch(
+  () => props.missionOverlay,
+  (overlay) => {
+    scene.value?.setMissionOverlay(overlay)
+  },
+)
+watch(
+  () => props.drawing,
+  (drawing) => {
+    scene.value?.setDrawing(drawing)
   },
 )
 watch(theme, (next) => {

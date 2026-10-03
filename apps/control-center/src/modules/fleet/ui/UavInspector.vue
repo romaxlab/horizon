@@ -98,7 +98,19 @@ onBeforeUnmount(() => {
             {{ inspector.mission ? 'Area Scan' : 'Not assigned' }}
           </BaseText>
         </div>
-        <BaseText v-if="inspector.mission?.waypoint" variant="body-md" tone="secondary" numeric>
+        <BaseText
+          v-if="inspector.mission?.returning"
+          variant="body-md"
+          :tone="inspector.mission.returning.includes('battery') ? 'warning' : 'secondary'"
+        >
+          {{ inspector.mission.returning }}
+        </BaseText>
+        <BaseText
+          v-else-if="inspector.mission?.waypoint"
+          variant="body-md"
+          tone="secondary"
+          numeric
+        >
           Waypoint {{ inspector.mission.waypoint }}
         </BaseText>
       </div>

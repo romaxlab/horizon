@@ -47,6 +47,8 @@ const telemetry = (uavId: string, overrides: Partial<UavTelemetry>): UavTelemetr
   gpsSatellites: 12,
   missionId: 'm-1',
   currentWaypoint: 0,
+  flightPhase: 'mission',
+  returnReason: null,
   ...overrides,
 })
 

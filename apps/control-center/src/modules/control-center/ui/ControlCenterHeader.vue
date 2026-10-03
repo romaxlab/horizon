@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Moon, Sun } from '@lucide/vue'
-import { BaseBadge, BaseIconButton, BaseSurface, BaseText, useTheme } from '@horizon/ui'
+import { Moon, Plus, Sun } from '@lucide/vue'
+import { BaseBadge, BaseButton, BaseIconButton, BaseSurface, BaseText, useTheme } from '@horizon/ui'
 import type { BadgeVariant } from '@horizon/ui'
 import { HorizonLogo } from '@/shared/brand'
 
@@ -8,7 +8,10 @@ defineProps<{
   connection: { label: string; variant: BadgeVariant }
   clock: string
   missionTitle: string
+  canCreateMission: boolean
 }>()
+
+const emit = defineEmits<{ newMission: [] }>()
 
 const { theme, toggleTheme } = useTheme()
 </script>
@@ -23,6 +26,16 @@ const { theme, toggleTheme } = useTheme()
       <!-- The logo carries its own clear space (~8px each side), hence the tight padding. -->
       <HorizonLogo />
       <BaseText variant="body-md" tone="muted" truncate>{{ missionTitle }}</BaseText>
+      <BaseButton
+        size="sm"
+        variant="primary"
+        class="ml-2"
+        :disabled="!canCreateMission"
+        @click="emit('newMission')"
+      >
+        <Plus />
+        New Mission
+      </BaseButton>
     </BaseSurface>
 
     <BaseSurface

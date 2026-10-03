@@ -1,20 +1,9 @@
 import type { UavTelemetry } from '@horizon/domain'
 import { describe, expect, it } from 'vitest'
+import { telemetry as sample } from './fleet.fixtures.test-utils'
 import { deriveUavStatus, healthIssues, OFFLINE_AFTER_MS, STALE_AFTER_MS } from './fleet.status'
 
-const telemetry = (overrides: Partial<UavTelemetry> = {}): UavTelemetry => ({
-  uavId: 'uav-01',
-  timestamp: 0,
-  position: { latitude: 24.45, longitude: 54.39, altitude: 0 },
-  speed: 0,
-  heading: 0,
-  battery: 90,
-  signal: 95,
-  gpsSatellites: 14,
-  missionId: null,
-  currentWaypoint: null,
-  ...overrides,
-})
+const telemetry = (overrides: Partial<UavTelemetry> = {}) => sample('uav-01', 0, overrides)
 
 describe('deriveUavStatus', () => {
   const now = 100_000

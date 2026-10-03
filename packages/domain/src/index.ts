@@ -15,4 +15,12 @@ export type {
   UavRoute,
   Waypoint,
 } from './mission'
-export type { MissionExecutionState, Uav, UavState, UavStatus, UavTelemetry } from './uav'
+export type {
+  FlightPhase,
+  MissionExecutionState,
+  ReturnReason,
+  Uav,
+  UavState,
+  UavStatus,
+  UavTelemetry,
+} from './uav'

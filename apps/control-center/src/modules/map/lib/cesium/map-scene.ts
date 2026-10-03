@@ -1,5 +1,5 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import type { UavState } from '@horizon/domain'
+import type { GeoPoint, UavState } from '@horizon/domain'
 import {
   Cartographic,
   Credit,
@@ -20,6 +20,7 @@ import {
 import type { MapBasemap, MapPerspective } from '../../model/map.store'
 import { createCameraController, OPERATING_SITE } from './camera-controller'
 import { createClusterLayer } from './cluster-layer'
+import { createMissionLayer, type MissionOverlay } from './mission-layer'
 import { readMapPalette } from './palette'
 import { createUavLayer } from './uav-layer'
 
@@ -76,6 +77,8 @@ export interface MapSceneOptions {
   /** Adds 3D buildings to the 3D perspective; without it 3D is a keyless tilted view. */
   ionToken: string | null
   onSelect: (uavId: string | null) => void
+  /** Ground point clicked while drawing mode is on. */
+  onDraw: (point: GeoPoint) => void
 }
 
 /** Public surface of the 3D map, independent of Vue. */
@@ -84,6 +87,9 @@ export interface MapScene {
   setTheme(theme: MapTheme): void
   setBasemap(basemap: MapBasemap): void
   setPerspective(perspective: MapPerspective): void
+  setMissionOverlay(overlay: MissionOverlay | null): void
+  /** While drawing, clicks add area points instead of selecting UAVs. */
+  setDrawing(drawing: boolean): void
   home(): void
   focusUav(uavId: string): void
   follow(uavId: string | null): void
@@ -108,6 +114,7 @@ export function createMapScene({
   perspective: initialPerspective,
   ionToken,
   onSelect,
+  onDraw,
 }: MapSceneOptions): MapScene {
   if (ionToken) Ion.defaultAccessToken = ionToken
 
@@ -155,6 +162,13 @@ export function createMapScene({
 
   const layer = createUavLayer(viewer, palette)
   const clusters = createClusterLayer(viewer, layer, palette)
+  const missionLayer = createMissionLayer(viewer, palette)
+  let drawing = false
+
+  function setGroundHeight(meters: number) {
+    layer.setGroundHeight(meters)
+    missionLayer.setGroundHeight(meters)
+  }
   const camera = createCameraController(viewer, layer, perspective === '3d')
   camera.home(false)
 
@@ -246,7 +260,7 @@ export function createMapScene({
     const previous = content3d
     content3d = null
     scene.globe.show = true
-    layer.setGroundHeight(terrainGroundHeight)
+    setGroundHeight(terrainGroundHeight)
     if (previous) {
       afterTilesLoaded(() => {
         if (content3d?.tileset !== previous.tileset) scene.primitives.remove(previous.tileset)
@@ -306,7 +320,7 @@ export function createMapScene({
     showContent(tileset, source, request)
 
     const ground = source === 'google-photorealistic' ? await sampleTilesetGround() : null
-    if (!isStale()) layer.setGroundHeight(ground ?? terrainGroundHeight)
+    if (!isStale()) setGroundHeight(ground ?? terrainGroundHeight)
   }
 
   /**
@@ -346,6 +360,11 @@ export function createMapScene({
     return members ? { kind: 'cluster', members } : null
   }
   handler.setInputAction((event: { position: Cartesian2 }) => {
+    if (drawing) {
+      const ground = camera.groundPointAt(event.position)
+      if (ground) onDraw(ground)
+      return
+    }
     const target = pick(event.position)
     if (target?.kind === 'cluster') {
       // Clicking a cluster zooms in until its UAVs separate; selection is unchanged.
@@ -356,6 +375,10 @@ export function createMapScene({
     onSelect(target?.uavId ?? null)
   }, ScreenSpaceEventType.LEFT_CLICK)
   handler.setInputAction((event: { endPosition: Cartesian2 }) => {
+    if (drawing) {
+      scene.canvas.style.cursor = 'crosshair'
+      return
+    }
     const target = pick(event.endPosition)
     scene.canvas.style.cursor = target ? 'pointer' : ''
     layer.setHovered(target?.kind === 'uav' ? target.uavId : null)
@@ -371,6 +394,7 @@ export function createMapScene({
       applySceneColors()
       layer.setPalette(palette)
       clusters.setPalette(palette)
+      missionLayer.setPalette(palette)
       if (basemap === 'map') replaceBasemap()
     },
     setBasemap(next) {
@@ -394,11 +418,20 @@ export function createMapScene({
     follow: (uavId) => {
       camera.follow(uavId)
     },
+    setMissionOverlay(overlay) {
+      missionLayer.set(overlay)
+    },
+    setDrawing(next) {
+      drawing = next
+      scene.canvas.style.cursor = next ? 'crosshair' : ''
+      if (next) layer.setHovered(null)
+    },
     destroy() {
       contentRequest += 1
       basemapTransition += 1
       handler.destroy()
       clusters.destroy()
+      missionLayer.destroy()
       layer.destroy()
       viewer.destroy()
     },

@@ -239,4 +239,69 @@ describe('createSimulator', () => {
       { id: DEMO_MISSION.id, status: 'active', assigned_uav_ids: expect.any(Array) as unknown },
     ])
   })
+
+  it('aborts a mission: UAVs return home and the mission is marked aborted', () => {
+    const { simulator, messages } = record()
+    simulator.dispatch({ type: 'startDemoMission' })
+    simulator.step(60_000)
+
+    expect(simulator.dispatch({ type: 'abortMission', missionId: DEMO_MISSION.id })).toEqual({
+      ok: true,
+    })
+    expect(simulator.getActiveMission()?.status).toBe('aborted')
+    expect(missionMessages(messages).map((m) => m.status)).toEqual(['active', 'aborted'])
+    simulator.step(1_000)
+    const flying = simulator.getFleetSnapshot().telemetry.filter((t) => t.mission_id !== null)
+    expect(
+      flying.every((t) => t.flight_phase === 'returning' && t.return_reason === 'aborted'),
+    ).toBe(true)
+
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getFleetSnapshot().telemetry.every((t) => t.flight_phase === 'parked'),
+      30 * 60,
+    )
+    expect(simulator.dispatch({ type: 'abortMission', missionId: DEMO_MISSION.id })).toMatchObject({
+      ok: false,
+    })
+  })
+
+  it('sends a UAV home on low battery with enough charge to land', () => {
+    const { simulator } = record()
+    simulator.dispatch({ type: 'startDemoMission' })
+    simulator.step(120_000)
+    const [first] = simulator.getActiveMission()?.assigned_uav_ids ?? []
+    if (!first) throw new Error('expected an assigned UAV')
+    simulator.dispatch({ type: 'setBattery', uavId: first, batteryPct: 15 })
+    simulator.step(500)
+
+    const uav = () => simulator.getFleetSnapshot().telemetry.find((t) => t.uav_id === first)
+    expect(uav()).toMatchObject({ flight_phase: 'returning', return_reason: 'low-battery' })
+    expect(simulator.getActiveMission()?.status).toBe('active')
+
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => uav()?.flight_phase === 'parked',
+      30 * 60,
+    )
+    expect(uav()?.battery_pct).toBeGreaterThan(0)
+  })
+
+  it('returns on a separate layer above the scan altitude', () => {
+    const { simulator, messages } = record()
+    simulator.dispatch({ type: 'startDemoMission' })
+    simulator.step(60_000)
+    simulator.dispatch({ type: 'abortMission', missionId: DEMO_MISSION.id })
+    simulator.step(30_000)
+
+    const returning = telemetryOf(messages, 'uav-01').filter(
+      (t) => t.flight_phase === 'returning' && t.speed_mps > 10,
+    )
+    expect(returning.length).toBeGreaterThan(0)
+    expect(returning.every((t) => t.alt_m >= DEMO_MISSION.altitude + 19.9)).toBe(true)
+  })
 })

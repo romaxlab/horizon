@@ -27,7 +27,14 @@ export interface UavTelemetry {
   gpsSatellites: number
   missionId: string | null
   currentWaypoint: number | null
+  flightPhase: FlightPhase
+  /** Why a returning UAV is heading home; null otherwise. */
+  returnReason: ReturnReason | null
 }
+
+export type FlightPhase = 'parked' | 'mission' | 'returning'
+
+export type ReturnReason = 'completed' | 'aborted' | 'low-battery'
 
 export type UavStatus = 'standby' | 'active' | 'warning' | 'stale' | 'offline'
 

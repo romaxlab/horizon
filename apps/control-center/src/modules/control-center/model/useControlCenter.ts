@@ -1,8 +1,16 @@
 import type { BadgeVariant } from '@horizon/ui'
+import { useMutation } from '@tanstack/vue-query'
 import { computed } from 'vue'
+import { useAppServices } from '@/app/providers/services'
 import { useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
-import { useMapStore } from '@/modules/map'
-import { computeMissionProgress, useMissionStore, useMissionSync } from '@/modules/mission-planning'
+import { useMapStore, type MissionOverlay } from '@/modules/map'
+import {
+  computeMissionProgress,
+  provideMissionBuilder,
+  useMissionBuilder,
+  useMissionStore,
+  useMissionSync,
+} from '@/modules/mission-planning'
 import { formatDuration } from '@/shared/lib/format'
 import { useNow } from '@/shared/lib/useNow'
 
@@ -48,9 +56,14 @@ export function useControlCenter() {
     if (!current || !progress || current.status !== 'active') {
       return {
         title:
-          current?.status === 'completed' ? `${current.name} · completed` : 'No active mission',
+          current?.status === 'completed'
+            ? `${current.name} · completed`
+            : current?.status === 'aborted'
+              ? `${current.name} · stopped`
+              : 'No active mission',
         state: 'Standing by',
         detail: `${fleet.statusCounts.standby} UAVs ready`,
+        progress: null,
       }
     }
     const eta = progress.etaSec === null ? '' : ` · ETA ${formatDuration(progress.etaSec)}`
@@ -58,7 +71,35 @@ export function useControlCenter() {
       title: current.name,
       state: `${Math.round(progress.ratio * 100)}%`,
       detail: `${progress.activeUavCount} UAVs scanning${eta}`,
+      progress: progress.ratio,
     }
+  })
+
+  const builder = useMissionBuilder({
+    availableUavs: computed(() => fleet.statusCounts.standby),
+  })
+  provideMissionBuilder(builder)
+  const canCreateMission = computed(
+    () => missions.current?.status !== 'active' && !builder.open.value,
+  )
+
+  const { missionPlanner } = useAppServices()
+  const abortMutation = useMutation({
+    mutationFn: (missionId: string) => missionPlanner.abort(missionId),
+  })
+  function stopMission() {
+    const current = missions.current
+    if (current?.status === 'active') abortMutation.mutate(current.id)
+  }
+  const missionActive = computed(() => missions.current?.status === 'active')
+
+  /** The draft/plan while building, otherwise the current mission. */
+  const missionOverlay = computed<MissionOverlay | null>(() => {
+    if (builder.overlay.value) return builder.overlay.value
+    const current = missions.current
+    if (!current || current.status === 'draft' || current.status === 'planned') return null
+    const phase = current.status === 'active' ? 'active' : 'completed'
+    return { phase, area: current.area.polygon, routes: current.routes }
   })
 
   /**
@@ -87,6 +128,12 @@ export function useControlCenter() {
     selectedUavId: computed(() => fleet.selectedUavId),
     inspectorOpen: computed(() => fleet.selectedUav !== null),
     following: computed(() => map.followUavId !== null),
+    builder,
+    canCreateMission,
+    missionActive,
+    stopMission,
+    stoppingMission: computed(() => abortMutation.isPending.value),
+    missionOverlay,
     selectUav,
     focusSelected,
     toggleFollow,

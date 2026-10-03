@@ -14,6 +14,8 @@ const telemetryDto = {
   gps_sats: 14,
   mission_id: 'mission-1',
   waypoint_index: 3,
+  flight_phase: 'mission',
+  return_reason: null,
 }
 
 describe('parseTelemetryMessage', () => {
@@ -31,6 +33,8 @@ describe('parseTelemetryMessage', () => {
         gpsSatellites: 14,
         missionId: 'mission-1',
         currentWaypoint: 3,
+        flightPhase: 'mission',
+        returnReason: null,
       },
     })
   })

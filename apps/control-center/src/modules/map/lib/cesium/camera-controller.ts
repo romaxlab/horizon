@@ -2,10 +2,12 @@ import {
   BoundingSphere,
   Cartesian2,
   Cartesian3,
+  Cartographic,
   Math as CesiumMath,
   HeadingPitchRange,
   type Viewer,
 } from 'cesium'
+import type { GeoPoint } from '@horizon/domain'
 import type { UavLayer } from './uav-layer'
 
 /** Center of the operating area: between the stadium base and the demo mission area. */
@@ -29,6 +31,8 @@ export interface CameraController {
   focusArea(sphere: BoundingSphere): void
   /** Explicit Follow mode; null stops following and leaves the camera where it is. */
   follow(uavId: string | null): void
+  /** Geographic point under a screen position (on the ellipsoid), if any. */
+  groundPointAt(position: Cartesian2): GeoPoint | null
 }
 
 export function createCameraController(
@@ -82,6 +86,16 @@ export function createCameraController(
     focusArea(sphere) {
       viewer.trackedEntity = undefined
       flyAround(sphere.center, Math.max(sphere.radius * 6, FOCUS_RANGE_METERS / 2))
+    },
+
+    groundPointAt(position) {
+      const cartesian = camera.pickEllipsoid(position)
+      if (!cartesian) return null
+      const { latitude, longitude } = Cartographic.fromCartesian(cartesian)
+      return {
+        latitude: CesiumMath.toDegrees(latitude),
+        longitude: CesiumMath.toDegrees(longitude),
+      }
     },
 
     follow(uavId) {
