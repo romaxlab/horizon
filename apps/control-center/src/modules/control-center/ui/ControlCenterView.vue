@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { PanelLeftOpen } from '@lucide/vue'
-import { BaseIconButton, BaseSurface } from '@horizon/ui'
-import { ref } from 'vue'
+import { BaseButton, BaseIconButton, BaseSurface, BaseText } from '@horizon/ui'
+import { ref, watch } from 'vue'
 import { FleetPanel, UavInspector } from '@/modules/fleet'
 import { MapCanvas, MapControls } from '@/modules/map'
 import { MissionBuilderPanel } from '@/modules/mission-planning'
+import { VideoFeed } from '@/modules/video-monitoring'
 import { useControlCenter } from '../model/useControlCenter'
 import ControlCenterHeader from './ControlCenterHeader.vue'
 import MissionStatusBar from './MissionStatusBar.vue'
@@ -23,13 +24,18 @@ const {
   builder,
   canCreateMission,
   missionOverlay,
+  selectedFeed,
   missionActive,
   stopMission,
   stoppingMission,
 } = useControlCenter()
 
-/** Local presentation state: whether the fleet panel is expanded. */
+/** Local presentation state: fleet panel expansion and the large video focus view. */
 const fleetOpen = ref(true)
+const videoFocus = ref(false)
+watch(selectedUavId, (id) => {
+  if (id === null) videoFocus.value = false
+})
 </script>
 
 <template>
@@ -91,6 +97,33 @@ const fleetOpen = ref(true)
           </BaseSurface>
         </Transition>
 
+        <!-- Large floating video focus view; the map stays visible around it. -->
+        <div class="flex min-w-0 flex-1 items-center justify-center self-stretch">
+          <Transition
+            enter-active-class="transition duration-200 ease-out"
+            enter-from-class="scale-95 opacity-0"
+            leave-active-class="transition duration-150 ease-in"
+            leave-to-class="scale-95 opacity-0"
+          >
+            <BaseSurface
+              v-if="videoFocus && selectedFeed"
+              variant="floating"
+              padding="sm"
+              class="pointer-events-auto w-full max-w-3xl"
+              aria-label="Video focus"
+            >
+              <VideoFeed
+                variant="focus"
+                :uav-id="selectedFeed.uavId"
+                :label="selectedFeed.label"
+                :pose="selectedFeed.pose"
+                :link="selectedFeed.link"
+                @close="videoFocus = false"
+              />
+            </BaseSurface>
+          </Transition>
+        </div>
+
         <div class="flex h-full min-h-0 flex-col items-end gap-3">
           <Transition
             enter-active-class="transition duration-200 ease-out"
@@ -110,7 +143,29 @@ const fleetOpen = ref(true)
                 @close="selectUav(null)"
                 @focus="focusSelected"
                 @toggle-follow="toggleFollow"
-              />
+              >
+                <template v-if="selectedFeed" #media>
+                  <!-- One renderer at a time: the preview yields while the focus view is open. -->
+                  <BaseSurface
+                    v-if="videoFocus"
+                    variant="subtle"
+                    class="flex h-10 items-center justify-between px-3"
+                  >
+                    <BaseText variant="body-sm" tone="secondary">Video open in focus view</BaseText>
+                    <BaseButton size="sm" variant="ghost" @click="videoFocus = false">
+                      Restore
+                    </BaseButton>
+                  </BaseSurface>
+                  <VideoFeed
+                    v-else
+                    :uav-id="selectedFeed.uavId"
+                    :label="selectedFeed.label"
+                    :pose="selectedFeed.pose"
+                    :link="selectedFeed.link"
+                    @expand="videoFocus = true"
+                  />
+                </template>
+              </UavInspector>
             </BaseSurface>
           </Transition>
 

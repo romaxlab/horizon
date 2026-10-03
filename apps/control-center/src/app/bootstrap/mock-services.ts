@@ -8,6 +8,7 @@ import {
   toPlanRequestDto,
   type MissionPlanner,
 } from '@/modules/mission-planning'
+import type { VideoProvider } from '@/modules/video-monitoring'
 import type { AppConfig } from '@/shared/config'
 
 /** Simulated network latency for the fake REST endpoints. */
@@ -66,8 +67,28 @@ export function createMockServices(config: AppConfig): AppServices {
     },
   }
 
+  // Simulated nadir camera rendered from keyless Esri World Imagery under each UAV.
+  const videoProvider: VideoProvider = {
+    async getSource(uavId) {
+      await delay(MOCK_LATENCY_MS)
+      const hasCamera = simulator
+        .getFleetSnapshot()
+        .uavs.some((u) => u.id === uavId && u.has_camera)
+      return hasCamera
+        ? {
+            kind: 'synthetic-imagery',
+            tileUrlTemplate:
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            maxZoom: 19,
+            attribution: 'Esri, Maxar, Earthstar Geographics',
+          }
+        : null
+    },
+  }
+
   return {
     fleetRepository,
+    videoProvider,
     missionPlanner,
     realtimeTransport: createMockRealtimeTransport(simulator),
   }

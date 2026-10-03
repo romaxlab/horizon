@@ -817,7 +817,12 @@ interface VideoProvider {
 }
 ```
 
-Initial implementation uses prerecorded aerial footage and clearly labels it as simulated.
+The initial implementation is a synthetic onboard camera, clearly labelled `SIMULATED FEED`:
+the mock provider returns a `synthetic-imagery` source, and `modules/video-monitoring` renders a
+nadir view of Esri World Imagery under the selected UAV on a canvas (ground width
+2·h·tan(35°), rotated to heading, smoothed between telemetry samples, subtle drift, HUD with
+altitude, speed and heading). A stale link freezes the last frame; offline UAVs or UAVs without
+a camera show no feed.
 
 States:
 

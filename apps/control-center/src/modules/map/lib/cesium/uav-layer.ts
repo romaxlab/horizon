@@ -14,7 +14,7 @@ import {
   type Entity,
   type Viewer,
 } from 'cesium'
-import { createPoseTrack, type Pose, type PoseTrack } from '../interpolation'
+import { createPoseTrack, type Pose, type PoseTrack } from '@/shared/lib/pose-track'
 import { getLabelPill, getUavMarker, MARKER_SIZE } from './marker-images'
 import type { MapPalette } from './palette'
 

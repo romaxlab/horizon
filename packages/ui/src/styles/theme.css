@@ -37,6 +37,11 @@
   --color-status-info: var(--status-info);
   --color-status-neutral: var(--status-neutral);
 
+  --color-media: var(--media-backdrop);
+  --color-on-media: var(--media-text);
+  --color-on-media-muted: var(--media-text-muted);
+  --color-media-scrim: var(--media-scrim);
+
   --shadow-*: initial;
   --shadow-floating: var(--elevation-floating);
   --shadow-raised: var(--elevation-raised);

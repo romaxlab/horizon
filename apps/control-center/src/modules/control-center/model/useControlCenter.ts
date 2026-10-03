@@ -93,6 +93,35 @@ export function useControlCenter() {
   }
   const missionActive = computed(() => missions.current?.status === 'active')
 
+  /** Camera feed inputs for the selected UAV; the video module only sees pose and link. */
+  const selectedFeed = computed(() => {
+    const state = fleet.selectedUav
+    if (!state) return null
+    const t = state.telemetry
+    return {
+      uavId: state.uav.id,
+      label: state.uav.name,
+      pose:
+        t && state.lastUpdatedAt !== null
+          ? {
+              latitude: t.position.latitude,
+              longitude: t.position.longitude,
+              altitude: t.position.altitude,
+              heading: t.heading,
+              speed: t.speed,
+              timestamp: t.timestamp,
+              receivedAt: state.lastUpdatedAt,
+            }
+          : null,
+      link:
+        state.status === 'offline'
+          ? ('offline' as const)
+          : state.status === 'stale'
+            ? ('stale' as const)
+            : ('live' as const),
+    }
+  })
+
   /** The draft/plan while building, otherwise the current mission. */
   const missionOverlay = computed<MissionOverlay | null>(() => {
     if (builder.overlay.value) return builder.overlay.value
@@ -129,6 +158,7 @@ export function useControlCenter() {
     inspectorOpen: computed(() => fleet.selectedUav !== null),
     following: computed(() => map.followUavId !== null),
     builder,
+    selectedFeed,
     canCreateMission,
     missionActive,
     stopMission,
