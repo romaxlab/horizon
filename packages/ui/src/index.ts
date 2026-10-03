@@ -7,6 +7,7 @@ export { default as BaseInput } from './components/BaseInput.vue'
 export { default as BaseMetric } from './components/BaseMetric.vue'
 export { default as BaseProgress } from './components/BaseProgress.vue'
 export { default as BaseSegmentedControl } from './components/BaseSegmentedControl.vue'
+export { default as BaseSparkline } from './components/BaseSparkline.vue'
 export { default as BaseSurface } from './components/BaseSurface.vue'
 export { default as BaseText } from './components/BaseText.vue'
 

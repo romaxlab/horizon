@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, triggerRef } from 'vue'
 import { deriveMissionState, deriveUavStatus } from './fleet.status'
 import type { ConnectionStatus, FleetChange, FleetSnapshot } from './fleet.types'
+import { createTelemetryHistory } from './telemetry-history'
 
 function withTelemetry(
   state: UavState,
@@ -37,6 +38,8 @@ export const useFleetStore = defineStore('fleet', () => {
   const connectionStatus = ref<ConnectionStatus>('connecting')
   /** Single shared selection, stored by id rather than as a duplicated object. */
   const selectedUavId = ref<string | null>(null)
+  /** Downsampled trend history; recorded before each commit so readers see it with the update. */
+  const history = createTelemetryHistory()
 
   const uavs = computed(() =>
     uavIds.value.flatMap((id) => {
@@ -66,6 +69,7 @@ export const useFleetStore = defineStore('fleet', () => {
             lastUpdatedAt: null,
           }
       const isNewer = sample && (!base.telemetry || sample.timestamp > base.telemetry.timestamp)
+      if (isNewer) history.record(sample)
       // Age snapshot samples relative to the server clock so old telemetry does not look fresh.
       next[uav.id] = isNewer
         ? withTelemetry(
@@ -78,6 +82,7 @@ export const useFleetStore = defineStore('fleet', () => {
     }
 
     uavIds.value = snapshot.uavs.map((uav) => uav.id)
+    history.retain(uavIds.value)
     uavsById.value = next
     if (selectedUavId.value !== null && !(selectedUavId.value in next)) selectedUavId.value = null
     notify({ kind: 'reset' })
@@ -95,6 +100,7 @@ export const useFleetStore = defineStore('fleet', () => {
         continue
       }
       const next = withTelemetry(current, telemetry, receivedAt, receivedAt)
+      history.record(telemetry)
       record[telemetry.uavId] = next
       changed.push(next)
     }
@@ -169,6 +175,7 @@ export const useFleetStore = defineStore('fleet', () => {
     hydrate,
     refreshStatuses,
     subscribe,
+    historyFor: history.samples,
     selectUav,
     applyTelemetry,
     setConnectionStatus,

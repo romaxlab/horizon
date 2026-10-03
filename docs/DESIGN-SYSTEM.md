@@ -222,6 +222,7 @@ BaseDivider
 BaseBadge
 BaseMetric
 BaseProgress
+BaseSparkline
 BaseAlert
 BaseMenu
 BaseTooltip

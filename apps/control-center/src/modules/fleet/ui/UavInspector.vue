@@ -8,6 +8,7 @@ import {
   BaseIconButton,
   BaseMetric,
   BaseProgress,
+  BaseSparkline,
   BaseText,
 } from '@horizon/ui'
 import { onBeforeUnmount, onMounted } from 'vue'
@@ -87,6 +88,26 @@ onBeforeUnmount(() => {
           :value="inspector.lastUpdate.label"
           :tone="inspector.lastUpdate.degraded ? 'warning' : 'primary'"
         />
+      </div>
+
+      <div v-if="inspector.trends" class="flex flex-col gap-2">
+        <BaseText variant="caption" tone="muted">{{ inspector.trends.window }}</BaseText>
+        <div class="grid grid-cols-3 gap-3">
+          <div
+            v-for="trend in inspector.trends.series"
+            :key="trend.label"
+            class="flex min-w-0 flex-col gap-1"
+          >
+            <BaseSparkline
+              :label="`${trend.label} trend, ${inspector.trends.window.toLowerCase()}`"
+              :values="trend.values"
+              :min="trend.min"
+              :max="trend.max"
+              :tone="trend.tone"
+            />
+            <BaseText variant="caption" tone="secondary">{{ trend.label }}</BaseText>
+          </div>
+        </div>
       </div>
 
       <BaseDivider />

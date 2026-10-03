@@ -67,4 +67,22 @@ describe('useUavInspector', () => {
       lastUpdate: { degraded: true },
     })
   })
+
+  it('exposes trends once the UAV has history from live telemetry', () => {
+    const store = useFleetStore()
+    store.hydrate({ serverTime: 0, uavs: [uav('uav-01')], telemetry: [telemetry('uav-01', 0)] }, 0)
+    store.selectUav('uav-01')
+    const { inspector } = useUavInspector(ref(0))
+    expect(inspector.value?.trends).toBeNull()
+
+    store.applyTelemetry([telemetry('uav-01', 1000, { speed: 8, battery: 15 })], 1000)
+    expect(inspector.value?.trends).toMatchObject({
+      window: 'Last 5 min',
+      series: [
+        { label: 'Altitude', values: [0, 0] },
+        { label: 'Speed', values: [0, 8] },
+        { label: 'Battery', values: [90, 15], tone: 'danger' },
+      ],
+    })
+  })
 })

@@ -12,6 +12,7 @@ import {
   type HealthIssue,
 } from './fleet.status'
 import { useFleetStore } from './fleet.store'
+import { HISTORY_WINDOW_MS, type TelemetrySample } from './telemetry-history'
 
 const issueLabels: Record<HealthIssue, string> = {
   'low-battery': 'Low battery',
@@ -25,6 +26,31 @@ const returnLabels: Record<ReturnReason, string> = {
   completed: 'Returning home',
   aborted: 'Returning · mission stopped',
   'low-battery': 'Returning · low battery',
+}
+
+interface TrendSeries {
+  label: string
+  values: number[]
+  min?: number
+  max?: number
+  tone: ProgressTone
+}
+
+function trendSeries(
+  history: readonly TelemetrySample[],
+  batteryTone: ProgressTone,
+): TrendSeries[] {
+  return [
+    { label: 'Altitude', values: history.map((s) => s.altitude), min: 0, tone: 'info' },
+    { label: 'Speed', values: history.map((s) => s.speed), min: 0, tone: 'info' },
+    {
+      label: 'Battery',
+      values: history.map((s) => s.battery),
+      min: 0,
+      max: 100,
+      tone: batteryTone,
+    },
+  ]
 }
 
 /** View model for the UAV Inspector of the selected UAV. Null when nothing is selected. */
@@ -47,6 +73,8 @@ export function useUavInspector(now: Readonly<Ref<number>> = useNow()) {
             ? 'warning'
             : 'success'
     const tone = (bad: boolean): TextTone => (bad ? 'warning' : 'primary')
+    // Re-read on every live update of this UAV: the store records history before committing.
+    const history = store.historyFor(uav.id)
 
     return {
       id: uav.id,
@@ -86,6 +114,13 @@ export function useUavInspector(now: Readonly<Ref<number>> = useNow()) {
             },
           ]
         : [],
+      trends:
+        history.length < 2
+          ? null
+          : {
+              window: `Last ${String(HISTORY_WINDOW_MS / 60_000)} min`,
+              series: trendSeries(history, batteryTone),
+            },
       lastUpdate: {
         label: lastUpdatedAt === null ? 'Never' : formatAge(now.value - lastUpdatedAt),
         degraded: linkDegraded,
