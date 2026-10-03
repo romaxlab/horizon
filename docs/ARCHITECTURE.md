@@ -971,6 +971,10 @@ simulate connection loss
 → state restored
 ```
 
+E2E runs with Playwright against the mock backend (`pnpm e2e`, specs in
+`apps/control-center/e2e/`); it starts its own dev server with demo controls enabled and drives
+failures through the demo panel. Unit/integration tests run with `pnpm test` (Vitest, `src/`).
+
 ---
 
 ## 18. Technology choices

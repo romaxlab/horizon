@@ -157,7 +157,7 @@ const uavCount = computed({
           />
         </div>
         <BaseDivider />
-        <ul class="flex flex-col gap-1.5">
+        <ul class="flex flex-col gap-1.5" aria-label="Routes">
           <li
             v-for="route in builder.summary.value.routes"
             :key="route.uavId"

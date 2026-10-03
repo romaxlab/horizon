@@ -48,12 +48,10 @@ function confirmStop() {
     </template>
     <template v-else>
       <BaseText variant="label-lg" numeric>{{ state }}</BaseText>
-      <BaseProgress
-        v-if="progress !== null"
-        label="Mission progress"
-        :value="progress"
-        class="w-24"
-      />
+      <!-- Fixed track width from the wrapper; the progress bar fills it. -->
+      <div v-if="progress !== null" class="w-24 shrink-0">
+        <BaseProgress label="Mission progress" :value="progress" />
+      </div>
       <BaseText variant="body-md" tone="muted" numeric class="whitespace-nowrap">
         {{ detail }}
       </BaseText>
