@@ -21,15 +21,31 @@ import {
   type Pose,
   type PoseTrack,
 } from '@/shared/lib/pose-track'
-import { getLabelPill, getUavMarker, MARKER_SIZE } from './marker-images'
+import {
+  getLabelPill,
+  getSelectionRing,
+  MARKER_SIZE,
+  RING_SIZE,
+  uavMarkerUrl,
+  type UavMarkerState,
+} from './marker-images'
 import type { MapPalette } from './palette'
 
 const TRAIL_MIN_SPACING_METERS = 15
 const ENTITY_PREFIX = 'uav:'
 /** Name labels belong to their UAV for picking purposes. */
 const LABEL_ID_PREFIX = 'uav-label:'
-/** Selected UAVs are emphasized by a focus ring and a modest scale-up, not by size alone. */
-const SELECTED_SCALE = 1.15
+/**
+ * Stale UAVs share the warning artwork; the inspector tells the two apart. A selected nominal UAV
+ * turns light cyan; warning and offline keep their artwork so the alert stays visible.
+ */
+const MARKER_STATE: Record<UavStatus, UavMarkerState> = {
+  standby: 'standby',
+  active: 'active',
+  warning: 'warning',
+  stale: 'warning',
+  offline: 'offline',
+}
 /** Slightly smaller markers at medium distance; clustering takes over further out. */
 const MARKER_SCALE_BY_DISTANCE = new NearFarScalar(1_500, 1, 10_000, 0.8)
 /** Gap between the selected marker's dot and its name label (CSS px). */
@@ -147,7 +163,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       billboard: {
         horizontalOrigin: HorizontalOrigin.CENTER,
         verticalOrigin: VerticalOrigin.BOTTOM,
-        pixelOffset: new Cartesian2(0, -((MARKER_SIZE / 2) * SELECTED_SCALE + LABEL_GAP_PX)),
+        pixelOffset: new Cartesian2(0, -(MARKER_SIZE / 2 + LABEL_GAP_PX)),
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
     })
@@ -171,6 +187,34 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     }
   }
 
+  /** Selection: the UAV's own marker plus a ring around it, at the same size. */
+  const selectionRing = (() => {
+    const entity = viewer.entities.add({
+      id: `${LABEL_ID_PREFIX}ring`,
+      show: false,
+      position: new CallbackPositionProperty((_time, result) => {
+        const pose =
+          selectedId && !clustered.has(selectedId) ? entries.get(selectedId)?.pose() : null
+        return pose ? toCartesian(pose, result) : undefined
+      }, false),
+      billboard: {
+        width: RING_SIZE,
+        height: RING_SIZE,
+        horizontalOrigin: HorizontalOrigin.CENTER,
+        verticalOrigin: VerticalOrigin.CENTER,
+        scaleByDistance: MARKER_SCALE_BY_DISTANCE,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      },
+    })
+    return {
+      entity,
+      update() {
+        entity.show = selectedId !== null && entries.has(selectedId)
+        if (entity.billboard)
+          entity.billboard.image = new ConstantProperty(getSelectionRing(palette.markerSelection))
+      },
+    }
+  })()
   const selectionLabel = createNameLabel('selected', () => selectedId)
   const hoverLabel = createNameLabel('hovered', () => (hoveredId !== selectedId ? hoveredId : null))
 
@@ -178,22 +222,15 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const selected = entry.id === selectedId
     const color = statusColor(entry.status)
     const { billboard, polyline } = entry.entity
-    if (billboard) {
-      billboard.image = new ConstantProperty(
-        getUavMarker({
-          fill: color,
-          halo: palette.halo,
-          shadow: palette.shadow,
-          focus: selected ? palette.selected : undefined,
-        }),
-      )
-      billboard.scale = new ConstantProperty(selected ? SELECTED_SCALE : 1)
-    }
+    const state = MARKER_STATE[entry.status]
+    const marker = selected && (state === 'active' || state === 'standby') ? 'selected' : state
+    if (billboard) billboard.image = new ConstantProperty(uavMarkerUrl(marker))
     if (polyline) polyline.material = new ColorMaterialProperty(color.withAlpha(0.35))
     const trailLine = entry.trailEntity.polyline
+    // Trails stay quieter than the markers, so the aircraft keep the attention.
     if (trailLine) {
       trailLine.material = new ColorMaterialProperty(
-        (selected ? palette.selected : color).withAlpha(selected ? 0.75 : 0.5),
+        (selected ? palette.selected : color).withAlpha(selected ? 0.5 : 0.3),
       )
     }
   }
@@ -389,6 +426,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
         entries.delete(id)
       }
       selectionLabel.update()
+      selectionRing.update()
       hoverLabel.update()
     },
 
@@ -404,6 +442,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       if (previous) applyStyle(previous)
       if (next) applyStyle(next)
       selectionLabel.update()
+      selectionRing.update()
       hoverLabel.update()
     },
 
@@ -426,6 +465,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       palette = next
       entries.forEach(applyStyle)
       selectionLabel.update()
+      selectionRing.update()
       hoverLabel.update()
     },
 
@@ -464,8 +504,8 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
 
     uavIdFromPick(picked) {
       const id = (picked as { id?: { id?: unknown } } | undefined)?.id?.id
-      // Clicking a name label acts on its UAV.
-      if (id === `${LABEL_ID_PREFIX}selected`) return selectedId
+      // Clicking a name label or the selection ring acts on its UAV.
+      if (id === `${LABEL_ID_PREFIX}selected` || id === `${LABEL_ID_PREFIX}ring`) return selectedId
       if (id === `${LABEL_ID_PREFIX}hovered`) return hoveredId
       return typeof id === 'string' && id.startsWith(ENTITY_PREFIX)
         ? id.slice(ENTITY_PREFIX.length)
@@ -480,6 +520,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       entries.clear()
       movingCount = 0
       viewer.entities.remove(selectionLabel.entity)
+      viewer.entities.remove(selectionRing.entity)
       viewer.entities.remove(hoverLabel.entity)
     },
   }

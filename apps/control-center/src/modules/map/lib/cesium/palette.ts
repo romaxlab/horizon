@@ -13,6 +13,8 @@ export interface MapPalette {
   /** Halo around markers and badges; legible on any basemap. */
   halo: Color
   shadow: Color
+  /** Selection ring around the selected UAV marker. */
+  markerSelection: Color
 }
 
 export function readMapPalette(root: HTMLElement = document.documentElement): MapPalette {
@@ -35,5 +37,6 @@ export function readMapPalette(root: HTMLElement = document.documentElement): Ma
     selected: token('--action-primary'),
     halo: token('--map-marker-halo'),
     shadow: token('--map-marker-shadow'),
+    markerSelection: token('--map-marker-selection'),
   }
 }

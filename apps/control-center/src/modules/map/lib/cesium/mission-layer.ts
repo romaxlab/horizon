@@ -106,7 +106,7 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
           material:
             phase === 'planned'
               ? dashed(accent.withAlpha(0.85))
-              : new ColorMaterialProperty(lineColor.withAlpha(phase === 'active' ? 0.4 : 0.3)),
+              : new ColorMaterialProperty(lineColor.withAlpha(phase === 'active' ? 0.25 : 0.2)),
         },
       })
       if (phase === 'completed') continue

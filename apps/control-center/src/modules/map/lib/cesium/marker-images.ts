@@ -1,5 +1,4 @@
 import type { Color } from 'cesium'
-import { DRONE_VIEWBOX, getDroneGlyph } from './drone-glyph'
 
 /**
  * Map overlay images, drawn on canvases at 3× their on-screen size so they stay crisp on
@@ -31,61 +30,33 @@ function cached(
 
 const css = (color: Color) => color.toCssColorString()
 
-/** On-screen size of a UAV marker image (CSS px), leaving room for the selection ring. */
-export const MARKER_SIZE = 32
-const CENTER = MARKER_SIZE / 2
-/** On-screen size of the drone glyph itself (CSS px). */
-const GLYPH_SIZE = 20
-const FOCUS_RADIUS = 14.5
-/** Halo stroke around the glyph (CSS px, outside the shape). */
-const HALO_WIDTH = 1.5
+/** On-screen size of a UAV marker (CSS px); the asset pack's recommended billboard size. */
+export const MARKER_SIZE = 28
 
-export interface MarkerColors {
-  fill: Color
-  halo: Color
-  shadow: Color
-  /** Focus ring for the selected state. */
-  focus?: Color
-}
+/** States with their own marker artwork (`public/assets/uav/`, nose-up, shared center). */
+export type UavMarkerState = 'standby' | 'active' | 'selected' | 'warning' | 'offline'
 
 /**
- * Top-down drone marker from `assets/drone.svg`: status-colored glyph with a white halo and soft
- * shadow so it reads on gray map and satellite imagery. Points north at zero rotation; the
- * anchor is the glyph center.
+ * Same-origin URL of a UAV marker. The artwork carries its own status colors and shading, so no
+ * tint is applied; Cesium loads each URL once and shares it across all billboards.
  */
-export function getUavMarker({ fill, halo, shadow, focus }: MarkerColors): HTMLCanvasElement {
-  const key = `uav|${css(fill)}|${css(halo)}|${css(shadow)}|${focus ? css(focus) : ''}`
-  return cached(key, MARKER_SIZE, MARKER_SIZE, (ctx) => {
-    if (focus) {
-      ctx.beginPath()
-      ctx.arc(CENTER, CENTER, FOCUS_RADIUS, 0, Math.PI * 2)
-      ctx.fillStyle = css(focus.withAlpha(0.16))
-      ctx.fill()
-      ctx.lineWidth = 1
-      ctx.strokeStyle = css(focus.withAlpha(0.6))
-      ctx.stroke()
-    }
+export function uavMarkerUrl(state: UavMarkerState): string {
+  return `${import.meta.env.BASE_URL}assets/uav/uav-${state}.svg`
+}
 
-    const glyph = getDroneGlyph()
-    const unit = GLYPH_SIZE / DRONE_VIEWBOX
-    ctx.save()
-    ctx.translate(CENTER - GLYPH_SIZE / 2, CENTER - GLYPH_SIZE / 2)
-    ctx.scale(unit, unit)
-    ctx.lineJoin = 'round'
+/** Selection ring image (CSS px): a little larger than the marker so it clears the wingtips. */
+export const RING_SIZE = 32
+const RING_WIDTH = 1.5
+const RING_RADIUS = RING_SIZE / 2 - RING_WIDTH
 
-    // Halo pass with a soft shadow: the stroke straddles the outline, so double it.
-    ctx.save()
-    ctx.shadowColor = css(shadow)
-    ctx.shadowBlur = 3 * IMAGE_SCALE
-    ctx.shadowOffsetY = 0.5 * IMAGE_SCALE
-    ctx.lineWidth = (HALO_WIDTH * 2) / unit
-    ctx.strokeStyle = css(halo)
-    ctx.stroke(glyph)
-    ctx.restore()
-
-    ctx.fillStyle = css(fill)
-    ctx.fill(glyph)
-    ctx.restore()
+/** Selection ring drawn around (not into) the marker; no glow, the marker keeps its size. */
+export function getSelectionRing(color: Color): HTMLCanvasElement {
+  return cached(`ring|${css(color)}`, RING_SIZE, RING_SIZE, (ctx) => {
+    ctx.beginPath()
+    ctx.arc(RING_SIZE / 2, RING_SIZE / 2, RING_RADIUS, 0, Math.PI * 2)
+    ctx.lineWidth = RING_WIDTH
+    ctx.strokeStyle = css(color)
+    ctx.stroke()
   })
 }
 

@@ -28,6 +28,7 @@
 
   /* Primitive: accent */
   --blue-ring: #0a84ff;
+  --cyan-selection: #67e0ff;
   --blue-action: #0066cc;
   --blue-action-hover: #0058b0;
   --blue-action-dark: #0071e3;
@@ -90,6 +91,8 @@
      both the gray map and satellite imagery, in either theme. */
   --map-marker-halo: var(--white);
   --map-marker-shadow: rgba(0, 0, 0, 0.35);
+  /* Selection ring around the clicked UAV: bright cyan reads on map, satellite and both themes. */
+  --map-marker-selection: var(--cyan-selection);
 
   /* Media (video) surfaces are dark in both themes; overlays on them use these. */
   --media-backdrop: var(--gray-d-900);
