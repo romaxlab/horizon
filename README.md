@@ -1,4 +1,9 @@
-# Horizon
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/control-center/src/shared/brand/horizon-logo-dark.svg" />
+    <img src="apps/control-center/src/shared/brand/horizon-logo.svg" alt="Horizon" height="96" />
+  </picture>
+</h1>
 
 Horizon is a browser-based 3D mission-control interface for planning and monitoring autonomous UAV operations.
 

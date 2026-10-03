@@ -498,7 +498,34 @@ Runtime values are allowed where genuinely dynamic:
 
 ---
 
-## 15. UI package boundary
+## 15. Brand assets
+
+Approved Horizon identity: symbol + outlined wordmark (no fonts, no embedded raster).
+
+```text
+apps/control-center/src/shared/brand/
+  horizon-logo.svg        light UI (graphite + cyan)
+  horizon-logo-dark.svg   dark UI (off-white + cyan)
+  HorizonLogo.vue         the only place that picks a variant, by theme
+apps/control-center/public/
+  favicon.svg, favicon-32x32.png, apple-touch-icon.png (180×180)
+```
+
+Rules:
+
+- use `HorizonLogo` instead of rendering the files directly;
+- never crop, recolor or redraw the artwork; preserve the aspect ratio;
+- the SVG viewBox includes about half a symbol-height of clear space, so the visible artwork is
+  roughly half the rendered height: the floating header renders it at 32px (`h-8`, ~16px visible
+  artwork); larger placements use 48–64px (~24–32px visible);
+- the README uses the same files via `<picture>` with `prefers-color-scheme`.
+
+Brand colors (graphite `#171B20`, cyan `#7DB9C2`, off-white `#F5F7F8`) live only inside the
+artwork; UI colors still come from semantic tokens.
+
+---
+
+## 16. UI package boundary
 
 `@horizon/ui` contains generic design-system concerns only.
 
@@ -525,7 +552,7 @@ UavInspector.vue
 
 ---
 
-## 16. Review checklist
+## 17. Review checklist
 
 Before considering UI work complete:
 

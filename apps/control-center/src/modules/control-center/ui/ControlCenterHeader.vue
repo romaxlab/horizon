@@ -2,6 +2,7 @@
 import { Moon, Sun } from '@lucide/vue'
 import { BaseBadge, BaseIconButton, BaseSurface, BaseText, useTheme } from '@horizon/ui'
 import type { BadgeVariant } from '@horizon/ui'
+import { HorizonLogo } from '@/shared/brand'
 
 defineProps<{
   connection: { label: string; variant: BadgeVariant }
@@ -17,9 +18,10 @@ const { theme, toggleTheme } = useTheme()
     <BaseSurface
       variant="floating"
       shape="pill"
-      class="pointer-events-auto flex h-10 min-w-0 items-center gap-3 px-4"
+      class="pointer-events-auto flex h-10 min-w-0 items-center gap-1.5 pr-4 pl-2"
     >
-      <BaseText variant="heading-sm">Horizon</BaseText>
+      <!-- The logo carries its own clear space (~8px each side), hence the tight padding. -->
+      <HorizonLogo />
       <BaseText variant="body-md" tone="muted" truncate>{{ missionTitle }}</BaseText>
     </BaseSurface>
 
