@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { demoControls, openControlCenter } from './control-center'
+import { openControlCenter } from './control-center'
 
 test('create an Area Scan mission, generate the plan, launch and observe execution', async ({
   page,
@@ -43,8 +43,17 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
   await expect(status.getByRole('progressbar', { name: 'Mission progress' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New Mission' })).toBeDisabled()
 
-  // Speed up until the first waypoints are reached: progress derives from route execution.
-  const demo = await demoControls(page)
-  await demo.getByRole('radio', { name: '8×' }).click()
-  await expect(status).not.toContainText(/^0%/, { timeout: 60_000 })
+  // The mission UAVs are flying: Active in the fleet, moving and climbing in the inspector.
+  // (Waypoint-based progress itself is covered by unit tests; it needs minutes of flight.)
+  await expect(page.getByRole('radio', { name: /^Active/ })).toHaveText('Active 6')
+  await page.getByRole('radio', { name: /^Active/ }).click()
+  await page
+    .getByRole('complementary', { name: 'Fleet' })
+    .getByRole('button', { name: /^UAV-/ })
+    .first()
+    .click()
+  const inspector = page.getByRole('complementary', { name: 'UAV inspector' })
+  await expect(inspector.getByText('Area Scan', { exact: true })).toBeVisible()
+  await expect(inspector.getByText(/^ALT [1-9]\d* m$/)).toBeVisible({ timeout: 30_000 })
+  await expect(inspector.getByText(/^SPD (?!0\.0)[\d.]+ m\/s$/)).toBeVisible({ timeout: 30_000 })
 })
