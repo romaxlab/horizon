@@ -3,13 +3,19 @@ import { BaseBadge, BaseText } from '@horizon/ui'
 import type { FleetRow } from '../model/useFleetPanel'
 
 // A separate component so unchanged rows (same object) skip re-rendering on telemetry flushes.
-defineProps<{ row: FleetRow }>()
+defineProps<{
+  row: FleetRow
+  /** Roving tabindex: only one row of the list is in the Tab order. */
+  tabbable: boolean
+}>()
 const emit = defineEmits<{ select: [uavId: string] }>()
 </script>
 
 <template>
   <button
     type="button"
+    :tabindex="tabbable ? 0 : -1"
+    :data-row-id="row.id"
     :aria-pressed="row.selected"
     class="flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-fill aria-pressed:bg-fill-strong"
     @click="emit('select', row.id)"

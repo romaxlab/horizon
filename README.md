@@ -11,6 +11,39 @@ The product combines mission planning, realtime fleet telemetry, 3D situational 
 
 The initial implementation uses deterministic simulated data. Application boundaries are designed so REST, WebSocket and media providers can be introduced without rewriting feature UI.
 
+![Horizon Control Center: live Area Scan with UAV inspector and simulated video](docs/screenshots/control-center-dark.png)
+
+## Quick start
+
+Requirements: Node.js 22+ and pnpm via Corepack (`corepack enable`).
+
+```bash
+pnpm install
+pnpm dev                      # http://localhost:5173/control-center
+```
+
+Everything runs against a deterministic in-browser simulator; no backend or keys are needed.
+Use **Demo** (bottom left) to run scenarios: Normal, Incident (scripted failures) or Stress
+(480 UAVs), inject failures and speed up time.
+
+| Command | |
+| --- | --- |
+| `pnpm dev` | Control Center dev server |
+| `pnpm check` | lint + typecheck + unit tests + build |
+| `pnpm test` | unit/integration tests (Vitest) |
+| `pnpm e2e` / `pnpm e2e:ui` | Playwright workflows (mission, inspection, recovery) |
+| `pnpm build` | production build |
+
+Optional configuration (`apps/control-center/.env.local`, see `.env.example`):
+
+| Variable | Default | |
+| --- | --- | --- |
+| `VITE_DEMO_CONTROLS` | on in dev | show the Demo panel |
+| `VITE_DEMO_AUTOSTART` | `false` | start the demo Area Scan on load |
+| `VITE_SIMULATOR_MODE` | `deterministic` | or `random` |
+| `VITE_TELEMETRY_FLUSH_MS` | `100` | telemetry → state flush interval |
+| `VITE_CESIUM_ION_TOKEN` | — | 3D buildings (Google Photorealistic / OSM) in 3D view |
+
 ## Core workflow
 
 ```text
@@ -92,6 +125,12 @@ Standard demo dataset:
 - deterministic incidents;
 - simulated UAV video feeds.
 
+## Screenshots
+
+| Mission planning (light) | Incidents and recovery (dark) |
+| --- | --- |
+| ![Area Scan plan review](docs/screenshots/mission-planning-light.png) | ![Connection lost and low battery alerts](docs/screenshots/incidents-dark.png) |
+
 ## Documentation
 
 - `AGENTS.md` — repository implementation rules and quality expectations
@@ -101,7 +140,10 @@ Standard demo dataset:
 
 ## Status
 
-Horizon is currently in the foundation stage.
+MVP complete: the full workflow (plan → launch → monitor → inspect → incident → recover) runs
+end-to-end against the simulator, with Playwright coverage of the primary flows. Remote REST,
+WebSocket and video implementations can be added behind the existing contracts
+(`FleetRepository`, `RealtimeTransport`, `MissionPlanner`, `VideoProvider`).
 
 ## Disclaimer
 

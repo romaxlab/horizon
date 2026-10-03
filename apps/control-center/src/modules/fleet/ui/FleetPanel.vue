@@ -1,12 +1,45 @@
 <script setup lang="ts">
 import { PanelLeftClose } from '@lucide/vue'
 import { BaseIconButton, BaseInput, BaseSegmentedControl, BaseText } from '@horizon/ui'
+import { computed, ref, useTemplateRef } from 'vue'
 import { useFleetPanel } from '../model/useFleetPanel'
 import FleetPanelRow from './FleetPanelRow.vue'
 
 const emit = defineEmits<{ select: [uavId: string]; collapse: [] }>()
 
 const { query, filter, filterOptions, rows, isLoading } = useFleetPanel()
+
+// Roving tabindex (local presentation state): the last focused row, else the selected/first one.
+const list = useTemplateRef<HTMLUListElement>('list')
+const focusedId = ref<string | null>(null)
+const tabbableId = computed(() => {
+  const ids = rows.value.map((r) => r.id)
+  if (focusedId.value && ids.includes(focusedId.value)) return focusedId.value
+  return rows.value.find((r) => r.selected)?.id ?? ids[0] ?? null
+})
+
+function onListFocus(event: FocusEvent) {
+  const id = (event.target as HTMLElement).dataset.rowId
+  if (id) focusedId.value = id
+}
+
+function onListKeydown(event: KeyboardEvent) {
+  const buttons = [...(list.value?.querySelectorAll<HTMLButtonElement>('[data-row-id]') ?? [])]
+  const index = buttons.findIndex((b) => b === document.activeElement)
+  const target =
+    event.key === 'ArrowDown'
+      ? buttons[Math.min(index + 1, buttons.length - 1)]
+      : event.key === 'ArrowUp'
+        ? buttons[Math.max(index - 1, 0)]
+        : event.key === 'Home'
+          ? buttons[0]
+          : event.key === 'End'
+            ? buttons.at(-1)
+            : undefined
+  if (!target) return
+  event.preventDefault()
+  target.focus()
+}
 </script>
 
 <template>
@@ -45,9 +78,20 @@ const { query, filter, filterOptions, rows, isLoading } = useFleetPanel()
     >
       No UAVs match.
     </BaseText>
-    <ul v-else class="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+    <!-- One Tab stop for the whole list; arrow keys move between UAVs. -->
+    <ul
+      v-else
+      ref="list"
+      class="min-h-0 flex-1 overflow-y-auto px-2 pb-2"
+      @keydown="onListKeydown"
+      @focusin="onListFocus"
+    >
       <li v-for="row in rows" :key="row.id">
-        <FleetPanelRow :row="row" @select="emit('select', $event)" />
+        <FleetPanelRow
+          :row="row"
+          :tabbable="row.id === tabbableId"
+          @select="emit('select', $event)"
+        />
       </li>
     </ul>
   </section>

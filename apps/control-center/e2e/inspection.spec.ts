@@ -26,3 +26,20 @@ test('select a UAV: inspector opens with telemetry and the simulated video feed'
   await expect(inspector).toBeHidden()
   await expect(row).toHaveAttribute('aria-pressed', 'false')
 })
+
+test('fleet list is one Tab stop with arrow-key navigation', async ({ page }) => {
+  await openControlCenter(page)
+
+  await fleetRow(page, 'UAV-01').focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(fleetRow(page, 'UAV-02')).toBeFocused()
+  await page.keyboard.press('End')
+  await expect(fleetRow(page, 'UAV-24')).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { name: 'UAV-24' })).toBeVisible()
+
+  // Leaving the list with Tab skips the remaining rows.
+  await fleetRow(page, 'UAV-24').focus()
+  await page.keyboard.press('Shift+Tab')
+  await expect(page.getByRole('radio', { name: /^All/ })).toBeFocused()
+})
