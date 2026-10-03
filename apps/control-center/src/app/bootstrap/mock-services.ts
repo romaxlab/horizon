@@ -2,6 +2,12 @@ import { createMockRealtimeTransport } from '@horizon/realtime'
 import { createSimulator } from '@horizon/simulator'
 import type { AppServices } from '@/app/providers/services'
 import { parseFleetSnapshot, type FleetRepository } from '@/modules/fleet'
+import {
+  MissionPlanningError,
+  parseMission,
+  toPlanRequestDto,
+  type MissionPlanner,
+} from '@/modules/mission-planning'
 import type { AppConfig } from '@/shared/config'
 
 /** Simulated network latency for the fake REST endpoints. */
@@ -36,8 +42,28 @@ export function createMockServices(config: AppConfig): AppServices {
     },
   }
 
+  const missionPlanner: MissionPlanner = {
+    async plan(request, signal) {
+      await delay(MOCK_LATENCY_MS, signal)
+      const result = simulator.planMission(toPlanRequestDto(request))
+      if (!result.ok) throw new MissionPlanningError(result.reason)
+      return parseMission(structuredClone(result.mission))
+    },
+    async launch(missionId) {
+      await delay(MOCK_LATENCY_MS)
+      const result = simulator.dispatch({ type: 'launchMission', missionId })
+      if (!result.ok) throw new MissionPlanningError(result.reason)
+    },
+    async getActiveMission(signal) {
+      await delay(MOCK_LATENCY_MS, signal)
+      const mission = simulator.getActiveMission()
+      return mission ? parseMission(structuredClone(mission)) : null
+    },
+  }
+
   return {
     fleetRepository,
+    missionPlanner,
     realtimeTransport: createMockRealtimeTransport(simulator),
   }
 }

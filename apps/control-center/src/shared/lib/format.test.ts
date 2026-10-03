@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAge, formatCardinal } from './format'
+import { formatAge, formatCardinal, formatDuration } from './format'
 
 describe('formatAge', () => {
   it('formats compact relative ages', () => {
@@ -19,5 +19,13 @@ describe('formatCardinal', () => {
     expect(formatCardinal(320.7)).toBe('NW')
     expect(formatCardinal(359)).toBe('N')
     expect(formatCardinal(-90)).toBe('W')
+  })
+})
+
+describe('formatDuration', () => {
+  it('formats m:ss and h:mm:ss', () => {
+    expect(formatDuration(0)).toBe('0:00')
+    expect(formatDuration(75)).toBe('1:15')
+    expect(formatDuration(3_725)).toBe('1:02:05')
   })
 })

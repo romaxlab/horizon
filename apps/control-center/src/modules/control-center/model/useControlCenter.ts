@@ -2,6 +2,8 @@ import type { BadgeVariant } from '@horizon/ui'
 import { computed } from 'vue'
 import { useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
 import { useMapStore } from '@/modules/map'
+import { computeMissionProgress, useMissionStore, useMissionSync } from '@/modules/mission-planning'
+import { formatDuration } from '@/shared/lib/format'
 import { useNow } from '@/shared/lib/useNow'
 
 const connectionPresentation: Record<ConnectionStatus, { label: string; variant: BadgeVariant }> = {
@@ -28,16 +30,35 @@ export function useControlCenter() {
   const connection = computed(() => connectionPresentation[fleet.connectionStatus])
   const clock = computed(() => clockFormat.format(now.value))
 
-  // Interim mission summary derived from telemetry until the mission module owns mission state.
+  useMissionSync()
+  const missions = useMissionStore()
+
+  const missionProgress = computed(() => {
+    const current = missions.current
+    if (!current) return null
+    const telemetry = new Map(
+      fleet.uavs.flatMap((s) => (s.telemetry ? [[s.uav.id, s.telemetry] as const] : [])),
+    )
+    return computeMissionProgress(current, telemetry)
+  })
+
   const mission = computed(() => {
-    const executing = fleet.uavs.filter((s) => s.missionState === 'executing').length
-    return executing > 0
-      ? { title: 'Area Scan', state: 'In progress', detail: `${executing} UAVs executing` }
-      : {
-          title: 'No active mission',
-          state: 'Standing by',
-          detail: `${fleet.uavs.length} UAVs ready`,
-        }
+    const current = missions.current
+    const progress = missionProgress.value
+    if (!current || !progress || current.status !== 'active') {
+      return {
+        title:
+          current?.status === 'completed' ? `${current.name} · completed` : 'No active mission',
+        state: 'Standing by',
+        detail: `${fleet.statusCounts.standby} UAVs ready`,
+      }
+    }
+    const eta = progress.etaSec === null ? '' : ` · ETA ${formatDuration(progress.etaSec)}`
+    return {
+      title: current.name,
+      state: `${Math.round(progress.ratio * 100)}%`,
+      detail: `${progress.activeUavCount} UAVs scanning${eta}`,
+    }
   })
 
   /**

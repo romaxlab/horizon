@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { distanceMeters } from '@horizon/domain'
 import { DEMO_BASE, DEMO_MISSION, DEMO_PARKING } from './demo'
-import type { SimulatorMessage, TelemetryDto } from './protocol'
+import type { MissionDto, SimulatorMessage, TelemetryDto } from './protocol'
 import { createSimulator, type SimulatorOptions } from './simulator'
 
 const START = Date.UTC(2026, 0, 1)
@@ -14,7 +14,17 @@ function record(options: SimulatorOptions = {}) {
 }
 
 function telemetryOf(messages: SimulatorMessage[], uavId: string): TelemetryDto[] {
-  return messages.filter((m) => m.data.uav_id === uavId).map((m) => m.data)
+  return messages.flatMap((m) =>
+    m.type === 'telemetry' && m.data.uav_id === uavId ? [m.data] : [],
+  )
+}
+
+function missionMessages(messages: SimulatorMessage[]): MissionDto[] {
+  return messages.flatMap((m) => (m.type === 'mission' ? [m.data] : []))
+}
+
+const demoArea = {
+  polygon: DEMO_MISSION.area.polygon.map((p) => ({ lat: p.latitude, lon: p.longitude })),
 }
 
 /** Steps in 1 s increments until `done` or the limit, returning elapsed simulated seconds. */
@@ -158,5 +168,75 @@ describe('createSimulator', () => {
     expect(reset.server_time).toBe(START + 30_000)
     const ignoringTime = (t: TelemetryDto) => ({ ...t, ts: 0 })
     expect(reset.telemetry.map(ignoringTime)).toEqual(initial.telemetry.map(ignoringTime))
+  })
+
+  it('plans a mission with the healthiest standby UAVs without launching it', () => {
+    const { simulator, messages } = record()
+    const plan = simulator.planMission({
+      name: 'Scan',
+      area: demoArea,
+      altitude_m: 100,
+      uav_count: 4,
+    })
+    if (!plan.ok) throw new Error(plan.reason)
+
+    expect(plan.mission).toMatchObject({ status: 'planned', name: 'Scan', altitude_m: 100 })
+    expect(plan.mission.routes).toHaveLength(4)
+    const batteries = simulator.getFleetSnapshot().telemetry
+    const assigned = plan.mission.assigned_uav_ids.map(
+      (id) => batteries.find((t) => t.uav_id === id)?.battery_pct ?? 0,
+    )
+    expect(assigned).toEqual([...assigned].sort((a, b) => b - a))
+    expect(simulator.getActiveMission()).toBeNull()
+    expect(missionMessages(messages)).toEqual([])
+  })
+
+  it('rejects plans it cannot fulfil', () => {
+    const simulator = createSimulator({ startTime: START })
+    expect(
+      simulator.planMission({ name: 'x', area: demoArea, altitude_m: 120, uav_count: 99 }),
+    ).toMatchObject({ ok: false })
+    const tiny = { polygon: demoArea.polygon.map((p) => ({ lat: p.lat * 1, lon: 54.37 })) }
+    expect(
+      simulator.planMission({ name: 'x', area: tiny, altitude_m: 120, uav_count: 2 }),
+    ).toMatchObject({ ok: false })
+  })
+
+  it('launches a planned mission, streams its state and completes it', () => {
+    const { simulator, messages } = record()
+    const plan = simulator.planMission({
+      name: 'Scan',
+      area: demoArea,
+      altitude_m: 120,
+      uav_count: 2,
+    })
+    if (!plan.ok) throw new Error(plan.reason)
+
+    expect(simulator.dispatch({ type: 'launchMission', missionId: plan.mission.id })).toEqual({
+      ok: true,
+    })
+    expect(simulator.dispatch({ type: 'launchMission', missionId: plan.mission.id })).toMatchObject(
+      {
+        ok: false,
+      },
+    )
+    expect(simulator.getActiveMission()).toMatchObject({ id: plan.mission.id, status: 'active' })
+
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      60 * 60,
+    )
+    expect(missionMessages(messages).map((m) => m.status)).toEqual(['active', 'completed'])
+  })
+
+  it('runs the demo mission through the same plan/launch path', () => {
+    const { simulator, messages } = record()
+    simulator.dispatch({ type: 'startDemoMission' })
+    expect(missionMessages(messages)).toMatchObject([
+      { id: DEMO_MISSION.id, status: 'active', assigned_uav_ids: expect.any(Array) as unknown },
+    ])
   })
 })

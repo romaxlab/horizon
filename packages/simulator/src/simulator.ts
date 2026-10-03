@@ -9,7 +9,15 @@ import {
 import { planAreaScan } from './area-scan'
 import { DEMO_BASE, DEMO_FLEET_SIZE, DEMO_MISSION, DEMO_PARKING } from './demo'
 import { generateFleet } from './fleet'
-import type { FleetSnapshotDto, SimulatorMessage, TelemetryDto, UavDto } from './protocol'
+import type {
+  FleetSnapshotDto,
+  GeoPointDto,
+  MissionDto,
+  MissionPlanRequestDto,
+  SimulatorMessage,
+  TelemetryDto,
+  UavDto,
+} from './protocol'
 import { createRandom, type Random } from './random'
 
 export type SimulatorMode = 'deterministic' | 'random'
@@ -25,7 +33,10 @@ export interface SimulatorOptions {
   tickMs?: number
 }
 
-export type SimulatorCommand = { type: 'startDemoMission' } | { type: 'reset' }
+export type SimulatorCommand =
+  { type: 'startDemoMission' } | { type: 'launchMission'; missionId: string } | { type: 'reset' }
+
+export type PlanResult = { ok: true; mission: MissionDto } | { ok: false; reason: string }
 
 export type CommandResult = { ok: true } | { ok: false; reason: string }
 
@@ -34,6 +45,10 @@ export interface Simulator {
   readonly now: number
   /** Fake REST: current fleet state. */
   getFleetSnapshot(): FleetSnapshotDto
+  /** Fake REST: the current (active or most recent) mission. */
+  getActiveMission(): MissionDto | null
+  /** Fake REST: plans an Area Scan with standby UAVs; the plan is kept until launched. */
+  planMission(request: MissionPlanRequestDto): PlanResult
   /** Fake realtime stream. */
   subscribe(listener: (message: SimulatorMessage) => void): () => void
   dispatch(command: SimulatorCommand): CommandResult
@@ -69,12 +84,7 @@ interface UavRuntime {
   waypointIndex: number
 }
 
-interface MissionRuntime {
-  id: string
-  altitude: number
-  uavIds: string[]
-  completed: boolean
-}
+const toGeoPoint = ({ lat, lon }: GeoPointDto) => ({ latitude: lat, longitude: lon })
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const round = (value: number, digits: number) => Number(value.toFixed(digits))
@@ -91,12 +101,17 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   let timer: ReturnType<typeof setInterval> | null = null
   let random: Random
   let uavs: UavRuntime[]
-  let mission: MissionRuntime | null
+  /** The current mission (active or most recent); only one mission is active at a time. */
+  let mission: MissionDto | null
+  const plannedMissions = new Map<string, MissionDto>()
+  let missionSeq = 0
   const listeners = new Set<(message: SimulatorMessage) => void>()
 
   function init() {
     random = createRandom(seed)
     mission = null
+    plannedMissions.clear()
+    missionSeq = 0
     uavs = generateFleet(fleetSize, DEMO_BASE, DEMO_PARKING, random).map(
       ({ uav, home, battery }) => ({
         uav,
@@ -175,7 +190,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       if (target && moveToward(state, target, dt)) state.waypointIndex += 1
       if (state.waypointIndex >= state.route.length) state.phase = 'returning'
     } else if (state.phase === 'returning') {
-      const cruise = mission?.altitude ?? state.position.altitude
+      const cruise = mission?.altitude_m ?? state.position.altitude
       const overHome = distanceMeters(state.position, state.home) <= ARRIVAL_TOLERANCE_METERS
       const target = overHome ? state.home : { ...state.home, altitude: cruise }
       if (moveToward(state, target, dt) && overHome) {
@@ -199,12 +214,14 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   }
 
   function updateMissionCompletion() {
-    if (!mission || mission.completed) return
-    const done = mission.uavIds.every((id) => {
+    if (!mission || mission.status !== 'active') return
+    const done = mission.assigned_uav_ids.every((id) => {
       const state = uavs.find((u) => u.uav.id === id)
       return !state || state.phase !== 'mission'
     })
-    if (done) mission.completed = true
+    if (!done) return
+    mission = { ...mission, status: 'completed', completed_at: now }
+    emit({ type: 'mission', data: mission })
   }
 
   function emit(message: SimulatorMessage) {
@@ -227,34 +244,102 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     updateMissionCompletion()
   }
 
-  function startDemoMission(): CommandResult {
-    if (mission && !mission.completed) return { ok: false, reason: 'A mission is already active' }
+  const missionActive = () => mission?.status === 'active'
+
+  function planMission(request: MissionPlanRequestDto, id?: string): PlanResult {
+    if (request.uav_count < 1) return { ok: false, reason: 'At least one UAV is required' }
     const available = uavs.filter((u) => u.phase === 'parked' && u.uav.capabilities.camera)
-    if (available.length < DEMO_MISSION.uavCount) {
-      return { ok: false, reason: 'Not enough standby UAVs' }
+    if (available.length < request.uav_count) {
+      return { ok: false, reason: `Only ${available.length} standby UAVs are available` }
     }
-    const assigned = available.slice(0, DEMO_MISSION.uavCount)
-    const routes = planAreaScan({
-      area: DEMO_MISSION.area,
-      altitude: DEMO_MISSION.altitude,
-      uavs: assigned.map((u) => ({ id: u.uav.id, home: u.home })),
-      cruiseSpeedMps: CRUISE_SPEED_MPS,
-    })
-    routes.forEach((route) => {
-      const state = assigned.find((u) => u.uav.id === route.uavId)
-      if (!state) return
+    // Deterministic assignment: the healthiest standby UAVs first, ties by id.
+    const assigned = [...available]
+      .sort((a, b) => b.battery - a.battery || a.uav.id.localeCompare(b.uav.id))
+      .slice(0, request.uav_count)
+    let routes
+    try {
+      routes = planAreaScan({
+        area: { polygon: request.area.polygon.map(toGeoPoint) },
+        altitude: request.altitude_m,
+        uavs: assigned.map((u) => ({ id: u.uav.id, home: u.home })),
+        cruiseSpeedMps: CRUISE_SPEED_MPS,
+      })
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : 'Planning failed' }
+    }
+
+    missionSeq += 1
+    const planned: MissionDto = {
+      id: id ?? `mission-${String(missionSeq).padStart(3, '0')}`,
+      name: request.name,
+      type: 'area_scan',
+      status: 'planned',
+      area: { polygon: request.area.polygon.map(({ lat, lon }) => ({ lat, lon })) },
+      altitude_m: request.altitude_m,
+      assigned_uav_ids: assigned.map((u) => u.uav.id),
+      routes: routes.map((route) => ({
+        uav_id: route.uavId,
+        waypoints: route.waypoints.map((w) => ({
+          id: w.id,
+          lat: w.latitude,
+          lon: w.longitude,
+          alt_m: w.altitude,
+          order: w.order,
+        })),
+        distance_m: route.distanceMeters,
+        eta_s: route.estimatedDurationSec,
+      })),
+      created_at: now,
+      started_at: null,
+      completed_at: null,
+    }
+    plannedMissions.set(planned.id, planned)
+    return { ok: true, mission: structuredClone(planned) }
+  }
+
+  function launchMission(missionId: string): CommandResult {
+    if (missionActive()) return { ok: false, reason: 'A mission is already active' }
+    const planned = plannedMissions.get(missionId)
+    if (!planned) return { ok: false, reason: 'Unknown mission plan' }
+    const assigned = planned.assigned_uav_ids.map((id) => uavs.find((u) => u.uav.id === id))
+    if (assigned.some((u) => !u || u.phase !== 'parked')) {
+      return { ok: false, reason: 'Assigned UAVs are no longer available; plan again' }
+    }
+
+    for (const route of planned.routes) {
+      const state = uavs.find((u) => u.uav.id === route.uav_id)
+      if (!state) continue
       state.phase = 'mission'
-      state.missionId = DEMO_MISSION.id
-      state.route = route.waypoints
+      state.missionId = planned.id
+      state.route = route.waypoints.map((w) => ({
+        id: w.id,
+        latitude: w.lat,
+        longitude: w.lon,
+        altitude: w.alt_m,
+        order: w.order,
+      }))
       state.waypointIndex = 0
-    })
-    mission = {
-      id: DEMO_MISSION.id,
-      altitude: DEMO_MISSION.altitude,
-      uavIds: assigned.map((u) => u.uav.id),
-      completed: false,
     }
+    plannedMissions.delete(missionId)
+    mission = { ...planned, status: 'active', started_at: now }
+    emit({ type: 'mission', data: mission })
     return { ok: true }
+  }
+
+  function startDemoMission(): CommandResult {
+    if (missionActive()) return { ok: false, reason: 'A mission is already active' }
+    const plan = planMission(
+      {
+        name: DEMO_MISSION.name,
+        area: {
+          polygon: DEMO_MISSION.area.polygon.map((p) => ({ lat: p.latitude, lon: p.longitude })),
+        },
+        altitude_m: DEMO_MISSION.altitude,
+        uav_count: DEMO_MISSION.uavCount,
+      },
+      DEMO_MISSION.id,
+    )
+    return plan.ok ? launchMission(plan.mission.id) : plan
   }
 
   init()
@@ -268,6 +353,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       uavs: uavs.map(toUavDto),
       telemetry: uavs.map(toTelemetryDto),
     }),
+    getActiveMission: () => (mission ? structuredClone(mission) : null),
+    planMission: (request) => planMission(request),
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -276,6 +363,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       switch (command.type) {
         case 'startDemoMission':
           return startDemoMission()
+        case 'launchMission':
+          return launchMission(command.missionId)
         case 'reset':
           init()
           return { ok: true }
