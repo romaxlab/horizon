@@ -60,7 +60,7 @@ export interface RouteDto {
   eta_s: number
 }
 
-export type MissionTypeDto = 'area_scan' | 'patrol'
+export type MissionTypeDto = 'area_scan' | 'patrol' | 'point_inspection'
 
 export type MissionStatusDto = 'planned' | 'active' | 'completed' | 'aborted'
 
@@ -71,8 +71,11 @@ export interface MissionDto {
   status: MissionStatusDto
   area: { polygon: GeoPointDto[] }
   altitude_m: number
-  /** Patrol circuits; null for other mission types. */
+  /** Patrol circuits or inspection orbits; null for an area scan. */
   laps: number | null
+  /** Point inspection: the inspected point and orbit radius; null for other types. */
+  target: GeoPointDto | null
+  radius_m: number | null
   assigned_uav_ids: string[]
   routes: RouteDto[]
   created_at: number
@@ -86,15 +89,20 @@ export interface GeofenceDto {
   polygon: GeoPointDto[]
 }
 
-/** Fake REST: POST /missions/plan body. `area` is the scan area or the patrol loop. */
+/**
+ * Fake REST: POST /missions/plan body. `area` holds the scan area, the patrol loop, or the single
+ * inspection target. The planned mission's area for an inspection is its orbit loop.
+ */
 export interface MissionPlanRequestDto {
   name: string
   type: MissionTypeDto
   area: { polygon: GeoPointDto[] }
   altitude_m: number
   uav_count: number
-  /** Patrol only: number of circuits. */
+  /** Patrol circuits or inspection orbits. */
   laps?: number
+  /** Point inspection only: orbit radius. */
+  radius_m?: number
 }
 
 export type SimulatorMessage =

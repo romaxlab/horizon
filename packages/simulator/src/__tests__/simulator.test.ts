@@ -613,6 +613,60 @@ describe('createSimulator', () => {
     expect(result).toMatchObject({ ok: false, geofenceIds: ['nfz-marina'] })
   })
 
+  it('plans a point inspection as orbits around the target and flies it to completion', () => {
+    const { simulator } = record()
+    const target = { lat: 24.456, lon: 54.386 }
+    const request = {
+      type: 'point_inspection' as const,
+      name: 'Tower check',
+      area: { polygon: [target] },
+      altitude_m: 60,
+      uav_count: 2,
+      laps: 1,
+      radius_m: 80,
+    }
+    expect(simulator.planMission({ ...request, radius_m: 5 })).toMatchObject({ ok: false })
+    expect(
+      simulator.planMission({ ...request, area: { polygon: [target, target] } }),
+    ).toMatchObject({ ok: false })
+
+    const plan = simulator.planMission(request)
+    if (!plan.ok) throw new Error(plan.reason)
+    expect(plan.mission).toMatchObject({ type: 'point_inspection', target, radius_m: 80, laps: 1 })
+    expect(plan.mission.area.polygon).toHaveLength(24)
+    const center = { latitude: target.lat, longitude: target.lon }
+    const firstOrbitPoint = plan.mission.routes[0]?.waypoints.at(-1)
+    expect(
+      distanceMeters(center, {
+        latitude: firstOrbitPoint?.lat ?? 0,
+        longitude: firstOrbitPoint?.lon ?? 0,
+      }),
+    ).toBeCloseTo(80, 0)
+
+    simulator.dispatch({ type: 'launchMission', missionId: plan.mission.id })
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      3600,
+    )
+  })
+
+  it('rejects an inspection orbit that passes through a no-fly zone', () => {
+    const { simulator } = record()
+    const result = simulator.planMission({
+      type: 'point_inspection',
+      name: 'x',
+      area: { polygon: [{ lat: 24.4655, lon: 54.3528 }] },
+      altitude_m: 60,
+      uav_count: 1,
+      laps: 1,
+      radius_m: 100,
+    })
+    expect(result).toMatchObject({ ok: false, geofenceIds: ['nfz-marina'] })
+  })
+
   it('reports whether there is anything to reset', () => {
     const { simulator } = record()
     expect(simulator.pristine).toBe(true)

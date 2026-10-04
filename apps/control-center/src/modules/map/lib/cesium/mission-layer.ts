@@ -1,4 +1,4 @@
-import type { GeoPoint, GeoPosition } from '@horizon/domain'
+import { destinationPoint, type GeoPoint, type GeoPosition } from '@horizon/domain'
 import {
   Cartesian3,
   ClassificationType,
@@ -15,9 +15,13 @@ import type { MapPalette } from './palette'
 export interface MissionOverlay {
   /** `draft`: area being drawn · `planned`: reviewed, not launched · then `active` / `completed`. */
   phase: 'draft' | 'planned' | 'active' | 'completed'
-  /** `area`: filled scan area · `loop`: closed patrol route, drawn as a line only. */
-  shape: 'area' | 'loop'
+  /**
+   * `area`: filled scan area · `loop`: closed patrol route, drawn as a line only · `orbit`: circle
+   * around an inspection target (`area` is the planned orbit once known, else drawn from `orbit`).
+   */
+  shape: 'area' | 'loop' | 'orbit'
   area: GeoPoint[]
+  orbit: { target: GeoPoint; radiusMeters: number } | null
   /** Scan routes per UAV; waypoint altitude is above ground. */
   routes: { uavId: string; waypoints: GeoPosition[] }[]
 }
@@ -29,6 +33,9 @@ export interface MissionLayer {
   setGroundHeight(meters: number): void
   destroy(): void
 }
+
+/** Smoothness of the draft orbit preview (the planned orbit comes from the backend). */
+const PREVIEW_ORBIT_POINTS = 64
 
 /** Renders the mission area, routes and waypoints; rebuilt on change (overlays change rarely). */
 export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): MissionLayer {
@@ -51,7 +58,14 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
   function render() {
     clear()
     if (!overlay) return
-    const { phase, shape, area, routes } = overlay
+    const { phase, shape, routes, orbit } = overlay
+    // A draft inspection has no planned orbit yet: preview the circle from target and radius.
+    const area =
+      shape === 'orbit' && overlay.area.length < 3 && orbit
+        ? Array.from({ length: PREVIEW_ORBIT_POINTS }, (_, i) =>
+            destinationPoint(orbit.target, (i * 360) / PREVIEW_ORBIT_POINTS, orbit.radiusMeters),
+          )
+        : overlay.area
     const accent = palette.selected
     const muted = palette.standby
     const draft = phase === 'draft'
@@ -81,19 +95,19 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
         },
       })
     }
-    if (draft) {
-      for (const point of area) {
-        add({
-          position: Cartesian3.fromDegrees(point.longitude, point.latitude),
-          point: {
-            pixelSize: 8,
-            color: palette.halo,
-            outlineColor: accent,
-            outlineWidth: 2,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        })
-      }
+    // Corner handles while drawing; an inspection shows its target throughout.
+    const handles = shape === 'orbit' ? (orbit ? [orbit.target] : []) : draft ? area : []
+    for (const point of handles) {
+      add({
+        position: Cartesian3.fromDegrees(point.longitude, point.latitude),
+        point: {
+          pixelSize: 8,
+          color: palette.halo,
+          outlineColor: accent,
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
     }
 
     for (const route of routes) {

@@ -11,6 +11,7 @@ import {
 } from '@horizon/domain'
 import { createAirspaceRouter } from './airspace-routing'
 import { planAreaScan } from './area-scan'
+import { INSPECTION_RADIUS_RANGE, orbitLoop } from './inspection'
 import { planPatrol } from './patrol'
 import {
   DEMO_BASE,
@@ -409,16 +410,33 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     const assigned = [...available]
       .sort((a, b) => b.battery - a.battery || a.uav.id.localeCompare(b.uav.id))
       .slice(0, request.uav_count)
-    const area = request.area.polygon.map(toGeoPoint)
-    const patrol = request.type === 'patrol'
-    const laps = patrol ? (request.laps ?? 1) : null
-    if (patrol) {
-      // Patrol corners are flown exactly, so none may lie inside a no-fly zone.
+    const drawn = request.area.polygon.map(toGeoPoint)
+    const inspection = request.type === 'point_inspection'
+    const looped = request.type === 'patrol' || inspection
+    const laps = looped ? (request.laps ?? 1) : null
+    const target = inspection ? (drawn[0] ?? null) : null
+    const radius = inspection ? (request.radius_m ?? 0) : null
+    if (inspection) {
+      if (!target || drawn.length !== 1) {
+        return { ok: false, reason: 'Point inspection needs exactly one target point' }
+      }
+      const { min, max } = INSPECTION_RADIUS_RANGE
+      if (radius === null || !(radius >= min && radius <= max)) {
+        return { ok: false, reason: `Orbit radius must be ${String(min)}–${String(max)} m` }
+      }
+    }
+    // Scan area, patrol loop, or the orbit around an inspection target.
+    const area = target && radius !== null ? orbitLoop(target, radius) : drawn
+    if (looped) {
+      // Loop corners are flown exactly, so none may lie inside a no-fly zone.
       const zones = [...new Set(area.flatMap((point) => airspace.zonesAt(point)))]
       if (zones.length > 0) {
+        const what = inspection
+          ? 'Inspection orbit passes through'
+          : 'Patrol route has points inside'
         return {
           ok: false,
-          reason: `Patrol route has points inside no-fly ${zones.length === 1 ? 'zone' : 'zones'} ${zones.map((z) => `"${z.name}"`).join(', ')}`,
+          reason: `${what} no-fly ${zones.length === 1 ? 'zone' : 'zones'} ${zones.map((z) => `"${z.name}"`).join(', ')}`,
           geofenceIds: zones.map((z) => z.id),
         }
       }
@@ -426,7 +444,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     const fleet = assigned.map((u) => ({ id: u.uav.id, home: u.home }))
     let routes
     try {
-      routes = patrol
+      routes = looped
         ? planPatrol({
             loop: area,
             altitude: request.altitude_m,
@@ -465,9 +483,11 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       name: request.name,
       type: request.type,
       status: 'planned',
-      area: { polygon: request.area.polygon.map(({ lat, lon }) => ({ lat, lon })) },
+      area: { polygon: area.map((p) => ({ lat: p.latitude, lon: p.longitude })) },
       altitude_m: request.altitude_m,
       laps,
+      target: target ? { lat: target.latitude, lon: target.longitude } : null,
+      radius_m: radius,
       assigned_uav_ids: assigned.map((u) => u.uav.id),
       routes: routes.map((route) => ({
         uav_id: route.uavId,

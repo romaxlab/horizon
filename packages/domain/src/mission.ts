@@ -2,9 +2,9 @@ import type { GeoPoint } from './geo'
 
 export type MissionStatus = 'draft' | 'planned' | 'active' | 'completed' | 'aborted'
 
-export type MissionType = 'area_scan' | 'patrol'
+export type MissionType = 'area_scan' | 'patrol' | 'point_inspection'
 
-/** Scan area (Area Scan) or the closed patrol loop (Patrol), corners in order. */
+/** Scan area (Area Scan), or the closed loop flown by a Patrol or around an inspection target. */
 export interface MissionArea {
   polygon: GeoPoint[]
 }
@@ -34,8 +34,11 @@ export interface Mission {
   area: MissionArea
   /** Scan altitude, meters. */
   altitude: number
-  /** Patrol circuits; null for other mission types. */
+  /** Patrol circuits or inspection orbits; null for an area scan. */
   laps: number | null
+  /** Point inspection: inspected point and orbit radius (meters); null for other types. */
+  target: GeoPoint | null
+  radiusMeters: number | null
   assignedUavIds: string[]
   routes: UavRoute[]
   createdAt: number

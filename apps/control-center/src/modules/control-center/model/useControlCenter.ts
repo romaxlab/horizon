@@ -1,4 +1,4 @@
-import { isPointInPolygon, type Geofence, type GeoPoint } from '@horizon/domain'
+import { isPointInPolygon, type Geofence, type GeoPoint, type MissionType } from '@horizon/domain'
 import type { BadgeVariant } from '@horizon/ui'
 import { useMutation } from '@tanstack/vue-query'
 import { computed } from 'vue'
@@ -10,6 +10,7 @@ import { useIncidentCenter, type Observation } from '@/modules/incidents'
 import { useMapStore, type GeofenceOverlay, type MissionOverlay } from '@/modules/map'
 import {
   computeMissionProgress,
+  MISSION_TYPES,
   provideMissionBuilder,
   useMissionBuilder,
   useMissionStore,
@@ -17,6 +18,13 @@ import {
 } from '@/modules/mission-planning'
 import { formatDuration } from '@/shared/lib/format'
 import { stableComputed, shallowEqual } from '@/shared/lib/stable-computed'
+
+/** What UAVs on a mission of this type are doing, for the status line. */
+const MISSION_ACTIVITY: Record<MissionType, string> = {
+  area_scan: 'scanning',
+  patrol: 'patrolling',
+  point_inspection: 'inspecting',
+}
 
 const connectionPresentation: Record<ConnectionStatus, { label: string; variant: BadgeVariant }> = {
   connecting: { label: 'Connecting', variant: 'neutral' },
@@ -71,7 +79,7 @@ export function useControlCenter() {
       // Floor: 100% only once every UAV has landed (the mission then completes).
       state: `${Math.floor(progress.ratio * 100)}%`,
       detail: scanning
-        ? `${progress.activeUavCount} UAVs ${current.type === 'patrol' ? 'patrolling' : 'scanning'}${eta}`
+        ? `${progress.activeUavCount} UAVs ${MISSION_ACTIVITY[current.type]}${eta}`
         : `${progress.returningUavCount} UAVs returning`,
       progress: progress.ratio,
     }
@@ -230,8 +238,12 @@ export function useControlCenter() {
     const current = missions.current
     if (!current || current.status === 'draft' || current.status === 'planned') return null
     const phase = current.status === 'active' ? 'active' : 'completed'
-    const shape = current.type === 'patrol' ? 'loop' : 'area'
-    return { phase, shape, area: current.area.polygon, routes: current.routes }
+    const shape = MISSION_TYPES[current.type].shape
+    const orbit =
+      current.target && current.radiusMeters !== null
+        ? { target: current.target, radiusMeters: current.radiusMeters }
+        : null
+    return { phase, shape, orbit, area: current.area.polygon, routes: current.routes }
   })
 
   /**

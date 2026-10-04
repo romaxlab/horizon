@@ -11,6 +11,8 @@ export function mapMission(dto: MissionDto): Mission {
     area: { polygon: dto.area.polygon.map(({ lat, lon }) => ({ latitude: lat, longitude: lon })) },
     altitude: dto.altitude_m,
     laps: dto.laps ?? null,
+    target: dto.target ? { latitude: dto.target.lat, longitude: dto.target.lon } : null,
+    radiusMeters: dto.radius_m ?? null,
     assignedUavIds: dto.assigned_uav_ids,
     routes: dto.routes.map((route) => ({
       uavId: route.uav_id,
@@ -43,6 +45,7 @@ export function toPlanRequestDto(request: MissionPlanRequest) {
     area: toAreaDto(request.area),
     altitude_m: request.altitude,
     uav_count: request.uavCount,
-    ...(request.type === 'patrol' ? { laps: request.laps } : {}),
+    ...(request.type === 'area_scan' ? {} : { laps: request.laps }),
+    ...(request.type === 'point_inspection' ? { radius_m: request.radiusMeters } : {}),
   }
 }

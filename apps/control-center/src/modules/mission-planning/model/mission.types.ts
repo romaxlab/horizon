@@ -3,13 +3,15 @@ import type { Mission, MissionArea, MissionType } from '@horizon/domain'
 export interface MissionPlanRequest {
   name: string
   type: MissionType
-  /** Scan area, or the patrol loop corners in flight order. */
+  /** Scan area, the patrol loop corners in flight order, or the single inspection target. */
   area: MissionArea
   /** Scan altitude above ground, meters. */
   altitude: number
   uavCount: number
-  /** Patrol circuits (patrol only). */
+  /** Patrol circuits or inspection orbits (not used by an area scan). */
   laps: number
+  /** Inspection orbit radius, meters (point inspection only). */
+  radiusMeters: number
 }
 
 /** Planning failures the operator can act on (e.g. area too small, not enough UAVs). */

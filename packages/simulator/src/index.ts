@@ -1,4 +1,5 @@
 export { AreaScanError, planAreaScan, type AreaScanRequest } from './area-scan'
+export { INSPECTION_RADIUS_RANGE, orbitLoop } from './inspection'
 export { PatrolError, planPatrol, type PatrolRequest } from './patrol'
 export {
   DEMO_BASE,

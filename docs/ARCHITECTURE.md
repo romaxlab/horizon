@@ -51,7 +51,7 @@ Main capabilities:
 
 - fleet monitoring;
 - 3D situational awareness;
-- mission planning: Area Scan and Patrol;
+- mission planning: Area Scan, Patrol and Point Inspection;
 - mission execution monitoring;
 - UAV inspection;
 - simulated video;
@@ -489,13 +489,16 @@ interface UavRoute {
 interface Mission {
   id: string
   name: string
-  type: 'area_scan' | 'patrol'
+  type: 'area_scan' | 'patrol' | 'point_inspection'
   status: MissionStatus
-  /** Scan area, or the closed patrol loop (corners in flight order). */
+  /** Scan area, or the closed loop flown by a patrol or around an inspection target. */
   area: MissionArea
   altitude: number
-  /** Patrol circuits; null for other types. */
+  /** Patrol circuits or inspection orbits; null for an area scan. */
   laps: number | null
+  /** Point inspection: inspected point and orbit radius; null for other types. */
+  target: GeoPoint | null
+  radiusMeters: number | null
   assignedUavIds: string[]
   routes: UavRoute[]
   createdAt: number
@@ -519,8 +522,13 @@ Mission types (planned by the backend, `@horizon/simulator`):
   point on the loop. Loop legs and transit detour around no-fly zones; a corner inside a zone
   rejects the plan. Progress is the same distance-based measure, so laps count toward it.
 
-The plan request carries `type` and, for patrol, `laps`; the same `area.polygon` holds the scan
-area or the loop.
+- **Point Inspection** — one target point; UAVs orbit it at a set radius (30–1000 m) for a set
+  number of orbits. The backend turns target and radius into a 24-point orbit loop and plans it
+  as a patrol, so spacing, orbits, detours and progress behave the same; an orbit passing through
+  a no-fly zone rejects the plan. The planned mission's `area` is that orbit.
+
+The plan request carries `type`, `laps` for patrol and inspection, and `radius_m` for inspection;
+`area.polygon` holds the scan area, the loop, or the single inspection target.
 
 ---
 

@@ -62,13 +62,15 @@ describe('createRemoteMissionPlanner', () => {
       altitude: 120,
       uavCount: 2,
       laps: 3,
+      radiusMeters: 150,
     })
     expect(mission).toMatchObject({ id: planBody.mission.id, status: 'planned' })
     expect(mission.routes).toHaveLength(2)
     const body: unknown = JSON.parse(requests[0]?.slice(5) ?? '{}')
     expect(body).toMatchObject({ type: 'area_scan', altitude_m: 120, uav_count: 2 })
-    // Laps are a patrol parameter only.
+    // Laps and radius are patrol/inspection parameters only.
     expect(body).not.toHaveProperty('laps')
+    expect(body).not.toHaveProperty('radius_m')
 
     await planner.launch(mission.id)
     await planner.abort(mission.id)
@@ -92,6 +94,7 @@ describe('createRemoteMissionPlanner', () => {
       altitude: 120,
       uavCount: 1,
       laps: 1,
+      radiusMeters: 150,
     }
     await expect(planner.plan(request)).rejects.toEqual(
       new MissionPlanningError('Area is too small'),
@@ -121,6 +124,7 @@ describe('createRemoteMissionPlanner', () => {
       altitude: 120,
       uavCount: 1,
       laps: 1,
+      radiusMeters: 150,
     }
     await expect(planner.plan(request)).rejects.toMatchObject({
       geofenceIds: ['nfz-marina', 'nfz-palace'],

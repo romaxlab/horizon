@@ -16,6 +16,7 @@ import {
   ALTITUDE_RANGE,
   injectMissionBuilder,
   LAPS_RANGE,
+  RADIUS_RANGE,
   type BuilderStep,
 } from '../model/useMissionBuilder'
 
@@ -23,7 +24,7 @@ const builder = injectMissionBuilder()
 
 const steps = computed<{ id: BuilderStep; label: string }[]>(() => [
   { id: 'details', label: 'Details' },
-  { id: 'area', label: builder.shape.value === 'loop' ? 'Route' : 'Area' },
+  { id: 'area', label: { area: 'Area', loop: 'Route', orbit: 'Target' }[builder.shape.value] },
   { id: 'review', label: 'Review' },
 ])
 const stepIndex = computed(() => steps.value.findIndex((s) => s.id === builder.step.value))
@@ -33,6 +34,18 @@ const altitude = computed({
   get: () => builder.altitude.value,
   set: (value: string | number | undefined) => {
     builder.altitude.value = Number(value)
+  },
+})
+const drawHint = {
+  area: 'Click the map to place the corners of the scan area.',
+  loop: 'Click the map to place the patrol route in flight order; it closes back to the first point.',
+  orbit: 'Click the map to place the inspection target; click again to move it.',
+} as const
+
+const radius = computed({
+  get: () => builder.radius.value,
+  set: (value: string | number | undefined) => {
+    builder.radius.value = Number(value)
   },
 })
 const laps = computed({
@@ -104,13 +117,26 @@ const uavCount = computed({
             :max="builder.availableUavs.value"
           />
           <BaseInput
-            v-if="builder.type.value === 'patrol'"
+            v-if="builder.lapsLabel.value"
             v-model="laps"
             type="number"
-            label="Laps"
-            hint="Each UAV flies the loop this many times"
+            :label="builder.lapsLabel.value"
+            :hint="
+              builder.shape.value === 'orbit'
+                ? 'Each UAV circles the target this many times'
+                : 'Each UAV flies the loop this many times'
+            "
             :min="LAPS_RANGE.min"
             :max="LAPS_RANGE.max"
+          />
+          <BaseInput
+            v-if="builder.shape.value === 'orbit'"
+            v-model="radius"
+            type="number"
+            label="Radius (m)"
+            hint="Orbit distance from the target"
+            :min="RADIUS_RANGE.min"
+            :max="RADIUS_RANGE.max"
           />
         </div>
         <BaseAlert
@@ -131,14 +157,18 @@ const uavCount = computed({
       <!-- 2. Area -->
       <template v-else-if="builder.step.value === 'area'">
         <BaseText as="p" variant="body-md" tone="secondary">
-          {{
-            builder.shape.value === 'loop'
-              ? 'Click the map to place the patrol route in flight order; it closes back to the first point.'
-              : 'Click the map to place the corners of the scan area.'
-          }}
+          {{ drawHint[builder.shape.value] }}
         </BaseText>
         <div class="flex items-center justify-between">
-          <BaseText variant="label-lg" numeric>{{ builder.area.value.length }} points</BaseText>
+          <BaseText variant="label-lg" numeric>
+            {{
+              builder.shape.value === 'orbit'
+                ? builder.area.value.length > 0
+                  ? 'Target set'
+                  : 'No target'
+                : `${String(builder.area.value.length)} points`
+            }}
+          </BaseText>
           <div class="flex gap-1">
             <BaseButton
               size="sm"

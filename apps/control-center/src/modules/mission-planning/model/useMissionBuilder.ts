@@ -12,14 +12,30 @@ const DEFAULT_ALTITUDE = 120
 const DEFAULT_UAV_COUNT = 6
 export const LAPS_RANGE = { min: 1, max: 10 } as const
 const DEFAULT_LAPS = 3
+export const RADIUS_RANGE = { min: 30, max: 1000 } as const
+const DEFAULT_RADIUS = 150
 
-/** Per type: label, default mission name and what the operator draws on the map. */
+/**
+ * Per type: label, default mission name and what the operator draws on the map — an area, a
+ * closed loop, or one target point to orbit. `lapsLabel` names the repeat count, if any.
+ */
 export const MISSION_TYPES: Record<
   MissionType,
-  { label: string; defaultName: string; shape: 'area' | 'loop' }
+  {
+    label: string
+    defaultName: string
+    shape: 'area' | 'loop' | 'orbit'
+    lapsLabel: string | null
+  }
 > = {
-  area_scan: { label: 'Area Scan', defaultName: 'Area Scan', shape: 'area' },
-  patrol: { label: 'Patrol', defaultName: 'Patrol', shape: 'loop' },
+  area_scan: { label: 'Area Scan', defaultName: 'Area Scan', shape: 'area', lapsLabel: null },
+  patrol: { label: 'Patrol', defaultName: 'Patrol', shape: 'loop', lapsLabel: 'Laps' },
+  point_inspection: {
+    label: 'Inspection',
+    defaultName: 'Point Inspection',
+    shape: 'orbit',
+    lapsLabel: 'Orbits',
+  },
 }
 const typeOptions: SegmentOption<MissionType>[] = (Object.keys(MISSION_TYPES) as MissionType[]).map(
   (value) => ({ value, label: MISSION_TYPES[value].label }),
@@ -38,6 +54,7 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
   const type = ref<MissionType>('area_scan')
   const name = ref(MISSION_TYPES.area_scan.defaultName)
   const laps = ref(DEFAULT_LAPS)
+  const radius = ref(DEFAULT_RADIUS)
   const altitude = ref(DEFAULT_ALTITUDE)
   const uavCount = ref(DEFAULT_UAV_COUNT)
   const area = ref<GeoPoint[]>([])
@@ -68,19 +85,30 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     else if (uavCount.value > availableUavs.value) {
       errors.push(`Only ${availableUavs.value} standby UAVs available`)
     }
+    const lapsLabel = MISSION_TYPES[type.value].lapsLabel
     if (
-      type.value === 'patrol' &&
+      lapsLabel &&
       !(
         Number.isInteger(laps.value) &&
         laps.value >= LAPS_RANGE.min &&
         laps.value <= LAPS_RANGE.max
       )
     ) {
-      errors.push(`Laps must be ${LAPS_RANGE.min}–${LAPS_RANGE.max}`)
+      errors.push(`${lapsLabel} must be ${LAPS_RANGE.min}–${LAPS_RANGE.max}`)
+    }
+    if (
+      type.value === 'point_inspection' &&
+      !(radius.value >= RADIUS_RANGE.min && radius.value <= RADIUS_RANGE.max)
+    ) {
+      errors.push(`Radius must be ${RADIUS_RANGE.min}–${RADIUS_RANGE.max} m`)
     }
     return errors
   })
-  const areaReady = computed(() => area.value.length >= 3)
+  const shape = computed(() => MISSION_TYPES[type.value].shape)
+  // An orbit needs its one target point; an area or loop at least three corners.
+  const areaReady = computed(() =>
+    shape.value === 'orbit' ? area.value.length === 1 : area.value.length >= 3,
+  )
 
   const error = computed(() => {
     const failure = planMutation.error.value ?? launchMutation.error.value
@@ -98,6 +126,7 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     type.value = 'area_scan'
     name.value = MISSION_TYPES.area_scan.defaultName
     laps.value = DEFAULT_LAPS
+    radius.value = DEFAULT_RADIUS
     altitude.value = DEFAULT_ALTITUDE
     uavCount.value = Math.min(DEFAULT_UAV_COUNT, Math.max(availableUavs.value, 1))
     area.value = []
@@ -111,6 +140,8 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     if (name.value.trim() === MISSION_TYPES[type.value].defaultName) {
       name.value = MISSION_TYPES[next].defaultName
     }
+    // What was drawn doesn't carry over between an area/loop and a target point.
+    if ((MISSION_TYPES[next].shape === 'orbit') !== (shape.value === 'orbit')) area.value = []
     type.value = next
   }
 
@@ -124,7 +155,9 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
   }
 
   function addPoint(point: GeoPoint) {
-    if (step.value === 'area') area.value = [...area.value, point]
+    if (step.value !== 'area') return
+    // An inspection has one target: clicking again moves it.
+    area.value = shape.value === 'orbit' ? [point] : [...area.value, point]
   }
 
   function undoPoint() {
@@ -157,6 +190,7 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
       altitude: altitude.value,
       uavCount: uavCount.value,
       laps: laps.value,
+      radiusMeters: radius.value,
     })
   }
 
@@ -183,10 +217,20 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
   /** Map geometry for the draft / reviewed plan; null when the builder is closed. */
   const overlay = computed(() => {
     if (!open.value) return null
-    const shape = MISSION_TYPES[type.value].shape
+    const target = shape.value === 'orbit' ? area.value[0] : undefined
+    const base = {
+      shape: shape.value,
+      orbit: target ? { target, radiusMeters: radius.value } : null,
+    }
+    // A planned inspection shows the orbit the backend generated; areas and loops as drawn.
     return plan.value
-      ? { phase: 'planned' as const, shape, area: area.value, routes: plan.value.routes }
-      : { phase: 'draft' as const, shape, area: area.value, routes: [] }
+      ? {
+          ...base,
+          phase: 'planned' as const,
+          area: base.orbit ? plan.value.area.polygon : area.value,
+          routes: plan.value.routes,
+        }
+      : { ...base, phase: 'draft' as const, area: area.value, routes: [] }
   })
 
   return {
@@ -195,9 +239,11 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     type,
     typeOptions,
     setType,
-    shape: computed(() => MISSION_TYPES[type.value].shape),
+    shape,
+    lapsLabel: computed(() => MISSION_TYPES[type.value].lapsLabel),
     name,
     laps,
+    radius,
     altitude,
     uavCount,
     area,

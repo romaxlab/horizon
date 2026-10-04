@@ -14,6 +14,8 @@ const plannedMission: Mission = {
   area: { polygon: [] },
   altitude: 120,
   laps: null,
+  target: null,
+  radiusMeters: null,
   assignedUavIds: ['uav-01'],
   routes: [
     {
@@ -103,6 +105,7 @@ describe('useMissionBuilder', () => {
       altitude: 120,
       uavCount: 6,
       laps: 3,
+      radiusMeters: 150,
     })
     expect(builder.step.value).toBe('review')
     expect(builder.overlay.value?.phase).toBe('planned')
@@ -137,6 +140,36 @@ describe('useMissionBuilder', () => {
     builder.name.value = 'North fence'
     builder.setType('patrol')
     expect(builder.name.value).toBe('North fence')
+  })
+
+  it('plans a point inspection around one target that a second click moves', async () => {
+    const { builder, plan } = setup()
+    builder.start()
+    builder.setType('point_inspection')
+    expect(builder.name.value).toBe('Point Inspection')
+    builder.radius.value = 10
+    expect(builder.detailErrors.value).toContain('Radius must be 30–1000 m')
+    builder.radius.value = 200
+    builder.next()
+    const [first, second] = square
+    if (!first || !second) throw new Error('fixture')
+    builder.addPoint(first)
+    builder.addPoint(second)
+    expect(builder.area.value).toEqual([second])
+    expect(builder.areaReady.value).toBe(true)
+    expect(builder.overlay.value).toMatchObject({
+      shape: 'orbit',
+      orbit: { target: second, radiusMeters: 200 },
+    })
+    builder.generate()
+    await flush()
+    expect(plan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'point_inspection',
+        area: { polygon: [second] },
+        radiusMeters: 200,
+      }),
+    )
   })
 
   it('surfaces planning errors and stays on the area step', async () => {

@@ -9,6 +9,7 @@ export {
 } from './model/mission.types'
 export { useMissionSync } from './model/useMissionSync'
 export {
+  MISSION_TYPES,
   provideMissionBuilder,
   useMissionBuilder,
   type BuilderStep,

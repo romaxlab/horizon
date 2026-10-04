@@ -5,12 +5,15 @@ const geoPoint = z.object({ lat: z.number().min(-90).max(90), lon: z.number().mi
 export const missionDtoSchema = z.object({
   id: z.string().min(1),
   name: z.string(),
-  type: z.enum(['area_scan', 'patrol']),
+  type: z.enum(['area_scan', 'patrol', 'point_inspection']),
   status: z.enum(['planned', 'active', 'completed', 'aborted']),
   area: z.object({ polygon: z.array(geoPoint).min(3) }),
   altitude_m: z.number().positive(),
   /** Patrol circuits; absent or null for other types. */
   laps: z.number().int().positive().nullish(),
+  /** Point inspection only. */
+  target: geoPoint.nullish(),
+  radius_m: z.number().positive().nullish(),
   assigned_uav_ids: z.array(z.string()),
   routes: z.array(
     z.object({
