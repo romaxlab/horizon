@@ -22,6 +22,14 @@ export interface UavRoute {
   /** Where the UAV departs from and lands back; null when the backend doesn't report it. */
   home: GeoPoint | null
   waypoints: Waypoint[]
+  /**
+   * Waypoint indexes where the mission task starts and ends; waypoints before `taskStart` are
+   * transit from the base (incl. detours around no-fly zones).
+   */
+  taskStart: number
+  taskEnd: number
+  /** Waypoints per lap or orbit (patrol, inspection); null when the task has no laps. */
+  lapSize: number | null
   distanceMeters: number
   estimatedDurationSec: number
 }

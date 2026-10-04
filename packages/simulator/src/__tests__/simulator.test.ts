@@ -487,6 +487,12 @@ describe('createSimulator', () => {
       uav_count: 1,
     })
     if (!plan.ok) throw new Error(plan.reason)
+    // Transit detour corners come before the task: the scan starts inside the area.
+    const [route] = plan.mission.routes
+    expect(route?.task_start).toBeGreaterThan(0)
+    expect(route?.lap_size).toBeNull()
+    const scanStart = route?.waypoints[route.task_start]
+    expect(scanStart && scanStart.lat <= 24.44 && scanStart.lon <= 54.353).toBe(true)
     simulator.dispatch({ type: 'launchMission', missionId: plan.mission.id })
     runUntil(
       (ms) => {

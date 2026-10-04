@@ -14,7 +14,7 @@ describe('useUavInspector', () => {
     expect(useUavInspector(ref(0)).inspector.value).toBeNull()
   })
 
-  it('presents the selected UAV telemetry, health and mission progress', () => {
+  it('presents the selected UAV telemetry and health', () => {
     const store = useFleetStore()
     store.hydrate(
       {
@@ -42,7 +42,6 @@ describe('useUavInspector', () => {
       battery: { label: '15%', tone: 'danger' },
       issues: ['Low battery'],
       lastUpdate: { label: '3s ago', degraded: false },
-      mission: { id: 'm-1', waypoint: 5 },
     })
     expect(view?.metrics.find((m) => m.label === 'Heading')).toMatchObject({
       value: '315°',

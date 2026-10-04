@@ -1,4 +1,3 @@
-import type { ReturnReason } from '@horizon/domain'
 import type { ProgressTone, TextTone } from '@horizon/ui'
 import { computed, type Ref } from 'vue'
 import { formatAge, formatCardinal } from '@/shared/lib/format'
@@ -21,12 +20,6 @@ const issueLabels: Record<HealthIssue, string> = {
 }
 
 const fixed = (value: number, digits = 0) => value.toFixed(digits)
-
-const returnLabels: Record<ReturnReason, string> = {
-  completed: 'Returning home',
-  aborted: 'Returning · mission stopped',
-  'low-battery': 'Returning · low battery',
-}
 
 interface TrendSeries {
   label: string
@@ -126,16 +119,6 @@ export function useUavInspector(now: Readonly<Ref<number>> = useNow()) {
         degraded: linkDegraded,
       },
       issues: telemetry && !linkDegraded ? healthIssues(telemetry).map((i) => issueLabels[i]) : [],
-      mission: telemetry?.missionId
-        ? {
-            id: telemetry.missionId,
-            waypoint: telemetry.currentWaypoint === null ? null : telemetry.currentWaypoint + 1,
-            returning:
-              telemetry.flightPhase === 'returning' && telemetry.returnReason
-                ? returnLabels[telemetry.returnReason]
-                : null,
-          }
-        : null,
     }
   })
 

@@ -6,6 +6,8 @@ import { ref, watch } from 'vue'
 const props = defineProps<{
   state: string
   detail: string
+  /** Phase counts of an active mission ("2 en route · 3 scanning · …"); replaces `detail`. */
+  phases: { text: string; tone: 'muted' | 'warning' }[] | null
   progress: number | null
   /** Shows the Stop action. */
   canStop: boolean
@@ -54,8 +56,14 @@ function confirmStop() {
       <div v-if="progress !== null" class="w-24 shrink-0">
         <BaseProgress label="Mission progress" :value="progress" />
       </div>
-      <BaseText variant="body-md" tone="muted" numeric class="whitespace-nowrap">
+      <BaseText v-if="!phases" variant="body-md" tone="muted" numeric class="whitespace-nowrap">
         {{ detail }}
+      </BaseText>
+      <BaseText v-else variant="body-md" tone="muted" numeric class="whitespace-nowrap">
+        <template v-for="(phase, index) in phases" :key="phase.text">
+          <template v-if="index > 0"> · </template>
+          <span :class="phase.tone === 'warning' && 'text-status-warning'">{{ phase.text }}</span>
+        </template>
       </BaseText>
       <BaseText
         v-if="stopError && !stopping"

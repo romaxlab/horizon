@@ -34,5 +34,5 @@ test('create a Patrol: pick the type, draw the loop, plan and launch', async ({ 
   await expect(planning).toBeHidden()
 
   await expect(page.locator('header').first()).toContainText('Patrol')
-  await expect(page.getByLabel('Mission status')).toContainText('3 UAVs patrolling')
+  await expect(page.getByLabel('Mission status')).toContainText('3 en route')
 })

@@ -39,7 +39,7 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
   // Execution is visible: header names the mission, status shows scanning UAVs and progress.
   await expect(page.locator('header').first()).toContainText('E2E Scan')
   const status = page.getByLabel('Mission status')
-  await expect(status).toContainText('6 UAVs scanning')
+  await expect(status).toContainText('6 en route')
   await expect(status.getByRole('progressbar', { name: 'Mission progress' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'New Mission' })).toBeDisabled()
 

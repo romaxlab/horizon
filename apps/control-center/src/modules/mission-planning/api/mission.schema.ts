@@ -29,6 +29,10 @@ export const missionDtoSchema = z.object({
           order: z.number().int().nonnegative(),
         }),
       ),
+      /** Optional for backends that don't mark the task span: the whole route is the task. */
+      task_start: z.number().int().nonnegative().nullish(),
+      task_end: z.number().int().nonnegative().nullish(),
+      lap_size: z.number().int().positive().nullish(),
       distance_m: z.number().nonnegative(),
       eta_s: z.number().nonnegative(),
     }),

@@ -143,10 +143,15 @@ export function planAreaScan(request: AreaScanRequest): UavRoute[] {
       order,
     }))
     const distance = pathDistance([...flown, ...back.slice(1)])
+    // Detour points keep their identity, so the first scan point marks where transit ends.
+    const taskStart = Math.max(0, geoPoints.indexOf(scan[0] ?? uav.home))
     return {
       uavId: uav.id,
       home: uav.home,
       waypoints,
+      taskStart,
+      taskEnd: Math.max(0, waypoints.length - 1),
+      lapSize: null,
       distanceMeters: Math.round(distance),
       estimatedDurationSec: Math.round(distance / cruiseSpeedMps),
     }

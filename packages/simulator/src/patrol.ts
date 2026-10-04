@@ -85,6 +85,9 @@ export function planPatrol(request: PatrolRequest): UavRoute[] {
       uavId: uav.id,
       home: uav.home,
       waypoints,
+      taskStart: transit.length,
+      taskEnd: waypoints.length - 1,
+      lapSize: circuit.length,
       distanceMeters: Math.round(distance),
       estimatedDurationSec: Math.round(distance / cruiseSpeedMps),
     }

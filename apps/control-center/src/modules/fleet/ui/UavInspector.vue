@@ -12,12 +12,13 @@ import {
   BaseText,
 } from '@horizon/ui'
 import { onBeforeUnmount, onMounted } from 'vue'
+import type { InspectorMission } from '../model/fleet.types'
 import { useUavInspector } from '../model/useUavInspector'
 
 defineProps<{
   following: boolean
-  /** Name of the mission the UAV flies, from the composing view (fleet does not own missions). */
-  missionName: string | null
+  /** The UAV's part in the current mission, from the composing view (fleet doesn't own missions). */
+  mission: InspectorMission | null
 }>()
 const emit = defineEmits<{ close: []; focus: []; toggleFollow: [] }>()
 
@@ -116,28 +117,22 @@ onBeforeUnmount(() => {
 
       <BaseDivider />
 
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex min-w-0 flex-col">
-          <BaseText variant="caption" tone="muted">Mission</BaseText>
-          <BaseText variant="label-lg" truncate>
-            {{ inspector.mission ? (missionName ?? 'Assigned') : 'Not assigned' }}
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-end justify-between gap-3">
+          <div class="flex min-w-0 flex-col">
+            <BaseText variant="caption" tone="muted">Mission</BaseText>
+            <BaseText variant="label-lg" truncate>{{ mission?.name ?? 'Not assigned' }}</BaseText>
+          </div>
+          <BaseText v-if="mission" variant="body-md" :tone="mission.tone" numeric truncate>
+            {{ mission.phase }}
           </BaseText>
         </div>
-        <BaseText
-          v-if="inspector.mission?.returning"
-          variant="body-md"
-          :tone="inspector.mission.returning.includes('battery') ? 'warning' : 'secondary'"
-        >
-          {{ inspector.mission.returning }}
-        </BaseText>
-        <BaseText
-          v-else-if="inspector.mission?.waypoint"
-          variant="body-md"
-          tone="secondary"
-          numeric
-        >
-          Waypoint {{ inspector.mission.waypoint }}
-        </BaseText>
+        <template v-if="mission?.ratio != null">
+          <BaseProgress label="UAV mission progress" :value="mission.ratio" />
+          <BaseText v-if="mission.eta" variant="caption" tone="secondary" numeric>
+            {{ mission.eta }}
+          </BaseText>
+        </template>
       </div>
 
       <div class="flex gap-2">

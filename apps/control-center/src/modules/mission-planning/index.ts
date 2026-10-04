@@ -1,6 +1,11 @@
 export { MissionPayloadError, parseMission } from './api/mission.parsers'
 export { toPlanRequestDto } from './api/mission.mapper'
-export { computeMissionProgress, type MissionProgress } from './model/mission-progress'
+export {
+  computeMissionProgress,
+  type MissionProgress,
+  type UavMissionPhase,
+  type UavMissionStatus,
+} from './model/mission-progress'
 export { useMissionStore } from './model/mission.store'
 export {
   MissionPlanningError,

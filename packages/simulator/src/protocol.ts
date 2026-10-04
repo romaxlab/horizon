@@ -56,6 +56,11 @@ export interface RouteDto {
   /** Departure and landing point. */
   home: GeoPointDto
   waypoints: WaypointDto[]
+  /** Waypoint indexes of the task (before `task_start`: transit from the base). */
+  task_start: number
+  task_end: number
+  /** Waypoints per lap/orbit; null when the task has no laps. */
+  lap_size: number | null
   distance_m: number
   eta_s: number
 }

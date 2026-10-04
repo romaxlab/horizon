@@ -30,6 +30,15 @@ describe('planPatrol', () => {
     expect(b.at(-1)).toEqual(b[0])
   })
 
+  it('marks the task span and lap size: start point, then whole circuits', () => {
+    const [route] = planPatrol({ ...request, laps: 3 })
+    if (!route) throw new Error('missing route')
+    expect(route.taskStart).toBe(0)
+    expect(route.lapSize).toBe(4)
+    expect(route.taskEnd - route.taskStart).toBe(3 * 4)
+    expect(route.taskEnd).toBe(route.waypoints.length - 1)
+  })
+
   it('flies every corner once per lap', () => {
     const [route] = planPatrol({ ...request, laps: 3 })
     const corner = loop[2] ?? home

@@ -514,6 +514,15 @@ route and the flight home (routes report their `home`) — so it moves from the 
 shows 100 % only when every UAV has landed, the same moment the mission completes. A UAV that
 landed early (stop, low battery) counts as done; ETA is the time until the last UAV lands.
 
+Routes mark their task span (`task_start` / `task_end` waypoint indexes; before it: transit from
+the base and its detours) and, for patrol and inspection, `lap_size`. From these the client
+derives each UAV's phase — pending, en route, on task (with lap/orbit), returning (with reason),
+landed — as a pure function next to the progress (`uavMissionStatus`). The mission status line
+shows phase counts ("2 en route · 3 scanning · 1 returning · ETA"); a low-battery return is
+counted apart in warning tone, since color signals status, not phase. The UAV inspector shows
+the UAV's phase with its lap ("Patrolling · lap 2 of 3"), its own progress and ETA to landing,
+passed in by the route-level composition because the fleet module does not own missions.
+
 Mission types (planned by the backend, `@horizon/simulator`):
 
 - **Area Scan** — boustrophedon coverage of a polygon, one strip per UAV.

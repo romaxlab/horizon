@@ -2,7 +2,7 @@ import type { Mission, UavTelemetry } from '@horizon/domain'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { parseMission, parseMissionMessage } from '../../api/mission.parsers'
-import { computeMissionProgress } from '../mission-progress'
+import { computeMissionProgress, uavMissionStatus } from '../mission-progress'
 import { useMissionStore } from '../mission.store'
 
 const missionDto = {
@@ -81,6 +81,9 @@ describe('computeMissionProgress', () => {
       altitude: 120,
       order,
     })),
+    taskStart: 0,
+    taskEnd: 3,
+    lapSize: null,
     distanceMeters: 8_000,
     estimatedDurationSec: 800,
   }
@@ -123,6 +126,38 @@ describe('computeMissionProgress', () => {
     const drifted = progressAt({ currentWaypoint: 2, position: { ...north(0), altitude: 120 } })
     // Still credited with the waypoints passed (base → 2nd waypoint = 2 km).
     expect(drifted.ratio).toBeCloseTo(2 / 8, 2)
+  })
+
+  it('tells transit, task and lap apart from the task span', () => {
+    // Patrol-like route: one transit point, then the start point and 2 laps of 3 waypoints.
+    const patrolRoute = { ...route, taskStart: 1, taskEnd: 7, lapSize: 3 }
+    const waypoints = Array.from({ length: 8 }, (_, order) => ({
+      id: `p-${String(order)}`,
+      ...north(order + 1),
+      altitude: 120,
+      order,
+    }))
+    const patrol: Mission = { ...mission, type: 'patrol', laps: 2 }
+    const at = (currentWaypoint: number) =>
+      uavMissionStatus(
+        patrol,
+        { ...patrolRoute, waypoints },
+        telemetry('a', { timestamp: 200, currentWaypoint }),
+      )
+    expect(at(1)).toMatchObject({ phase: 'en_route', lap: null })
+    expect(at(2)).toMatchObject({ phase: 'on_task', lap: { current: 1, total: 2 } })
+    expect(at(5)).toMatchObject({ phase: 'on_task', lap: { current: 2, total: 2 } })
+    expect(at(7)).toMatchObject({ lap: { current: 2, total: 2 } })
+  })
+
+  it('reports why a UAV returns and what is left before launch', () => {
+    expect(
+      progressAt({ flightPhase: 'returning', returnReason: 'low-battery', currentWaypoint: 2 })
+        .uavs[0],
+    ).toMatchObject({ phase: 'returning', returnReason: 'low-battery' })
+    expect(
+      progressAt({ missionId: null, flightPhase: 'parked', timestamp: 50 }).uavs[0],
+    ).toMatchObject({ phase: 'pending', etaSec: null })
   })
 
   it('ignores telemetry from before the launch and from other missions', () => {

@@ -4,20 +4,27 @@ import { useMutation } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { useAppServices } from '@/app/providers/services'
 import { useGeofences } from '@/modules/airspace'
-import { healthIssues, useFleetStore, useFleetSync, type ConnectionStatus } from '@/modules/fleet'
+import {
+  healthIssues,
+  useFleetStore,
+  useFleetSync,
+  type ConnectionStatus,
+  type InspectorMission,
+} from '@/modules/fleet'
 import { useDemoControls } from '@/modules/demo-controls'
 import { useIncidentCenter, type Observation } from '@/modules/incidents'
 import { useMapStore, type GeofenceOverlay, type MissionOverlay } from '@/modules/map'
 import {
   computeMissionProgress,
   MISSION_TYPES,
+  type UavMissionStatus,
   provideMissionBuilder,
   useMissionBuilder,
   useMissionStore,
   useMissionSync,
 } from '@/modules/mission-planning'
 import { formatDuration } from '@/shared/lib/format'
-import { stableComputed, shallowEqual } from '@/shared/lib/stable-computed'
+import { stableComputed } from '@/shared/lib/stable-computed'
 
 /** What UAVs on a mission of this type are doing, for the status line. */
 const MISSION_ACTIVITY: Record<MissionType, string> = {
@@ -25,6 +32,41 @@ const MISSION_ACTIVITY: Record<MissionType, string> = {
   patrol: 'patrolling',
   point_inspection: 'inspecting',
 }
+
+/** One part of the mission status line, e.g. "3 scanning"; warnings stand out. */
+export interface MissionPhaseCount {
+  text: string
+  tone: 'muted' | 'warning'
+}
+
+/** Inspector wording for a UAV's mission phase. */
+function phaseLabel(type: MissionType, status: UavMissionStatus): string {
+  const repeat = type === 'point_inspection' ? 'orbit' : 'lap'
+  switch (status.phase) {
+    case 'pending':
+      return 'Waiting for launch'
+    case 'en_route':
+      return 'En route'
+    case 'on_task': {
+      const activity = MISSION_ACTIVITY[type]
+      const label = activity.charAt(0).toUpperCase() + activity.slice(1)
+      return status.lap
+        ? `${label} · ${repeat} ${String(status.lap.current)} of ${String(status.lap.total)}`
+        : label
+    }
+    case 'returning':
+      return status.returnReason === 'low-battery'
+        ? 'Returning · low battery'
+        : status.returnReason === 'aborted'
+          ? 'Returning · mission stopped'
+          : 'Returning home'
+    case 'landed':
+      return 'Landed'
+  }
+}
+
+/** The status line re-renders only when its visible content changes, not on every flush. */
+const sameSummary = <T>(a: T, b: T) => JSON.stringify(a) === JSON.stringify(b)
 
 const connectionPresentation: Record<ConnectionStatus, { label: string; variant: BadgeVariant }> = {
   connecting: { label: 'Connecting', variant: 'neutral' },
@@ -69,21 +111,43 @@ export function useControlCenter() {
         title: null,
         state: 'Standing by',
         detail: `${fleet.statusCounts.standby} UAVs ready`,
+        phases: null,
         progress: null,
       }
     }
-    const eta = progress.etaSec === null ? '' : ` · ETA ${formatDuration(progress.etaSec)}`
-    const scanning = progress.activeUavCount > 0
+    // Exceptions stand out: a low-battery return is counted apart, in warning tone.
+    const count = (match: (u: UavMissionStatus) => boolean) => progress.uavs.filter(match).length
+    const lowBattery = (u: UavMissionStatus) =>
+      u.phase === 'returning' && u.returnReason === 'low-battery'
+    const counts: (MissionPhaseCount & { n: number })[] = [
+      { text: 'en route', n: count((u) => u.phase === 'en_route'), tone: 'muted' },
+      {
+        text: MISSION_ACTIVITY[current.type],
+        n: count((u) => u.phase === 'on_task'),
+        tone: 'muted',
+      },
+      {
+        text: 'returning',
+        n: count((u) => u.phase === 'returning' && !lowBattery(u)),
+        tone: 'muted',
+      },
+      { text: 'low battery', n: count(lowBattery), tone: 'warning' },
+    ]
+    const phases: MissionPhaseCount[] = counts
+      .filter((p) => p.n > 0)
+      .map((p) => ({ text: `${String(p.n)} ${p.text}`, tone: p.tone }))
+    if (progress.etaSec !== null && progress.etaSec > 0) {
+      phases.push({ text: `ETA ${formatDuration(progress.etaSec)}`, tone: 'muted' })
+    }
     return {
       title: current.name,
       // Floor: 100% only once every UAV has landed (the mission then completes).
       state: `${Math.floor(progress.ratio * 100)}%`,
-      detail: scanning
-        ? `${progress.activeUavCount} UAVs ${MISSION_ACTIVITY[current.type]}${eta}`
-        : `${progress.returningUavCount} UAVs returning`,
+      detail: phases.map((p) => p.text).join(' · '),
+      phases,
       progress: progress.ratio,
     }
-  }, shallowEqual)
+  }, sameSummary)
 
   const builder = useMissionBuilder({
     availableUavs: computed(() => fleet.statusCounts.standby),
@@ -270,11 +334,23 @@ export function useControlCenter() {
     /** Live fleet stream for the map: deltas bypass component rendering. */
     fleetFeed: { current: () => fleet.uavs, subscribe: fleet.subscribe },
     selectedUavId: computed(() => fleet.selectedUavId),
-    /** Mission the selected UAV is flying, by name, for the inspector. */
-    selectedMissionName: computed(() => {
+    /** The selected UAV's part in the current mission, for the inspector. */
+    selectedMission: computed<InspectorMission | null>(() => {
       const current = missions.current
-      const missionId = fleet.selectedUav?.telemetry?.missionId
-      return current && missionId === current.id ? current.name : null
+      const uavId = fleet.selectedUavId
+      const status = missionProgress.value?.uavs.find((u) => u.uavId === uavId)
+      if (!current || !status || current.status !== 'active') return null
+      const flying = status.phase !== 'pending' && status.phase !== 'landed'
+      return {
+        name: current.name,
+        phase: phaseLabel(current.type, status),
+        tone:
+          status.phase === 'returning' && status.returnReason === 'low-battery'
+            ? 'warning'
+            : 'secondary',
+        ratio: flying ? status.ratio : null,
+        eta: flying && status.etaSec !== null ? `Lands in ${formatDuration(status.etaSec)}` : null,
+      }
     }),
     inspectorOpen: computed(() => fleet.selectedUav !== null),
     following: computed(() => map.followUavId !== null),

@@ -5,6 +5,7 @@ export type {
   FleetChange,
   FleetRepository,
   FleetSnapshot,
+  InspectorMission,
 } from './model/fleet.types'
 export { useFleetSync } from './model/useFleetSync'
 export { default as FleetPanel } from './ui/FleetPanel.vue'

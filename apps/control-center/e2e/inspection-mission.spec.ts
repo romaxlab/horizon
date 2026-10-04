@@ -26,5 +26,5 @@ test('create a Point Inspection: place the target, plan the orbit and launch', a
   await expect(planning.getByRole('list', { name: 'Routes' }).getByRole('listitem')).toHaveCount(2)
   await planning.getByRole('button', { name: 'Launch mission' }).click()
   await expect(planning).toBeHidden()
-  await expect(page.getByLabel('Mission status')).toContainText('2 UAVs inspecting')
+  await expect(page.getByLabel('Mission status')).toContainText('2 en route')
 })
