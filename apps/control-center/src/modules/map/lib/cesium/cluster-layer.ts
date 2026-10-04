@@ -69,11 +69,17 @@ export function createClusterLayer(
     return undefined
   }
 
-  function centerOf(memberIds: readonly string[]): Cartesian3 | undefined {
-    const positions = memberIds.flatMap((id) => uavs.positionOf(id) ?? [])
-    if (positions.length === 0) return undefined
-    const sum = positions.reduce((acc, p) => Cartesian3.add(acc, p, acc), new Cartesian3())
-    return Cartesian3.divideByScalar(sum, positions.length, sum)
+  /** Centroid of the members, written into `result` (runs every frame per badge: no arrays). */
+  function centerOf(memberIds: readonly string[], result: Cartesian3): Cartesian3 | undefined {
+    Cartesian3.clone(Cartesian3.ZERO, result)
+    let count = 0
+    for (const id of memberIds) {
+      const position = uavs.positionOf(id)
+      if (!position) continue
+      Cartesian3.add(result, position, result)
+      count += 1
+    }
+    return count === 0 ? undefined : Cartesian3.divideByScalar(result, count, result)
   }
 
   function slotAt(index: number): Slot {
@@ -83,7 +89,10 @@ export function createClusterLayer(
     const entity = viewer.entities.add({
       id: `${ENTITY_PREFIX}${index}`,
       show: false,
-      position: new CallbackPositionProperty(() => centerOf(members.memberIds), false),
+      position: new CallbackPositionProperty(
+        (_time, result) => centerOf(members.memberIds, result ?? new Cartesian3()),
+        false,
+      ),
       billboard: {
         horizontalOrigin: HorizontalOrigin.CENTER,
         verticalOrigin: VerticalOrigin.CENTER,
