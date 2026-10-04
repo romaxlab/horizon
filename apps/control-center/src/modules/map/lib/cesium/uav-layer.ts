@@ -33,6 +33,9 @@ import {
 import type { MapPalette } from './palette'
 
 const TRAIL_MIN_SPACING_METERS = 15
+/** Trail length cap: the last ~3.6 km flown; older points drop off so cost never grows. */
+const TRAIL_MAX_POINTS = 240
+const EMPTY_POSITIONS: Cartesian3[] = []
 const ENTITY_PREFIX = 'uav:'
 /** Name labels belong to their UAV for picking purposes. */
 const LABEL_ID_PREFIX = 'uav-label:'
@@ -53,7 +56,10 @@ interface UavEntry {
   id: string
   name: string
   entity: Entity
+  /** Flown path: constant geometry, rebuilt only when a trail point is added. */
   trailEntity: Entity
+  /** Short live segment from the last trail point to the marker (two reused points). */
+  trailHeadEntity: Entity
   track: PoseTrack
   /** Interpolated pose at the current render time. */
   pose: () => Pose | null
@@ -129,6 +135,11 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
   function toCartesian(pose: Pose, result?: Cartesian3): Cartesian3 {
     const height = groundHeight + pose.altitude
     return Cartesian3.fromDegrees(pose.longitude, pose.latitude, height, undefined, result)
+  }
+
+  /** Ground point under a pose (drop line foot), written into `result`. */
+  function groundUnder(pose: Pose, result?: Cartesian3): Cartesian3 {
+    return Cartesian3.fromDegrees(pose.longitude, pose.latitude, groundHeight, undefined, result)
   }
 
   function statusColor(status: UavStatus): Color {
@@ -223,9 +234,10 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const { billboard, polyline } = entry.entity
     if (billboard) billboard.image = new ConstantProperty(uavMarkerUrl(MARKER_STATE[entry.status]))
     if (polyline) polyline.material = new ColorMaterialProperty(color.withAlpha(0.35))
-    const trailLine = entry.trailEntity.polyline
     // Trails stay quieter than the markers, so the aircraft keep the attention.
-    if (trailLine) trailLine.material = new ColorMaterialProperty(color.withAlpha(0.3))
+    const trailMaterial = new ColorMaterialProperty(color.withAlpha(0.3))
+    if (entry.trailEntity.polyline) entry.trailEntity.polyline.material = trailMaterial
+    if (entry.trailHeadEntity.polyline) entry.trailHeadEntity.polyline.material = trailMaterial
   }
 
   function createEntry(state: UavState): UavEntry {
@@ -243,6 +255,9 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     }
     const trail: Pose[] = []
     const trailPositions: Cartesian3[] = []
+    // Scratch points reused every frame by the per-frame line callbacks.
+    const dropLine = [new Cartesian3(), new Cartesian3()]
+    const trailHead = [new Cartesian3(), new Cartesian3()]
     const id = state.uav.id
     const flags = { airborne: false, moving: true, parkedSamples: 0, shown: null }
     const dynamic = {
@@ -267,26 +282,35 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
         scaleByDistance: MARKER_SCALE_BY_DISTANCE,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
       },
-      // Drop line to the ground: altitude cue in a tilted view.
-      // Hidden lines skip position evaluation and geometry updates in Cesium.
+      // Drop line to the ground: altitude cue in a tilted view. Two reused points, no
+      // per-frame allocation; hidden lines skip position evaluation in Cesium.
       polyline: {
         width: 1,
         show: false,
         positions: new CallbackProperty(() => {
           const current = pose()
-          if (!current) return []
-          return [toCartesian({ ...current, altitude: 0 }), toCartesian(current)]
+          if (!current) return EMPTY_POSITIONS
+          groundUnder(current, dropLine[0])
+          toCartesian(current, dropLine[1])
+          return dropLine
         }, false),
       },
     })
 
     const trailEntity = viewer.entities.add({
+      polyline: { width: 1.5, show: false, positions: new ConstantProperty([]) },
+    })
+    const trailHeadEntity = viewer.entities.add({
       polyline: {
         width: 1.5,
         show: false,
         positions: new CallbackProperty(() => {
           const current = pose()
-          return current ? [...trailPositions, toCartesian(current)] : trailPositions
+          const last = trailPositions.at(-1)
+          if (!current || !last) return EMPTY_POSITIONS
+          Cartesian3.clone(last, trailHead[0])
+          toCartesian(current, trailHead[1])
+          return trailHead
         }, false),
       },
     })
@@ -296,6 +320,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       name: state.uav.name,
       entity,
       trailEntity,
+      trailHeadEntity,
       track,
       pose,
       lastTimestamp: -Infinity,
@@ -333,6 +358,9 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     if (entry.trailEntity.polyline) {
       entry.trailEntity.polyline.show = new ConstantProperty(next.trail)
     }
+    if (entry.trailHeadEntity.polyline) {
+      entry.trailHeadEntity.polyline.show = new ConstantProperty(next.trail)
+    }
   }
 
   /**
@@ -366,8 +394,10 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const telemetry = state.telemetry
     entry.flags.airborne = (telemetry?.position.altitude ?? 0) >= 2
     if (!telemetry?.missionId) {
+      if (entry.trail.length === 0) return
       entry.trail.length = 0
       entry.trailPositions.length = 0
+      commitTrail(entry)
       return
     }
     const point: Pose = { ...telemetry.position, heading: telemetry.heading }
@@ -375,7 +405,24 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     if (!last || distanceMeters(last, point) >= TRAIL_MIN_SPACING_METERS) {
       entry.trail.push(point)
       entry.trailPositions.push(toCartesian(point))
+      if (entry.trail.length > TRAIL_MAX_POINTS) {
+        entry.trail.shift()
+        entry.trailPositions.shift()
+      }
+      commitTrail(entry)
     }
+  }
+
+  /** Hands the flown path to Cesium as constant geometry (rebuilt per new point, not per frame). */
+  function commitTrail(entry: UavEntry) {
+    const line = entry.trailEntity.polyline
+    if (line) line.positions = new ConstantProperty(entry.trailPositions.slice())
+  }
+
+  function removeEntities(entry: UavEntry) {
+    viewer.entities.remove(entry.entity)
+    viewer.entities.remove(entry.trailEntity)
+    viewer.entities.remove(entry.trailHeadEntity)
   }
 
   /** Creates or updates one UAV's entities; only what changed is touched. */
@@ -414,8 +461,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       for (const [id, entry] of entries) {
         if (seen.has(id)) continue
         if (entry.flags.moving) movingCount -= 1
-        viewer.entities.remove(entry.entity)
-        viewer.entities.remove(entry.trailEntity)
+        removeEntities(entry)
         entries.delete(id)
       }
       selectionLabel.update()
@@ -451,6 +497,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       }
       for (const entry of entries.values()) {
         entry.trailPositions.splice(0, Infinity, ...entry.trail.map((point) => toCartesian(point)))
+        commitTrail(entry)
       }
     },
 
@@ -506,10 +553,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     },
 
     destroy() {
-      entries.forEach((entry) => {
-        viewer.entities.remove(entry.entity)
-        viewer.entities.remove(entry.trailEntity)
-      })
+      entries.forEach(removeEntities)
       entries.clear()
       movingCount = 0
       viewer.entities.remove(selectionLabel.entity)
