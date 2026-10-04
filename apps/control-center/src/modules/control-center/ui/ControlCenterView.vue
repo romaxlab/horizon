@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PanelLeftOpen } from '@lucide/vue'
 import { BaseButton, BaseIconButton, BasePopover, BaseSurface, BaseText } from '@horizon/ui'
-import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { FleetPanel, UavInspector } from '@/modules/fleet'
 import { MAP_ATTRIBUTION_TARGET_ID, MapCanvas, MapControls } from '@/modules/map'
 import { DemoControlsPanel } from '@/modules/demo-controls'
@@ -41,6 +41,26 @@ const {
 } = useControlCenter()
 
 // The free map area between the panels, reported as insets for camera framing.
+/** Side panels: fixed width on larger screens, full width on phones. */
+const SIDE_PANEL_CLASS =
+  'pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden max-sm:w-full'
+
+/**
+ * Phones (below `sm`) show one surface at a time; this decides which one owns the screen. Larger
+ * screens ignore it (all classes it drives are `max-sm:` variants).
+ */
+const phoneSurface = computed<'video' | 'inspector' | 'side-panel' | 'map'>(() => {
+  if (videoFocus.value && selectedFeed.value) return 'video'
+  if (inspectorOpen.value) return 'inspector'
+  if (builder.open.value || fleetOpen.value) return 'side-panel'
+  return 'map'
+})
+const hiddenOnPhoneUnless = (...surfaces: (typeof phoneSurface.value)[]) =>
+  surfaces.includes(phoneSurface.value) ? '' : 'max-sm:hidden'
+
+/** Below this free width a panel covers the map (phones): there is nothing to frame around. */
+const MIN_FRAMED_WIDTH_PX = 160
+
 const freeArea = useTemplateRef<HTMLElement>('freeArea')
 function reportFreeArea() {
   const rect = freeArea.value?.getBoundingClientRect()
@@ -50,8 +70,7 @@ function reportFreeArea() {
     setMapViewportInsets({ top: 0, right: 0, bottom: 0, left: 0 })
     return
   }
-  // A panel covering (nearly) the whole width, as on phones, leaves nothing to frame in.
-  const covered = rect.width < 160
+  const covered = rect.width < MIN_FRAMED_WIDTH_PX
   setMapViewportInsets({
     top: Math.round(rect.top),
     left: covered ? 0 : Math.round(rect.left),
@@ -146,8 +165,7 @@ watch(selectedUavId, (id) => {
             v-if="builder.open.value"
             as="aside"
             variant="floating"
-            class="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden max-sm:w-full"
-            :class="(inspectorOpen || videoFocus) && 'max-sm:hidden'"
+            :class="[SIDE_PANEL_CLASS, hiddenOnPhoneUnless('side-panel')]"
             aria-label="Mission planning"
           >
             <MissionBuilderPanel />
@@ -156,8 +174,7 @@ watch(selectedUavId, (id) => {
             v-else-if="fleetOpen"
             as="aside"
             variant="floating"
-            class="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden max-sm:w-full"
-            :class="(inspectorOpen || videoFocus) && 'max-sm:hidden'"
+            :class="[SIDE_PANEL_CLASS, hiddenOnPhoneUnless('side-panel')]"
             aria-label="Fleet"
           >
             <FleetPanel
@@ -165,7 +182,13 @@ watch(selectedUavId, (id) => {
               @collapse="fleetOpen = false"
             />
           </BaseSurface>
-          <BaseSurface v-else variant="floating" shape="pill" class="pointer-events-auto p-1">
+          <BaseSurface
+            v-else
+            variant="floating"
+            shape="pill"
+            class="pointer-events-auto p-1"
+            :class="hiddenOnPhoneUnless('map')"
+          >
             <BaseIconButton label="Show fleet panel" @click="fleetOpen = true">
               <PanelLeftOpen />
             </BaseIconButton>
@@ -177,11 +200,7 @@ watch(selectedUavId, (id) => {
         <div
           ref="freeArea"
           class="flex min-w-0 flex-1 items-center justify-center self-stretch"
-          :class="
-            (inspectorOpen || builder.open.value || fleetOpen) &&
-            !(videoFocus && selectedFeed) &&
-            'max-sm:hidden'
-          "
+          :class="hiddenOnPhoneUnless('video', 'map')"
         >
           <Transition
             enter-active-class="transition duration-200 ease-out"
@@ -208,10 +227,9 @@ watch(selectedUavId, (id) => {
           </Transition>
         </div>
 
-        <!-- Phones: one panel at a time, full width (the inspector replaces the fleet list). -->
         <div
-          class="flex h-full min-h-0 flex-col items-end gap-3"
-          :class="videoFocus && selectedFeed ? 'max-sm:hidden' : inspectorOpen && 'max-sm:flex-1'"
+          class="flex h-full min-h-0 flex-col items-end gap-3 max-sm:flex-1"
+          :class="hiddenOnPhoneUnless('inspector')"
         >
           <Transition
             enter-active-class="transition duration-200 ease-out"
@@ -223,7 +241,7 @@ watch(selectedUavId, (id) => {
               v-if="inspectorOpen"
               as="aside"
               variant="floating"
-              class="pointer-events-auto flex max-h-full min-h-0 w-80 flex-col overflow-hidden max-sm:w-full"
+              :class="[SIDE_PANEL_CLASS, 'min-h-0']"
               aria-label="UAV inspector"
             >
               <UavInspector
