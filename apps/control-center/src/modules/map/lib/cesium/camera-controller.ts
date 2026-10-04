@@ -39,6 +39,8 @@ export interface CameraController {
   groundPointAt(position: Cartesian2): GeoPoint | null
   /** Panels covering the map: framing centers targets in the remaining free area. */
   setInsets(insets: ViewportInsets): void
+  /** Detaches the per-frame follow listener. */
+  destroy(): void
 }
 
 /** Follow distance; the user can zoom and orbit while following, which is kept. */
@@ -133,7 +135,7 @@ export function createCameraController(
     })
   }
 
-  scene.preRender.addEventListener(() => {
+  const removeFollowListener = scene.preRender.addEventListener(() => {
     if (!followedId || !followArmed) return
     const position = layer.positionOf(followedId)
     if (!position) return
@@ -211,6 +213,10 @@ export function createCameraController(
         return
       }
       startFollow(uavId)
+    },
+
+    destroy() {
+      removeFollowListener()
     },
 
     setInsets(next) {

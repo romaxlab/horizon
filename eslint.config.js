@@ -21,6 +21,22 @@ export default defineConfigWithVueTs(
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+      // Modules and packages are used through their public `index.ts` only (AGENTS.md).
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^@/modules/[^/]+/',
+              message: "Import from the module's public API ('@/modules/<name>').",
+            },
+            {
+              regex: '^@horizon/[^/]+/',
+              message: "Import from the package's public API ('@horizon/<name>').",
+            },
+          ],
+        },
+      ],
     },
   },
   {

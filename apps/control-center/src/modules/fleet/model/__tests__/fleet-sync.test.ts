@@ -105,6 +105,38 @@ describe('createFleetSync', () => {
     expect(logger.warn).toHaveBeenCalled()
   })
 
+  it('a resync supersedes a pending reconnect attempt', async () => {
+    const simulator = createSimulator({ startTime: START })
+    const store = useFleetStore()
+    const onReconnected = vi.fn()
+    let reachable = false
+    const loadSnapshot = vi.fn(() =>
+      reachable
+        ? Promise.resolve(parseFleetSnapshot(simulator.getFleetSnapshot()))
+        : Promise.reject(new Error('down')),
+    )
+    const sync = createFleetSync({
+      transport: createMockRealtimeTransport(simulator),
+      target: store,
+      loadSnapshot,
+      logger: { warn: vi.fn() },
+      reconnectDelaysMs: [1_000],
+      onReconnected,
+    })
+    await sync.start()
+    expect(store.connectionStatus).toBe('reconnecting')
+
+    reachable = true
+    await sync.resync()
+    expect(store.connectionStatus).toBe('live')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    // The pending reconnect never ran: no second snapshot, no reconnect notification.
+    expect(loadSnapshot).toHaveBeenCalledTimes(2)
+    expect(onReconnected).not.toHaveBeenCalled()
+    sync.stop()
+  })
+
   it('discards a snapshot that arrives after stop()', async () => {
     const store = useFleetStore()
     const simulator = createSimulator({ startTime: START })

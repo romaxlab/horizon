@@ -11,7 +11,7 @@ import {
   BaseText,
   BaseTooltip,
 } from '@horizon/ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { DemoInjection, DemoPreset } from '../model/demo.types'
 import DemoDiagnostics from './DemoDiagnostics.vue'
 import type { DemoControls } from '../model/useDemoControls'
@@ -20,6 +20,9 @@ const { controls } = defineProps<{ controls: DemoControls }>()
 
 /** Local presentation state: whether the panel is open. */
 const open = ref(false)
+watch(open, (visible) => {
+  controls.setDiagnosticsVisible(visible)
+})
 
 const presets: { id: DemoPreset; label: string; hint: string }[] = [
   { id: 'normal', label: 'Normal', hint: 'Demo Area Scan, no failures' },

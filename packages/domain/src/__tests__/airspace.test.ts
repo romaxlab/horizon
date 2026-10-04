@@ -16,6 +16,16 @@ describe('airspace geometry', () => {
     expect(pathEntersPolygon([p(-1, -1), p(-1, 2), p(2, 2)], square)).toBe(false)
   })
 
+  it('detects a leg entering through a corner, but not one grazing a corner from outside', () => {
+    // Corner to opposite corner: no vertex inside and no proper edge crossing.
+    expect(pathEntersPolygon([p(-1, -1), p(2, 2)], square)).toBe(true)
+    // In through one corner, out through an edge.
+    expect(pathEntersPolygon([p(-1, -0.5), p(2, 1)], square)).toBe(true)
+    // Touching a corner from outside.
+    expect(pathEntersPolygon([p(-1, 1), p(1, -1)], square)).toBe(false)
+    expect(pathEntersPolygon([p(-1, 2), p(0, 1), p(-1, 3)], square)).toBe(false)
+  })
+
   it('detects overlapping polygons, including full containment either way', () => {
     const shifted = square.map((q) => p(q.latitude + 0.5, q.longitude + 0.5))
     const inner = [p(0.4, 0.4), p(0.4, 0.6), p(0.6, 0.6)]

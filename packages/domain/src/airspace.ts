@@ -29,33 +29,70 @@ export function isPointInPolygon(point: GeoPoint, polygon: readonly GeoPoint[]):
   return inside
 }
 
-const cross = (o: GeoPoint, a: GeoPoint, b: GeoPoint) =>
-  (a.longitude - o.longitude) * (b.latitude - o.latitude) -
-  (a.latitude - o.latitude) * (b.longitude - o.longitude)
-
-/** Proper crossing of segments p1–p2 and q1–q2 (touching endpoints don't count). */
-function segmentsCross(p1: GeoPoint, p2: GeoPoint, q1: GeoPoint, q2: GeoPoint): boolean {
-  const d1 = cross(q1, q2, p1)
-  const d2 = cross(q1, q2, p2)
-  const d3 = cross(p1, p2, q1)
-  const d4 = cross(p1, p2, q2)
-  return d1 * d2 < 0 && d3 * d4 < 0
-}
-
 function edgesOf(polygon: readonly GeoPoint[]): [GeoPoint, GeoPoint][] {
   return polygon.map((a, i) => [a, polygon[(i + 1) % polygon.length] ?? a])
 }
 
-/** Whether a polyline enters the polygon: a vertex inside or a leg crossing its boundary. */
+/**
+ * Where along the leg (0–1) it meets the polygon boundary: crossings, touches and vertices
+ * it passes through. Between two consecutive meetings the leg is wholly inside or outside.
+ */
+function boundaryHits(from: GeoPoint, to: GeoPoint, polygon: readonly GeoPoint[]): number[] {
+  const dx = to.longitude - from.longitude
+  const dy = to.latitude - from.latitude
+  const hits: number[] = []
+  for (const [a, b] of edgesOf(polygon)) {
+    const ex = b.longitude - a.longitude
+    const ey = b.latitude - a.latitude
+    const ax = a.longitude - from.longitude
+    const ay = a.latitude - from.latitude
+    const denominator = dx * ey - dy * ex
+    if (denominator !== 0) {
+      const t = (ax * ey - ay * ex) / denominator
+      const u = (ax * dy - ay * dx) / denominator
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) hits.push(t)
+    } else if (ax * dy - ay * dx === 0) {
+      // Collinear edge: its ends on the leg bound the shared stretch.
+      const length = dx * dx + dy * dy
+      if (length === 0) continue
+      for (const [x, y] of [
+        [ax, ay],
+        [b.longitude - from.longitude, b.latitude - from.latitude],
+      ] as const) {
+        const t = (x * dx + y * dy) / length
+        if (t >= 0 && t <= 1) hits.push(t)
+      }
+    }
+  }
+  return hits
+}
+
+/** Whether a polyline enters the polygon: a vertex inside, or any part of a leg inside. */
 export function pathEntersPolygon(
   path: readonly GeoPoint[],
   polygon: readonly GeoPoint[],
 ): boolean {
   if (path.some((point) => isPointInPolygon(point, polygon))) return true
-  const edges = edgesOf(polygon)
   return path.slice(1).some((to, i) => {
     const from = path[i] ?? to
-    return edges.some(([a, b]) => segmentsCross(from, to, a, b))
+    // Test one point per stretch between boundary meetings. Unlike a crossing test, this also
+    // catches a leg entering exactly through a corner, while grazing a corner from outside
+    // stays clear.
+    const ts = [0, ...boundaryHits(from, to, polygon), 1].sort((a, b) => a - b)
+    return ts.slice(1).some((t, j) => {
+      const previous = ts[j] ?? t
+      // A zero-length stretch is a boundary point itself, which ray casting may place either way.
+      if (t === previous) return false
+      const mid = (previous + t) / 2
+      return isPointInPolygon(
+        {
+          ...from,
+          latitude: from.latitude + (to.latitude - from.latitude) * mid,
+          longitude: from.longitude + (to.longitude - from.longitude) * mid,
+        },
+        polygon,
+      )
+    })
   })
 }
 

@@ -507,6 +507,7 @@ export function createMapScene({
       removeAnimationLoop()
       removeMoveStart()
       removeMoveEnd()
+      camera.destroy()
       if (hoverFrame !== null) cancelAnimationFrame(hoverFrame)
       contentRequest += 1
       basemapTransition += 1

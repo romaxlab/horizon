@@ -185,6 +185,9 @@ export function createFleetSync({
 
   async function resync() {
     if (unsubscribe === null) return
+    // This sync supersedes a pending reconnect attempt; don't run a second one after it.
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer)
+    reconnectTimer = null
     const current = session
     try {
       await sync(current)

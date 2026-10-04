@@ -161,11 +161,14 @@ export function useDemoControls({
     lastAt = at
   }, 1_000)
   // Render diagnostics: frames per second and the slow-frame time (p95) over the last second.
+  // Sampled only while someone is looking (the panel is open); otherwise no frame loop runs.
   const frames = ref({ fps: 0, p95: 0 })
+  const diagnosticsVisible = ref(false)
   let frameTimes: number[] = []
-  let lastFrame = performance.now()
-  let frameWindowStart = lastFrame
-  let raf = requestAnimationFrame(function onFrame(time) {
+  let lastFrame = 0
+  let frameWindowStart = 0
+  let raf: number | null = null
+  function onFrame(time: number) {
     frameTimes.push(time - lastFrame)
     lastFrame = time
     if (time - frameWindowStart >= 1_000) {
@@ -178,12 +181,23 @@ export function useDemoControls({
       frameWindowStart = time
     }
     raf = requestAnimationFrame(onFrame)
+  }
+  function stopFrameSampling() {
+    if (raf !== null) cancelAnimationFrame(raf)
+    raf = null
+  }
+  watch(diagnosticsVisible, (visible) => {
+    stopFrameSampling()
+    if (!visible) return
+    frameTimes = []
+    lastFrame = frameWindowStart = performance.now()
+    raf = requestAnimationFrame(onFrame)
   })
 
   onBeforeUnmount(() => {
     clearTimeout(feedbackTimer)
     clearInterval(timer)
-    cancelAnimationFrame(raf)
+    stopFrameSampling()
   })
 
   const diagnosticsRows = computed(() => [
@@ -209,6 +223,10 @@ export function useDemoControls({
     selectedTimeScale,
     setTimeScale,
     diagnosticsRows,
+    /** The view reports when diagnostics are on screen; frames are sampled only then. */
+    setDiagnosticsVisible: (visible: boolean) => {
+      diagnosticsVisible.value = visible
+    },
     applyPreset,
     injections,
     setInjection,
