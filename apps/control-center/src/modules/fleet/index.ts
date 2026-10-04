@@ -10,5 +10,11 @@ export type {
 export { useFleetSync } from './model/useFleetSync'
 export { default as FleetPanel } from './ui/FleetPanel.vue'
 export { default as UavInspector } from './ui/UavInspector.vue'
-export { healthIssues, LOW_BATTERY_PCT, type HealthIssue } from './model/fleet.status'
+export {
+  healthIssues,
+  linkOf,
+  LOW_BATTERY_PCT,
+  type HealthIssue,
+  type UavLink,
+} from './model/fleet.status'
 export { createRestFleetRepository } from './api/fleet.repository'

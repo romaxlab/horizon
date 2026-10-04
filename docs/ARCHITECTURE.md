@@ -155,7 +155,10 @@ modules/control-center/
 
 It does not own fleet, mission, video, realtime or Cesium business logic.
 
-Cross-module coordination belongs in `useControlCenter()` or a small helper owned by the module.
+Cross-module coordination belongs in `useControlCenter()` or a small helper owned by the module. `useControlCenter()` is wiring only: it
+feeds one module's data into another (e.g. fleet telemetry into `useMissionStatus`, flying UAV
+positions into `useAirspaceMonitor`) and coordinates selection and the camera; module logic stays
+in the modules, which never import each other.
 
 Example:
 
@@ -214,7 +217,8 @@ useFleetPanel()
 useUavInspector()
 useMissionBuilder()
 useMissionSync()
-useGeofences()
+useMissionStatus()      progress, status line, per-UAV rows, Stop
+useAirspaceMonitor()    which flying UAV is in which no-fly zone (map + incidents)
 useIncidentCenter()
 useDemoControls()
 ```

@@ -5,7 +5,7 @@ export interface UavObservation {
   id: string
   name: string
   /** `stale` / `offline` mean telemetry is late or missing. */
-  link: 'fresh' | 'stale' | 'offline'
+  link: 'live' | 'stale' | 'offline'
   battery: number | null
   lowBattery: boolean
   weakSignal: boolean

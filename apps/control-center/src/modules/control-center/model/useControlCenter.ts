@@ -1,14 +1,13 @@
-import { isPointInPolygon, type Geofence, type GeoPoint, type MissionType } from '@horizon/domain'
 import type { BadgeVariant } from '@horizon/ui'
-import { useMutation } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { useAppServices } from '@/app/providers/services'
-import { useGeofences } from '@/modules/airspace'
+import { useAirspaceMonitor } from '@/modules/airspace'
 import {
   healthIssues,
+  linkOf,
+  LOW_BATTERY_PCT,
   useFleetStore,
   useFleetSync,
-  LOW_BATTERY_PCT,
   type ConnectionStatus,
   type InspectorMission,
 } from '@/modules/fleet'
@@ -16,58 +15,14 @@ import { useDemoControls } from '@/modules/demo-controls'
 import { useIncidentCenter, type Observation } from '@/modules/incidents'
 import { useMapStore, type GeofenceOverlay, type MissionOverlay } from '@/modules/map'
 import {
-  computeMissionProgress,
   MISSION_TYPES,
-  type UavMissionStatus,
   provideMissionBuilder,
   useMissionBuilder,
+  useMissionStatus,
   useMissionStore,
   useMissionSync,
 } from '@/modules/mission-planning'
-import { formatDuration } from '@/shared/lib/format'
 import { stableComputed } from '@/shared/lib/stable-computed'
-
-/** What UAVs on a mission of this type are doing, for the status line. */
-const MISSION_ACTIVITY: Record<MissionType, string> = {
-  area_scan: 'scanning',
-  patrol: 'patrolling',
-  point_inspection: 'inspecting',
-}
-
-/** One part of the mission status line, e.g. "3 scanning"; warnings stand out. */
-export interface MissionPhaseCount {
-  text: string
-  tone: 'muted' | 'warning'
-}
-
-/** Inspector wording for a UAV's mission phase. */
-function phaseLabel(type: MissionType, status: UavMissionStatus): string {
-  const repeat = type === 'point_inspection' ? 'orbit' : 'lap'
-  switch (status.phase) {
-    case 'pending':
-      return 'Waiting for launch'
-    case 'en_route':
-      return 'En route'
-    case 'on_task': {
-      const activity = MISSION_ACTIVITY[type]
-      const label = activity.charAt(0).toUpperCase() + activity.slice(1)
-      return status.lap
-        ? `${label} · ${repeat} ${String(status.lap.current)} of ${String(status.lap.total)}`
-        : label
-    }
-    case 'returning':
-      return status.returnReason === 'low-battery'
-        ? 'Returning · low battery'
-        : status.returnReason === 'aborted'
-          ? 'Returning · mission stopped'
-          : 'Returning home'
-    case 'landed':
-      return 'Landed'
-  }
-}
-
-/** The status line re-renders only when its visible content changes, not on every flush. */
-const sameSummary = <T>(a: T, b: T) => JSON.stringify(a) === JSON.stringify(b)
 
 const connectionPresentation: Record<ConnectionStatus, { label: string; variant: BadgeVariant }> = {
   connecting: { label: 'Connecting', variant: 'neutral' },
@@ -75,10 +30,11 @@ const connectionPresentation: Record<ConnectionStatus, { label: string; variant:
   reconnecting: { label: 'Reconnecting', variant: 'warning' },
 }
 
-const zoneAt = (zones: readonly Geofence[], point: GeoPoint) =>
-  zones.find((zone) => isPointInPolygon(point, zone.polygon)) ?? null
-
-/** Route-level composition for the Control Center: starts live sync and coordinates modules. */
+/**
+ * Route-level composition for the Control Center: starts live sync and wires modules together.
+ * Module logic lives in the modules (mission status, airspace, incidents…); this composable only
+ * feeds one module's data into another and coordinates selection and the camera.
+ */
 export function useControlCenter() {
   const missionSync = useMissionSync()
   // Missions ride the same stream: after a reconnect they reload too, since mission events sent
@@ -90,148 +46,35 @@ export function useControlCenter() {
   })
   const fleet = useFleetStore()
   const map = useMapStore()
-
-  const connection = computed(() => connectionPresentation[fleet.connectionStatus])
-
   const missions = useMissionStore()
 
-  const missionProgress = computed(() => {
-    const current = missions.current
-    if (!current) return null
-    // Only the mission's UAVs matter; don't walk the whole fleet on every flush.
-    const telemetry = new Map(
-      current.assignedUavIds.flatMap((id) => {
-        const sample = fleet.uavsById[id]?.telemetry
-        return sample ? [[id, sample] as const] : []
-      }),
-    )
-    return computeMissionProgress(current, telemetry)
+  const missionStatus = useMissionStatus({
+    telemetryOf: (uavId) => fleet.uavsById[uavId]?.telemetry ?? null,
+    uavNameOf: (uavId) => fleet.uavsById[uavId]?.uav.name ?? null,
+    standbyCount: computed(() => fleet.statusCounts.standby),
+    lowBatteryPct: LOW_BATTERY_PCT,
   })
-
-  // Stable: the view only updates when the visible summary changes, not on every flush.
-  const mission = stableComputed(() => {
-    const current = missions.current
-    const progress = missionProgress.value
-    if (!current || !progress || current.status !== 'active') {
-      return {
-        // The header only names a mission while it is active.
-        title: null,
-        state: 'Standing by',
-        detail: `${fleet.statusCounts.standby} UAVs ready`,
-        phases: null,
-        progress: null,
-      }
-    }
-    // Exceptions stand out: a low-battery return is counted apart, in warning tone.
-    const count = (match: (u: UavMissionStatus) => boolean) => progress.uavs.filter(match).length
-    const lowBattery = (u: UavMissionStatus) =>
-      u.phase === 'returning' && u.returnReason === 'low-battery'
-    const counts: (MissionPhaseCount & { n: number })[] = [
-      { text: 'en route', n: count((u) => u.phase === 'en_route'), tone: 'muted' },
-      {
-        text: MISSION_ACTIVITY[current.type],
-        n: count((u) => u.phase === 'on_task'),
-        tone: 'muted',
-      },
-      {
-        text: 'returning',
-        n: count((u) => u.phase === 'returning' && !lowBattery(u)),
-        tone: 'muted',
-      },
-      { text: 'low battery', n: count(lowBattery), tone: 'warning' },
-    ]
-    const phases: MissionPhaseCount[] = counts
-      .filter((p) => p.n > 0)
-      .map((p) => ({ text: `${String(p.n)} ${p.text}`, tone: p.tone }))
-    if (progress.etaSec !== null && progress.etaSec > 0) {
-      phases.push({ text: `ETA ${formatDuration(progress.etaSec)}`, tone: 'muted' })
-    }
-    return {
-      title: current.name,
-      // Floor: 100% only once every UAV has landed (the mission then completes).
-      state: `${Math.floor(progress.ratio * 100)}%`,
-      detail: phases.map((p) => p.text).join(' · '),
-      phases,
-      progress: progress.ratio,
-    }
-  }, sameSummary)
 
   const builder = useMissionBuilder({
     availableUavs: computed(() => fleet.statusCounts.standby),
   })
   provideMissionBuilder(builder)
-  const canCreateMission = computed(
-    () => missions.current?.status !== 'active' && !builder.open.value,
-  )
 
-  const { geofences } = useGeofences()
-  /** Zones a flying UAV is currently inside; stable so the map only redraws on change. */
-  const breachedZoneIds = stableComputed(
-    () =>
-      geofences.value
-        .filter((zone) =>
-          fleet.uavs.some(
-            (state) =>
-              state.telemetry !== null &&
-              state.telemetry.flightPhase !== 'parked' &&
-              isPointInPolygon(state.telemetry.position, zone.polygon),
-          ),
-        )
-        .map((zone) => zone.id),
-    (a, b) => a.length === b.length && a.every((id, i) => id === b[i]),
+  const airspace = useAirspaceMonitor(() =>
+    fleet.uavs.flatMap((state) =>
+      state.telemetry && state.telemetry.flightPhase !== 'parked'
+        ? [{ id: state.uav.id, position: state.telemetry.position }]
+        : [],
+    ),
   )
   const geofenceOverlay = computed<GeofenceOverlay[]>(() =>
-    geofences.value.map((zone) => ({
+    airspace.geofences.value.map((zone) => ({
       ...zone,
       highlighted:
         builder.conflictGeofenceIds.value.includes(zone.id) ||
-        breachedZoneIds.value.includes(zone.id),
+        airspace.breachedZoneIds.value.includes(zone.id),
     })),
   )
-
-  /**
-   * Each mission UAV's part in the active mission (phase, lap, progress, ETA, battery on landing),
-   * for the mission details list and the inspector.
-   */
-  const missionUavs = computed<(InspectorMission & { uavId: string; uavName: string })[]>(() => {
-    const current = missions.current
-    const progress = missionProgress.value
-    if (!current || !progress || current.status !== 'active') return []
-    return progress.uavs.map((status) => {
-      const state = fleet.uavsById[status.uavId]
-      const flying = status.phase !== 'pending' && status.phase !== 'landed'
-      const landing = flying ? (state?.telemetry?.landingBattery ?? null) : null
-      return {
-        uavId: status.uavId,
-        uavName: state?.uav.name ?? status.uavId,
-        name: current.name,
-        phase: phaseLabel(current.type, status),
-        tone:
-          status.phase === 'returning' && status.returnReason === 'low-battery'
-            ? 'warning'
-            : 'secondary',
-        ratio: flying ? status.ratio : null,
-        eta: flying && status.etaSec !== null ? `Lands in ${formatDuration(status.etaSec)}` : null,
-        landingBattery:
-          landing === null
-            ? null
-            : {
-                label: `≈ ${String(Math.round(landing))}%`,
-                tone: landing < LOW_BATTERY_PCT ? 'warning' : 'secondary',
-              },
-      }
-    })
-  })
-
-  const { missionPlanner, demoControl } = useAppServices()
-  const abortMutation = useMutation({
-    mutationFn: (missionId: string) => missionPlanner.abort(missionId),
-  })
-  function stopMission() {
-    const current = missions.current
-    if (current?.status === 'active') abortMutation.mutate(current.id)
-  }
-  const missionActive = computed(() => missions.current?.status === 'active')
 
   /** What incident detection observes; the incidents module never reads fleet state directly. */
   // Read on the incident center's own cadence (a few times per second), not on every flush.
@@ -245,14 +88,11 @@ export function useControlCenter() {
       return {
         id: state.uav.id,
         name: state.uav.name,
-        link: state.status === 'offline' ? 'offline' : state.status === 'stale' ? 'stale' : 'fresh',
+        link: linkOf(state.status),
         battery: state.telemetry?.battery ?? null,
         lowBattery: issues.includes('low-battery'),
         weakSignal: issues.includes('weak-signal'),
-        geofence:
-          state.telemetry && state.telemetry.flightPhase !== 'parked'
-            ? (zoneAt(geofences.value, state.telemetry.position)?.name ?? null)
-            : null,
+        geofence: airspace.breaches.value.get(state.uav.id)?.name ?? null,
       }
     }),
   }))
@@ -265,6 +105,7 @@ export function useControlCenter() {
   }
 
   /** Demo controls (mock backend + config only): commands go to the simulator, never to stores. */
+  const { demoControl } = useAppServices()
   const demoTarget = stableComputed(
     () => {
       const state =
@@ -283,16 +124,7 @@ export function useControlCenter() {
     ? useDemoControls({
         control: demoControl,
         target: demoTarget,
-        // UAVs still flying scan lines: "Complete mission" has something to end.
-        missionScanning: computed(() => {
-          const current = missions.current
-          return (
-            current?.status === 'active' &&
-            current.assignedUavIds.some(
-              (id) => fleet.uavsById[id]?.telemetry?.flightPhase === 'mission',
-            )
-          )
-        }),
+        missionScanning: missionStatus.tasking,
         diagnostics: {
           stats: fleetSync.stats,
           fleetSize: computed(() => fleet.uavs.length),
@@ -328,12 +160,7 @@ export function useControlCenter() {
               receivedAt: state.lastUpdatedAt,
             }
           : null,
-      link:
-        state.status === 'offline'
-          ? ('offline' as const)
-          : state.status === 'stale'
-            ? ('stale' as const)
-            : ('live' as const),
+      link: linkOf(state.status),
     }
   })
 
@@ -370,16 +197,16 @@ export function useControlCenter() {
   }
 
   return {
-    connection,
-    mission,
+    connection: computed(() => connectionPresentation[fleet.connectionStatus]),
+    mission: missionStatus.summary,
     /** Live fleet stream for the map: deltas bypass component rendering. */
     fleetFeed: { current: () => fleet.uavs, subscribe: fleet.subscribe },
     selectedUavId: computed(() => fleet.selectedUavId),
     /** The selected UAV's part in the current mission, for the inspector. */
     selectedMission: computed<InspectorMission | null>(
-      () => missionUavs.value.find((row) => row.uavId === fleet.selectedUavId) ?? null,
+      () => missionStatus.uavRows.value.find((row) => row.uavId === fleet.selectedUavId) ?? null,
     ),
-    missionUavs,
+    missionUavs: missionStatus.uavRows,
     inspectorOpen: computed(() => fleet.selectedUav !== null),
     following: computed(() => map.followUavId !== null),
     builder,
@@ -387,11 +214,11 @@ export function useControlCenter() {
     incidents,
     inspectIncident,
     demo,
-    canCreateMission,
-    missionActive,
-    stopMission,
-    stoppingMission: computed(() => abortMutation.isPending.value),
-    stopError: computed(() => abortMutation.error.value?.message ?? null),
+    canCreateMission: computed(() => !missionStatus.active.value && !builder.open.value),
+    missionActive: missionStatus.active,
+    stopMission: missionStatus.stop,
+    stoppingMission: missionStatus.stopping,
+    stopError: missionStatus.stopError,
     missionOverlay,
     geofenceOverlay,
     selectUav,

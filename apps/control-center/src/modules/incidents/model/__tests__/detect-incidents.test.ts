@@ -5,7 +5,7 @@ import type { Observation, UavObservation } from '../incident.types'
 const uav = (overrides: Partial<UavObservation> = {}): UavObservation => ({
   id: 'uav-03',
   name: 'UAV-03',
-  link: 'fresh',
+  link: 'live',
   battery: 80,
   lowBattery: false,
   weakSignal: false,

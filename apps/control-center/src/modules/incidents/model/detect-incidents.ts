@@ -104,12 +104,12 @@ export function detectIncidents(previous: Observation | null, next: Observation)
     }
 
     if (!next.backendLive || !previous.backendLive || uav.link === was.link) continue
-    if (uav.link === 'stale' && was.link === 'fresh') {
+    if (uav.link === 'stale' && was.link === 'live') {
       incidents.push(uavIncident('TELEMETRY_STALE', uav, missionId, 'No telemetry for 5 s'))
     } else if (uav.link === 'offline') {
       incidents.push(uavIncident('CONNECTION_LOST', uav, missionId, 'Telemetry lost'))
       resolutions.push({ uavId: uav.id, types: ['TELEMETRY_STALE'] })
-    } else if (uav.link === 'fresh') {
+    } else if (uav.link === 'live') {
       incidents.push(uavIncident('CONNECTION_RESTORED', uav, missionId, 'Telemetry restored'))
       resolutions.push({ uavId: uav.id, types: ['TELEMETRY_STALE', 'CONNECTION_LOST'] })
     }

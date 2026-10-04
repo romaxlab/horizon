@@ -12,6 +12,12 @@ export {
   type MissionPlanner,
   type MissionPlanRequest,
 } from './model/mission.types'
+export {
+  useMissionStatus,
+  type MissionPhaseCount,
+  type MissionStatus,
+  type MissionUavRow,
+} from './model/useMissionStatus'
 export { useMissionSync } from './model/useMissionSync'
 export {
   MISSION_TYPES,

@@ -8,6 +8,12 @@ export const LOW_BATTERY_PCT = 20
 export const WEAK_SIGNAL_PCT = 35
 export const MIN_GPS_SATELLITES = 6
 
+/** Link to a UAV as other modules see it (video feed, incidents). */
+export type UavLink = 'live' | 'stale' | 'offline'
+
+export const linkOf = (status: UavStatus): UavLink =>
+  status === 'offline' ? 'offline' : status === 'stale' ? 'stale' : 'live'
+
 export type HealthIssue = 'low-battery' | 'weak-signal' | 'poor-gps'
 
 /** Health problems in a telemetry sample, most severe first. */
