@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clusterScreenPoints, type ScreenPoint } from '../declutter'
+import { anyCloserThan, clusterScreenPoints, type ScreenPoint } from '../declutter'
 
 const point = (id: string, x: number, y = 0): ScreenPoint => ({ id, x, y })
 const sizes = (clusters: { memberIds: string[] }[]) =>
@@ -86,4 +86,91 @@ describe('clusterScreenPoints', () => {
     expect(sizes(clusterScreenPoints(grid(20).slice(6), 40)).length).toBeGreaterThan(1)
     expect(sizes(clusterScreenPoints(formation, 40))).toEqual([18])
   })
+
+  it('matches a full pairwise scan exactly, including hysteresis (random layouts)', () => {
+    let seed = 7
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+    for (let run = 0; run < 40; run++) {
+      const points = Array.from({ length: 60 }, (_, i) => ({
+        id: `u${String(i).padStart(3, '0')}`,
+        x: random() * 600,
+        y: random() * 400,
+      }))
+      const previous = new Map(points.map((p) => [p.id, `c${String(Math.floor(random() * 8))}`]))
+      expect(clusterScreenPoints(points, 44, previous)).toEqual(bruteForce(points, 44, previous))
+    }
+  })
+
+  it('stays fast for a large fleet', () => {
+    const points = Array.from({ length: 2_000 }, (_, i) => ({
+      id: `u${String(i).padStart(4, '0')}`,
+      x: (i % 50) * 30 + (i % 7),
+      y: Math.floor(i / 50) * 30,
+    }))
+    const started = performance.now()
+    clusterScreenPoints(points, 44)
+    expect(performance.now() - started).toBeLessThan(500)
+  })
 })
+
+describe('anyCloserThan', () => {
+  it('finds a close pair without comparing all pairs', () => {
+    expect(
+      anyCloserThan(
+        [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 103, y: 4 },
+        ],
+        6,
+      ),
+    ).toBe(true)
+    expect(
+      anyCloserThan(
+        [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 200, y: 0 },
+        ],
+        6,
+      ),
+    ).toBe(false)
+  })
+})
+
+/** Reference: the straightforward closest-pair rescan the optimized version must match. */
+function bruteForce(
+  points: readonly { id: string; x: number; y: number }[],
+  threshold: number,
+  previous: ReadonlyMap<string, string>,
+) {
+  const groups = [...points]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((p) => ({ key: p.id, x: p.x, y: p.y, memberIds: [p.id] }))
+  const together = (a: { memberIds: string[] }, b: { memberIds: string[] }) =>
+    a.memberIds.some((m) => b.memberIds.some((n) => previous.get(n) === previous.get(m)))
+  for (;;) {
+    let best: [number, number, number] | null = null
+    for (let i = 0; i < groups.length; i++) {
+      for (let j = i + 1; j < groups.length; j++) {
+        const a = groups[i]
+        const b = groups[j]
+        if (!a || !b) continue
+        const d = Math.hypot(a.x - b.x, a.y - b.y)
+        const limit = together(a, b) ? threshold * 1.25 : threshold
+        if (d < limit && (!best || d < best[0])) best = [d, i, j]
+      }
+    }
+    if (!best) break
+    const a = groups[best[1]]
+    const b = groups[best[2]]
+    if (!a || !b) break
+    const total = a.memberIds.length + b.memberIds.length
+    a.x = (a.x * a.memberIds.length + b.x * b.memberIds.length) / total
+    a.y = (a.y * a.memberIds.length + b.y * b.memberIds.length) / total
+    a.memberIds = [...a.memberIds, ...b.memberIds].sort((p, q) => p.localeCompare(q))
+    a.key = a.memberIds[0] ?? a.key
+    groups.splice(best[2], 1)
+  }
+  return groups.map(({ key, memberIds }) => ({ key, memberIds }))
+}

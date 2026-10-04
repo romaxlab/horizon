@@ -11,7 +11,7 @@ import {
   type Entity,
   type Viewer,
 } from 'cesium'
-import { clusterScreenPoints } from '../declutter'
+import { anyCloserThan, clusterScreenPoints } from '../declutter'
 import { clusterBadgeSize, getClusterBadge } from './marker-images'
 import type { MapPalette } from './palette'
 import type { UavLayer } from './uav-layer'
@@ -126,11 +126,7 @@ export function createClusterLayer(
     // The parking formation is judged as a whole: if any neighbours would crowd each other it
     // aggregates into one badge, otherwise every UAV shows individually.
     const formation = projected.filter((p) => p.status === 'standby')
-    const crowded = formation.some((a, i) =>
-      formation.some(
-        (b, j) => j > i && Math.hypot(a.x - b.x, a.y - b.y) < CLUSTER_THRESHOLD_PX * 0.75,
-      ),
-    )
+    const crowded = anyCloserThan(formation, CLUSTER_THRESHOLD_PX * 0.75)
     const formationDistance =
       formation.reduce((sum, p) => sum + p.distance, 0) / Math.max(formation.length, 1)
     const groupFormation = crowded && formationDistance >= NEAR_DISTANCE_METERS
