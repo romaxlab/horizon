@@ -88,7 +88,6 @@ watch(selectedUavId, (id) => {
         v-model:events-open="eventsOpen"
         :connection="connection"
         :mission-title="mission.title"
-        :mission-context="mission.state"
         :can-create-mission="canCreateMission"
         :unread-count="unreadCount"
         :unread-alerts="unreadAlerts"

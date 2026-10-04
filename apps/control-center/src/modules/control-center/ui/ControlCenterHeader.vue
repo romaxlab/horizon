@@ -18,7 +18,6 @@ defineProps<{
   connection: { label: string; variant: BadgeVariant }
   /** Active mission name; null hides the mission context. */
   missionTitle: string | null
-  missionContext: string
   canCreateMission: boolean
   /** New events since the history was last viewed. */
   unreadCount: number
@@ -61,20 +60,23 @@ const clock = computed(() => clockFormat.format(now.value))
       <!-- The logo carries its own clear space (~8px each side), hence the tight padding. -->
       <HorizonLogo />
       <template v-if="missionTitle">
+        <!-- Progress lives in the mission status bar; the header only names the mission. -->
         <BaseText variant="body-md" truncate>{{ missionTitle }}</BaseText>
-        <BaseBadge variant="info">{{ missionContext }}</BaseBadge>
       </template>
       <!-- Shown only when a mission can be created; a disabled primary button read as a stray
            blue blot on glass. During a mission the header names it instead. -->
+      <!-- Narrow screens (below lg): icon only, named by aria-label and the native title tooltip. -->
       <BaseButton
         v-if="canCreateMission"
         size="sm"
         variant="primary"
-        class="ml-2"
+        class="ml-2 max-lg:size-control-sm max-lg:px-0"
+        aria-label="New Mission"
+        title="New Mission"
         @click="emit('newMission')"
       >
         <Plus />
-        New Mission
+        <span class="max-lg:hidden">New Mission</span>
       </BaseButton>
     </BaseSurface>
 
