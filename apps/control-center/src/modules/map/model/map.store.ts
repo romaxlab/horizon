@@ -41,7 +41,7 @@ export const useMapStore = defineStore('map', () => {
   const arrival = shallowRef<MapArrival>({ stage: 'settled', cut: false })
   /** Map content (UAVs, overlays) hidden during the arrival until revealed. */
   const contentHidden = ref(false)
-  /** The 3D scene exists and can take camera requests (Cesium loads on demand). */
+  /** The map shows its first complete view (Cesium loads on demand, then terrain and tiles). */
   const sceneReady = ref(false)
 
   function focusUav(uavId: string) {

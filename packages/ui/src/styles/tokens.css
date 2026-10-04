@@ -101,6 +101,10 @@
   --map-marker-shadow: rgba(0, 0, 0, 0.35);
   /* Selection ring around the clicked UAV: bright cyan reads on map, satellite and both themes. */
   --map-marker-selection: var(--cyan-selection);
+  /* Stand-in for the map while it loads: the basemap's own land tone (Esri Light Gray Canvas),
+     so the map appearing only adds detail. A faint graticule says "a map goes here". */
+  --map-placeholder: #ebebeb;
+  --map-placeholder-grid: rgb(0 0 0 / 0.05);
 
   /* Media (video) surfaces are dark in both themes; overlays on them use these. */
   --media-backdrop: var(--gray-d-900);
@@ -154,6 +158,10 @@
   --elevation-floating:
     var(--glass-highlight), var(--shadow-hairline-dark), var(--shadow-soft-dark);
   --elevation-raised: var(--shadow-hairline-dark), 0 2px 8px rgb(0 0 0 / 0.3);
+
+  /* Land tone of Esri Dark Gray Canvas. */
+  --map-placeholder: #4d4d4f;
+  --map-placeholder-grid: rgb(255 255 255 / 0.05);
 }
 
 /*

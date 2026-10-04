@@ -79,7 +79,7 @@ export function useStartupSequence() {
   const { signal } = abort
   const statusTimers: ReturnType<typeof setTimeout>[] = []
 
-  /** The overlay may hand over once the map scene exists (Cesium loads on demand), or after a
+  /** The overlay may hand over once the map shows its first complete view, or after a
    *  bounded wait: a slow map never holds the app behind the intro. */
   function mapReadyOrTimeout(maxWait: number): Promise<void> {
     if (map.sceneReady) return Promise.resolve()

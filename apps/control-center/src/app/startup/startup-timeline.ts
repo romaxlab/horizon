@@ -15,7 +15,7 @@ export interface StartupTimeline {
   /** Status lines: the first appears at `at`, each next one `interval` later; a line confirms
    *  `confirmAfter` after it appears. */
   status: { at: number; interval: number; confirmAfter: number; duration: number }
-  /** Overlay dissolves into the map. Waits for the map scene, at most `maxMapWait` longer. */
+  /** Overlay dissolves into the map. Waits for the map's first complete view, at most `maxMapWait` longer. */
   dissolve: { at: number; duration: number; maxMapWait: number }
   /** Camera fly-in from orbit; starts with the dissolve (offset from the dissolve start). */
   flyIn: { offset: number; duration: number }

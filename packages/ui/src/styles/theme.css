@@ -41,6 +41,7 @@
   --color-on-media: var(--media-text);
   --color-on-media-muted: var(--media-text-muted);
   --color-media-scrim: var(--media-scrim);
+  --color-map-placeholder: var(--map-placeholder);
 
   --shadow-*: initial;
   --shadow-floating: var(--elevation-floating);

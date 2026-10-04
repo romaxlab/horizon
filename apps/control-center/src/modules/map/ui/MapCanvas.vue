@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GeoPoint } from '@horizon/domain'
 import type { FleetFeed } from '../model/fleet-feed'
-import { BaseText, useTheme } from '@horizon/ui'
+import { BaseSpinner, BaseSurface, BaseText, useTheme } from '@horizon/ui'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { appConfig } from '@/shared/config'
@@ -27,6 +27,19 @@ const container = ref<HTMLElement>()
 const credits = ref<HTMLElement>()
 const scene = shallowRef<MapScene>()
 const failed = ref(false)
+/** The map appears once its first view is complete, instead of building up in steps. */
+const firstViewShown = ref(false)
+/** Fast loads never flash a loader: it appears only if the map takes longer than this. */
+const LOADER_DELAY_MS = 400
+const loaderShown = ref(false)
+const loaderTimer = setTimeout(() => {
+  loaderShown.value = true
+}, LOADER_DELAY_MS)
+/** The loader sits in the middle of the map area the panels leave free. */
+const freeAreaStyle = computed(() => {
+  const { top, right, bottom, left } = viewportInsets.value
+  return { inset: `${String(top)}px ${String(right)}px ${String(bottom)}px ${String(left)}px` }
+})
 
 const { theme } = useTheme()
 const map = useMapStore()
@@ -75,6 +88,10 @@ onMounted(async () => {
       startInOrbit: arrival.value.stage !== 'settled',
     })
     const created = scene.value
+    void created.whenFirstViewReady().then(() => {
+      firstViewShown.value = true
+      map.setSceneReady(true)
+    })
     created.sync(props.fleet.current())
     created.select(props.selectedUavId)
     unsubscribeFleet = props.fleet.subscribe((change) => {
@@ -87,7 +104,6 @@ onMounted(async () => {
     // The arrival may have moved on while Cesium loaded: catch up with it.
     applyArrival(arrival.value)
     scene.value.setContentVisible(!contentHidden.value)
-    map.setSceneReady(true)
   } catch (error) {
     console.error('[map] failed to initialize', error)
     failed.value = true
@@ -95,6 +111,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  clearTimeout(loaderTimer)
   map.setSceneReady(false)
   unsubscribeFleet?.()
   scene.value?.destroy()
@@ -160,6 +177,35 @@ watch(homeRequest, () => {
   <div class="absolute inset-0">
     <!-- data-map-ready: the 3D scene is interactive (also a stable hook for E2E). -->
     <div ref="container" class="absolute inset-0" :data-map-ready="scene !== undefined" />
+    <!-- Stands in for the map until its first view is complete, then fades away with its loader.
+         The WebGL canvas itself stays visible: hiding it stalls the main thread when shown. -->
+    <Transition
+      leave-active-class="transition-opacity duration-500 ease-out motion-reduce:transition-none"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="!firstViewShown && !failed"
+        class="map-placeholder pointer-events-none absolute inset-0 bg-map-placeholder"
+      >
+        <div class="absolute grid place-items-center" :style="freeAreaStyle">
+          <Transition
+            enter-active-class="transition-opacity duration-300 ease-out"
+            enter-from-class="opacity-0"
+          >
+            <BaseSurface
+              v-if="loaderShown"
+              variant="floating"
+              shape="pill"
+              class="flex items-center gap-2 py-2 pr-4 pl-3"
+              role="status"
+            >
+              <BaseSpinner label="Loading map" class="text-text-secondary" />
+              <BaseText variant="label-md" tone="secondary">Loading map</BaseText>
+            </BaseSurface>
+          </Transition>
+        </div>
+      </div>
+    </Transition>
     <div v-if="failed" class="absolute inset-0 grid place-items-center">
       <BaseText variant="body-md" tone="muted">3D map is unavailable</BaseText>
     </div>
@@ -180,6 +226,14 @@ watch(homeRequest, () => {
 </template>
 
 <style scoped>
+/* A faint graticule on the basemap tone: reads as "a map goes here", not as an empty screen. */
+.map-placeholder {
+  background-image:
+    linear-gradient(var(--map-placeholder-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--map-placeholder-grid) 1px, transparent 1px);
+  background-position: center;
+  background-size: 48px 48px;
+}
 /* Plain fine print over the map; a halo in the canvas color keeps it legible on imagery. */
 .map-attribution {
   text-shadow:

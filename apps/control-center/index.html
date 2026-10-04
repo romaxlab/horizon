@@ -3,10 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Browser defaults follow the system theme until the app styles load. -->
+    <meta name="color-scheme" content="dark light" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Horizon</title>
+    <script>
+      // Theme before the first paint (mirrors initTheme in @horizon/ui), so a dark setup never
+      // flashes the light canvas while the app loads.
+      try {
+        const stored = localStorage.getItem('horizon.theme')
+        document.documentElement.dataset.theme =
+          stored === 'light' || stored === 'dark'
+            ? stored
+            : matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark'
+      } catch {
+        // initTheme applies the theme during bootstrap.
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

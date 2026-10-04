@@ -2,6 +2,7 @@ import { readonly, ref } from 'vue'
 
 export type Theme = 'light' | 'dark'
 
+/** Also read by the pre-paint script in apps/control-center/index.html; keep them in sync. */
 const STORAGE_KEY = 'horizon.theme'
 
 const theme = ref<Theme>('dark')

@@ -67,6 +67,8 @@ const MAX_PIXEL_RATIO = 2
 const BASEMAP_FADE_MS = 250
 /** Don't wait forever for tiles (slow network); fade in whatever has loaded by then. */
 const TILE_WAIT_MS = 3_000
+/** Don't hold the first view for terrain longer than this; it then swaps in later. */
+const TERRAIN_WAIT_MS = 3_000
 
 export interface MapSceneOptions {
   container: HTMLElement
@@ -107,6 +109,11 @@ export interface MapScene {
   /** While drawing, clicks add area points instead of selecting UAVs. */
   setDrawing(drawing: boolean): void
   home(): void
+  /**
+   * Resolves once the first view is complete (terrain in place, visible tiles loaded) or after a
+   * bounded wait, so the map can appear once instead of building up in visible steps.
+   */
+  whenFirstViewReady(): Promise<void>
   /** Opening arrival from orbit into the home view. */
   arrive(durationMs: number): void
   /** Shows or hides map content (UAVs, clusters, mission and no-fly overlays). */
@@ -422,20 +429,33 @@ export function createMapScene({
   updateContent()
 
   // Cesium World Terrain under every view when ion is available; the ellipsoid otherwise.
-  if (ionToken) {
-    ensureTerrain().then(
-      () => {
-        // Photorealistic tiles carry their own ground height.
-        if (!viewer.isDestroyed() && wantedContent !== 'photorealistic') {
-          setGroundHeight(terrainGroundHeight)
-          scene.requestRender()
-        }
-      },
-      (error: unknown) => {
-        console.warn('[map] Cesium World Terrain unavailable; using the ellipsoid', error)
-      },
-    )
-  }
+  const terrainSettled: Promise<void> = ionToken
+    ? ensureTerrain().then(
+        () => {
+          // Photorealistic tiles carry their own ground height.
+          if (!viewer.isDestroyed() && wantedContent !== 'photorealistic') {
+            setGroundHeight(terrainGroundHeight)
+            scene.requestRender()
+          }
+        },
+        (error: unknown) => {
+          console.warn('[map] Cesium World Terrain unavailable; using the ellipsoid', error)
+        },
+      )
+    : Promise.resolve()
+
+  // Terrain swapped in after the first tiles would rebuild every tile on screen (a second,
+  // different-looking map); the first view waits for it, then for its tiles.
+  const firstViewReady = Promise.race([
+    terrainSettled,
+    new Promise<void>((resolve) => setTimeout(resolve, TERRAIN_WAIT_MS)),
+  ]).then(
+    () =>
+      new Promise<void>((resolve) => {
+        if (viewer.isDestroyed()) resolve()
+        else afterTilesLoaded(resolve)
+      }),
+  )
 
   // --- Picking -------------------------------------------------------------------------------
 
@@ -562,6 +582,7 @@ export function createMapScene({
     home: () => {
       camera.home(true)
     },
+    whenFirstViewReady: () => firstViewReady,
     arrive: (durationMs: number) => {
       camera.arrive(durationMs / 1000)
     },
