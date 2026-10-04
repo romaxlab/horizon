@@ -13,7 +13,7 @@ import {
   createWorldTerrainAsync,
   defined,
   sampleTerrainMostDetailed,
-  type Cartesian2,
+  Cartesian2,
   type Cesium3DTileset,
 } from 'cesium'
 import type { MapBasemap, MapPerspective } from '../../model/map.store'
@@ -389,13 +389,22 @@ export function createMapScene({
     }
     onSelect(target?.uavId ?? null)
   }, ScreenSpaceEventType.LEFT_CLICK)
+  /*
+   * Hover picking renders a pick pass, so it runs at most once per animation frame (with the
+   * latest pointer position) and not while the camera moves; a pending hover is resolved when the
+   * camera stops.
+   */
   let lastHovered: string | null = null
-  handler.setInputAction((event: { endPosition: Cartesian2 }) => {
-    if (drawing) {
-      scene.canvas.style.cursor = 'crosshair'
-      return
-    }
-    const target = pick(event.endPosition)
+  const hoverPosition = new Cartesian2()
+  let hoverFrame: number | null = null
+  let hoverPending = false
+  let cameraMoving = false
+
+  function resolveHover() {
+    hoverFrame = null
+    if (cameraMoving || drawing) return
+    hoverPending = false
+    const target = pick(hoverPosition)
     scene.canvas.style.cursor = target ? 'pointer' : ''
     const hovered = target?.kind === 'uav' ? target.uavId : null
     if (hovered !== lastHovered) {
@@ -403,6 +412,26 @@ export function createMapScene({
       layer.setHovered(hovered)
       scene.requestRender()
     }
+  }
+  function scheduleHover() {
+    if (hoverFrame === null) hoverFrame = requestAnimationFrame(resolveHover)
+  }
+  const removeMoveStart = viewer.camera.moveStart.addEventListener(() => {
+    cameraMoving = true
+  })
+  const removeMoveEnd = viewer.camera.moveEnd.addEventListener(() => {
+    cameraMoving = false
+    if (hoverPending) scheduleHover()
+  })
+
+  handler.setInputAction((event: { endPosition: Cartesian2 }) => {
+    if (drawing) {
+      scene.canvas.style.cursor = 'crosshair'
+      return
+    }
+    Cartesian2.clone(event.endPosition, hoverPosition)
+    hoverPending = true
+    scheduleHover()
   }, ScreenSpaceEventType.MOUSE_MOVE)
 
   // While any UAV moves (interpolated), keep Cesium's own render loop producing frames.
@@ -476,6 +505,9 @@ export function createMapScene({
     }),
     destroy() {
       removeAnimationLoop()
+      removeMoveStart()
+      removeMoveEnd()
+      if (hoverFrame !== null) cancelAnimationFrame(hoverFrame)
       contentRequest += 1
       basemapTransition += 1
       handler.destroy()

@@ -345,6 +345,9 @@ Map behavior:
 
 ---
 
+Hover picking (a pick render pass) runs at most once per animation frame with the latest pointer
+position and is skipped while the camera moves; a pending hover resolves when it stops.
+
 Camera follow is one shared state (`followUavId` in the map store), toggled from the UAV
 inspector — a UAV action; the map controls keep camera-wide actions only (2D/3D, Reset view,
 imagery). Following tracks the

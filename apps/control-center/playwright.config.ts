@@ -26,6 +26,15 @@ export default defineConfig({
     command: `pnpm exec vite --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}/control-center`,
     reuseExistingServer: !process.env.CI,
-    env: { VITE_DEMO_CONTROLS: 'true', VITE_DEMO_AUTOSTART: 'false' },
+    // Hermetic: pin every VITE_* setting so a developer's .env never changes what is tested
+    // (process env wins over .env files in Vite).
+    env: {
+      VITE_DATA_SOURCE: 'mock',
+      VITE_DEMO_CONTROLS: 'true',
+      VITE_DEMO_AUTOSTART: 'false',
+      VITE_SIMULATOR_MODE: 'deterministic',
+      VITE_TELEMETRY_FLUSH_MS: '100',
+      VITE_CESIUM_ION_TOKEN: '',
+    },
   },
 })
