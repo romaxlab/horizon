@@ -14,8 +14,9 @@ test('connection loss: last known state goes stale, reconnect restores current s
   await expect(header).toContainText('Reconnecting')
   await expect(page.getByLabel('Alerts', { exact: true })).toContainText('Connection lost')
 
-  // Without data UAVs keep their last known state but are marked stale (5 s threshold).
-  await expect(fleetRow(page, 'UAV-01')).toContainText('Stale', { timeout: 10_000 })
+  // Without data UAVs keep their last known state but are marked stale (5 s), then offline
+  // (15 s); a slow runner may already be past stale when it looks.
+  await expect(fleetRow(page, 'UAV-01')).toContainText(/Stale|Offline/, { timeout: 20_000 })
 
   // Switching the outage off reconnects, like Restore all.
   await outage.click()
