@@ -105,6 +105,8 @@
      so the map appearing only adds detail. A faint graticule says "a map goes here". */
   --map-placeholder: #ebebeb;
   --map-placeholder-grid: rgb(0 0 0 / 0.05);
+  /* 3D OSM buildings: calm volumes in the basemap's palette (lit by a fixed daylight). */
+  --map-building: #f7f7f8;
 
   /* Media (video) surfaces are dark in both themes; overlays on them use these. */
   --media-backdrop: var(--gray-d-900);
@@ -162,6 +164,7 @@
   /* Land tone of Esri Dark Gray Canvas. */
   --map-placeholder: #4d4d4f;
   --map-placeholder-grid: rgb(255 255 255 / 0.05);
+  --map-building: #6a6a6e;
 }
 
 /*

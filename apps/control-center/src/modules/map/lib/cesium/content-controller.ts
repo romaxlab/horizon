@@ -1,5 +1,7 @@
 import {
   Cartographic,
+  Cesium3DTileStyle,
+  type Color,
   createGooglePhotorealistic3DTileset,
   createOsmBuildingsAsync,
   createWorldTerrainAsync,
@@ -28,11 +30,15 @@ export function createContentController(
     basemap: MapBasemap
     perspective: MapPerspective
     setGroundHeight: (meters: number) => void
+    /** Theme color for OSM buildings. */
+    buildingColor: Color
   },
 ) {
   const { scene } = viewer
   const { ionToken, setGroundHeight } = options
-  let { basemap, perspective } = options
+  let { basemap, perspective, buildingColor } = options
+  const buildingStyle = () =>
+    new Cesium3DTileStyle({ color: `color('${buildingColor.toCssColorString()}')` })
 
   type ContentKind = 'photorealistic' | 'buildings'
 
@@ -108,7 +114,10 @@ export function createContentController(
 
   /** Cesium World Terrain + Cesium OSM Buildings. */
   async function loadBuildings(): Promise<Cesium3DTileset> {
-    const [buildings] = await Promise.all([createOsmBuildingsAsync(), ensureTerrain()])
+    const [buildings] = await Promise.all([
+      createOsmBuildingsAsync({ style: buildingStyle() }),
+      ensureTerrain(),
+    ])
     return buildings
   }
 
@@ -204,6 +213,11 @@ export function createContentController(
       updateContent()
     },
     whenFirstViewReady: () => firstViewReady,
+    /** Recolors the buildings for the theme. */
+    setBuildingColor(color: Color) {
+      buildingColor = color
+      if (content3d?.source === 'terrain-osm-buildings') content3d.tileset.style = buildingStyle()
+    },
     /** Discards loads still in flight. */
     destroy() {
       contentRequest += 1

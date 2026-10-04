@@ -2,6 +2,10 @@ import 'cesium/Build/Cesium/Widgets/widgets.css'
 import type { GeoPoint, UavState } from '@horizon/domain'
 import {
   Cartesian2,
+  Cartesian3,
+  DirectionalLight,
+  Matrix4,
+  Transforms,
   Ion,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
@@ -10,7 +14,7 @@ import {
 } from 'cesium'
 import type { MapBasemap, MapPerspective, ViewportInsets } from '../../model/map.store'
 import { createBasemapController, type MapTheme } from './basemap-controller'
-import { createCameraController } from './camera-controller'
+import { createCameraController, OPERATING_SITE } from './camera-controller'
 import { createClusterLayer } from './cluster-layer'
 import { createContentController } from './content-controller'
 import { createGeofenceLayer, type GeofenceOverlay } from './geofence-layer'
@@ -78,6 +82,21 @@ export interface MapScene {
   destroy(): void
 }
 
+/**
+ * A fixed daylight from the upper south-east of the operating site: 3D buildings read the same at
+ * any hour (Cesium's default sun follows the clock, which leaves them black at night).
+ */
+function fixedDaylight(): DirectionalLight {
+  const site = Cartesian3.fromDegrees(OPERATING_SITE.longitude, OPERATING_SITE.latitude)
+  const local = Cartesian3.normalize(new Cartesian3(-0.35, 0.45, -0.82), new Cartesian3())
+  const direction = Matrix4.multiplyByPointAsVector(
+    Transforms.eastNorthUpToFixedFrame(site),
+    local,
+    new Cartesian3(),
+  )
+  return new DirectionalLight({ direction, intensity: 2 })
+}
+
 export function createMapScene({
   container,
   creditContainer,
@@ -135,6 +154,7 @@ export function createMapScene({
   scene.globe.showGroundAtmosphere = false
   if (scene.skyAtmosphere) scene.skyAtmosphere.show = false
   if (scene.sun) scene.sun.show = false
+  scene.light = fixedDaylight()
   if (scene.moon) scene.moon.show = false
   scene.screenSpaceCameraController.maximumZoomDistance = 60_000
   applySceneColors()
@@ -165,6 +185,7 @@ export function createMapScene({
     onIonImageryUnavailable,
   })
   const content = createContentController(viewer, {
+    buildingColor: palette.building,
     ionToken,
     basemap,
     perspective,
@@ -277,6 +298,7 @@ export function createMapScene({
       clusters.setPalette(palette)
       missionLayer.setPalette(palette)
       geofenceLayer.setPalette(palette)
+      content.setBuildingColor(palette.building)
       basemaps.setTheme(next)
     }),
     setBasemap: withRender((next: MapBasemap) => {
