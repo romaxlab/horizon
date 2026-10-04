@@ -3,7 +3,7 @@ import type { GeoPoint } from '@horizon/domain'
 import type { FleetFeed } from '../model/fleet-feed'
 import { BaseText, useTheme } from '@horizon/ui'
 import { storeToRefs } from 'pinia'
-import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { appConfig } from '@/shared/config'
 import type { MapScene } from '../lib/cesium/map-scene'
 import type { GeofenceOverlay } from '../lib/cesium/geofence-layer'
@@ -33,6 +33,9 @@ const map = useMapStore()
 const { followUavId, focusRequest, homeRequest, basemap, perspective, viewportInsets } =
   storeToRefs(map)
 const ionToken = appConfig.cesiumIonToken
+/** Satellite imagery comes from Cesium ion until it fails; then the scene falls back to Esri. */
+const ionImagery = ref(ionToken !== null)
+const esriCredit = computed(() => basemapCredit(basemap.value, ionImagery.value))
 
 let unsubscribeFleet: (() => void) | null = null
 
@@ -48,6 +51,9 @@ onMounted(async () => {
       basemap: basemap.value,
       perspective: perspective.value,
       ionToken,
+      onIonImageryUnavailable: () => {
+        ionImagery.value = false
+      },
       onSelect: (uavId) => {
         emit('select', uavId)
       },
@@ -138,12 +144,12 @@ watch(homeRequest, () => {
          bar; glass keeps it legible over satellite imagery. -->
     <Teleport defer :to="`#${MAP_ATTRIBUTION_TARGET_ID}`">
       <!-- Basemap credit for the selected basemap only (no doubling during the cross-fade);
-           Cesium's container adds 3D content credits (buildings, Google tiles) when present. -->
+           Cesium's container adds ion credits (imagery, terrain, buildings, Google tiles). -->
       <div
         class="map-attribution text-right text-micro whitespace-nowrap text-text-secondary max-sm:w-64 max-sm:whitespace-normal"
         aria-label="Map data attribution"
       >
-        Powered by Esri · {{ basemapCredit(basemap) }}
+        <template v-if="esriCredit">Powered by Esri · {{ esriCredit }}</template>
         <div ref="credits" class="map-credits inline" :class="{ 'without-ion': !ionToken }" />
       </div>
     </Teleport>

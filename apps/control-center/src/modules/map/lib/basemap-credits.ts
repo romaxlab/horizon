@@ -14,6 +14,11 @@ const IMAGERY_CREDIT = 'Source: Esri, Vantor, Earthstar Geographics, and the GIS
  */
 export const MAP_ATTRIBUTION_TARGET_ID = 'map-attribution'
 
-export function basemapCredit(basemap: MapBasemap): string {
-  return basemap === 'satellite' ? IMAGERY_CREDIT : CANVAS_CREDIT
+/**
+ * Esri credit for the basemap; null when Satellite comes from Cesium ion, whose imagery credits
+ * Cesium renders itself.
+ */
+export function basemapCredit(basemap: MapBasemap, ionImagery: boolean): string | null {
+  if (basemap === 'satellite') return ionImagery ? null : IMAGERY_CREDIT
+  return CANVAS_CREDIT
 }

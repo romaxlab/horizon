@@ -4,12 +4,14 @@ import {
   Cartographic,
   ImageryLayer,
   Ion,
+  IonWorldImageryStyle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   UrlTemplateImageryProvider,
   Viewer,
   createGooglePhotorealistic3DTileset,
   createOsmBuildingsAsync,
+  createWorldImageryAsync,
   createWorldTerrainAsync,
   defined,
   sampleTerrainMostDetailed,
@@ -37,7 +39,8 @@ interface BasemapSource {
 
 /**
  * Keyless Esri basemaps. Free for development and demos with attribution; production use
- * requires an ArcGIS account or another provider.
+ * requires an ArcGIS account or another provider. With an ion token, Satellite uses Cesium ion
+ * imagery instead (see `createBasemap`); the dark/light canvas stays Esri, which ion lacks.
  */
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
 const BASEMAPS = {
@@ -71,8 +74,13 @@ export interface MapSceneOptions {
   theme: MapTheme
   basemap: MapBasemap
   perspective: MapPerspective
-  /** Adds 3D buildings to the 3D perspective; without it 3D is a keyless tilted view. */
+  /**
+   * Cesium ion: World Terrain, ion satellite imagery and 3D buildings. Without it the map uses
+   * keyless Esri imagery on the ellipsoid and 3D is a plain tilted view.
+   */
   ionToken: string | null
+  /** Ion satellite imagery failed (e.g. invalid token); Satellite falls back to Esri. */
+  onIonImageryUnavailable?: () => void
   onSelect: (uavId: string | null) => void
   /** Ground point clicked while drawing mode is on. */
   onDraw: (point: GeoPoint) => void
@@ -102,7 +110,7 @@ export interface MapScene {
   destroy(): void
 }
 
-function createBasemap(source: BasemapSource): ImageryLayer {
+function createUrlBasemap(source: BasemapSource): ImageryLayer {
   return new ImageryLayer(
     new UrlTemplateImageryProvider({
       url: source.url,
@@ -118,6 +126,7 @@ export function createMapScene({
   basemap: initialBasemap,
   perspective: initialPerspective,
   ionToken,
+  onIonImageryUnavailable,
   onSelect,
   onDraw,
   onFollowStopped,
@@ -128,10 +137,29 @@ export function createMapScene({
   let theme = initialTheme
   let basemap = initialBasemap
   let perspective = initialPerspective
-  const basemapSource = () => BASEMAPS[basemap === 'map' ? theme : 'satellite']
+  /** Satellite from Cesium ion (Bing Maps Aerial) while ion imagery works; Esri otherwise. */
+  let ionImagery = ionToken !== null
+
+  function createBasemap(): ImageryLayer {
+    if (basemap !== 'satellite' || !ionImagery) {
+      return createUrlBasemap(BASEMAPS[basemap === 'map' ? theme : 'satellite'])
+    }
+    const layer = ImageryLayer.fromProviderAsync(
+      createWorldImageryAsync({ style: IonWorldImageryStyle.AERIAL }),
+    )
+    layer.errorEvent.addEventListener((error: unknown) => {
+      if (!ionImagery) return
+      console.warn('[map] Cesium ion imagery unavailable; using Esri', error)
+      ionImagery = false
+      onIonImageryUnavailable?.()
+      // Swap in Esri satellite through the normal cross-fade; it drops the failed layer.
+      if (basemap === 'satellite') replaceBasemap()
+    })
+    return layer
+  }
 
   const viewer = new Viewer(container, {
-    baseLayer: createBasemap(basemapSource()),
+    baseLayer: createBasemap(),
     creditContainer,
     animation: false,
     timeline: false,
@@ -209,25 +237,38 @@ export function createMapScene({
   function replaceBasemap() {
     const transition = ++basemapTransition
     const layers = scene.imageryLayers
-    const next = createBasemap(basemapSource())
+    const next = createBasemap()
     next.alpha = 0
     layers.add(next)
 
-    afterTilesLoaded(() => {
-      if (transition !== basemapTransition) return
-      const fadeMs = reducedMotion() ? 0 : BASEMAP_FADE_MS
-      const fadeStart = performance.now()
-      const removeFade = scene.preRender.addEventListener(() => {
-        scene.requestRender()
-        const progress = fadeMs === 0 ? 1 : Math.min(1, (performance.now() - fadeStart) / fadeMs)
-        next.alpha = progress
-        if (progress < 1) return
-        removeFade()
+    // An ion layer has no tiles to wait for until its provider is ready.
+    const whenReady = (callback: () => void) => {
+      if (next.ready) {
+        callback()
+        return
+      }
+      const remove = next.readyEvent.addEventListener(() => {
+        remove()
+        callback()
+      })
+    }
+    whenReady(() => {
+      afterTilesLoaded(() => {
         if (transition !== basemapTransition) return
-        for (let i = layers.length - 1; i >= 0; i--) {
-          const layerAt = layers.get(i)
-          if (layerAt !== next) layers.remove(layerAt, true)
-        }
+        const fadeMs = reducedMotion() ? 0 : BASEMAP_FADE_MS
+        const fadeStart = performance.now()
+        const removeFade = scene.preRender.addEventListener(() => {
+          scene.requestRender()
+          const progress = fadeMs === 0 ? 1 : Math.min(1, (performance.now() - fadeStart) / fadeMs)
+          next.alpha = progress
+          if (progress < 1) return
+          removeFade()
+          if (transition !== basemapTransition) return
+          for (let i = layers.length - 1; i >= 0; i--) {
+            const layerAt = layers.get(i)
+            if (layerAt !== next) layers.remove(layerAt, true)
+          }
+        })
       })
     })
   }
@@ -242,7 +283,7 @@ export function createMapScene({
   let wantedContent: ContentKind | null = null
   /** Ground height of the loaded World Terrain at the operating site (0 on the ellipsoid). */
   let terrainGroundHeight = 0
-  let terrainLoaded = false
+  let terrainLoading: Promise<void> | null = null
   /** Incremented on every content change so slow loads from a previous request are discarded. */
   let contentRequest = 0
 
@@ -257,17 +298,23 @@ export function createMapScene({
     }
   }
 
-  /** Terrain stays loaded once used so later switches don't rebuild the globe. */
-  async function ensureTerrain() {
-    if (terrainLoaded) return
-    viewer.terrainProvider = await createWorldTerrainAsync()
-    terrainLoaded = true
-    try {
-      const [sample] = await sampleTerrainMostDetailed(viewer.terrainProvider, [site()])
-      terrainGroundHeight = sample?.height ?? 0
-    } catch {
-      terrainGroundHeight = 0
-    }
+  /** Terrain loads once and stays, so later switches don't rebuild the globe. */
+  function ensureTerrain(): Promise<void> {
+    terrainLoading ??= (async () => {
+      const terrain = await createWorldTerrainAsync()
+      if (viewer.isDestroyed()) return
+      viewer.terrainProvider = terrain
+      try {
+        const [sample] = await sampleTerrainMostDetailed(terrain, [site()])
+        terrainGroundHeight = sample?.height ?? 0
+      } catch {
+        terrainGroundHeight = 0
+      }
+    })().catch((error: unknown) => {
+      terrainLoading = null
+      throw error
+    })
+    return terrainLoading
   }
 
   /** Removes 3D content: the globe comes back first; content goes once the globe is ready. */
@@ -357,6 +404,22 @@ export function createMapScene({
   }
 
   updateContent()
+
+  // Cesium World Terrain under every view when ion is available; the ellipsoid otherwise.
+  if (ionToken) {
+    ensureTerrain().then(
+      () => {
+        // Photorealistic tiles carry their own ground height.
+        if (!viewer.isDestroyed() && wantedContent !== 'photorealistic') {
+          setGroundHeight(terrainGroundHeight)
+          scene.requestRender()
+        }
+      },
+      (error: unknown) => {
+        console.warn('[map] Cesium World Terrain unavailable; using the ellipsoid', error)
+      },
+    )
+  }
 
   // --- Picking -------------------------------------------------------------------------------
 
