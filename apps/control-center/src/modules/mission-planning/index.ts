@@ -1,4 +1,4 @@
-export { MissionPayloadError, parseMission } from './api/mission.parsers'
+export { MissionPayloadError, parseMission, parseMissionMessage } from './api/mission.parsers'
 export { toPlanRequestDto } from './api/mission.mapper'
 export {
   computeMissionProgress,

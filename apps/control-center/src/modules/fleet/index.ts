@@ -1,4 +1,4 @@
-export { FleetPayloadError, parseFleetSnapshot } from './api/fleet.parsers'
+export { FleetPayloadError, parseFleetSnapshot, parseTelemetryMessage } from './api/fleet.parsers'
 export { useFleetStore } from './model/fleet.store'
 export { fleetRepositorySlot } from './model/fleet.types'
 export type {
