@@ -126,7 +126,9 @@ Core boundaries:
 FleetRepository
 RealtimeTransport
 MissionPlanner
+AirspaceRepository
 VideoProvider
+DemoControl        # simulator demo controls; mock composition only
 ```
 
 Mock and remote implementations must enter the application through the same contracts.

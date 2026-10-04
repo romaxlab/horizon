@@ -93,6 +93,7 @@ apps/control-center/src/
 │   ├── bootstrap/        # mock / remote composition, app creation
 │   ├── providers/        # AppServices injection, Query client
 │   ├── router/
+│   ├── startup/          # optional cinematic startup sequence (VITE_CINEMATIC_INTRO)
 │   ├── styles/
 │   └── App.vue
 │
@@ -126,6 +127,25 @@ Module           modules/control-center
 Root view        ControlCenterView.vue
 Composable       useControlCenter.ts
 ```
+
+### Startup sequence
+
+`app/startup/` holds an optional cinematic intro (`VITE_CINEMATIC_INTRO`, default on; E2E turns
+it off). It is presentation only: bootstrap, data loading and realtime start in parallel and are
+never waited for.
+
+```text
+startup-timeline.ts     every duration, offset and easing curve (plus a reduced-motion set)
+useStartupSequence.ts   orchestrator: phases intro → dissolving → revealing → done, Skip/Escape
+StartupIntro.vue        overlay: logo, status lines, Skip
+startup-reveal.css      staged reveal of groups marked data-reveal="0…3" in the Control Center
+```
+
+The overlay hands over once the map shows its first complete view (bounded wait). The camera
+then flies in from orbit through the map's general **arrival** capability (see §7), and the
+panels reveal in staggered groups. Only opacity and transform animate, so the measured layout that
+frames the camera never moves. Removing the feature means deleting `app/startup/`, its use in
+`App.vue` and the `data-reveal` marks; the map's arrival API stays as an unused capability.
 
 ---
 
@@ -254,18 +274,25 @@ Cesium is a significant application capability but does not need to be a workspa
 ```text
 modules/map/
 ├── ui/
-│   ├── MapCanvas.vue        # mounts the scene; props in, `select` out
-│   └── MapControls.vue      # Follow / Reset view
+│   ├── MapCanvas.vue          # mounts the scene, first-view placeholder; props in, `select` out
+│   └── MapControls.vue        # 2D/3D, Reset view, Map/Satellite
 ├── model/
-│   └── map.store.ts         # camera intents (follow, focus, reset)
+│   ├── map.store.ts           # camera and view intents: follow, focus, reset, basemap,
+│   │                          # perspective, viewport insets, opening arrival
+│   └── fleet-feed.ts          # the live fleet stream type the map consumes
 ├── lib/
-│   ├── interpolation.ts     # Cesium-free pose interpolation (unit tested)
+│   ├── declutter.ts           # Cesium-free screen-space clustering (unit tested)
+│   ├── basemap-credits.ts     # Esri attribution, shown by the UI
 │   └── cesium/
-│       ├── map-scene.ts     # viewer, basemap, picking; lazy-loaded chunk
-│       ├── uav-layer.ts
-│       ├── mission-layer.ts # with mission planning
+│       ├── map-scene.ts       # viewer, basemaps, ion terrain/imagery, 3D content, picking;
+│       │                      # lazy-loaded chunk
 │       ├── camera-controller.ts
-│       └── palette.ts       # Cesium colors resolved from design tokens
+│       ├── uav-layer.ts       # markers, labels, selection ring, trails, interpolation
+│       ├── cluster-layer.ts   # cluster badges
+│       ├── mission-layer.ts   # areas, routes, orbits (with mission planning)
+│       ├── geofence-layer.ts  # no-fly zones
+│       ├── marker-images.ts   # UAV marker artwork
+│       └── palette.ts         # Cesium colors resolved from design tokens
 └── index.ts
 ```
 
@@ -277,17 +304,22 @@ Map controls have two independent settings:
 ```text
 Map / Satellite   segmented control; Esri Canvas light/dark gray (follows the theme) or
                   Esri World Imagery
-2D / 3D           single button above Follow / Reset view; top-down or tilted, both keyless
+2D / 3D           single button next to Reset view; top-down or tilted
 ```
 
-With `VITE_CESIUM_ION_TOKEN` (Cesium ion Community account) the 3D perspective adds buildings:
+Without a token everything is keyless (Esri imagery on the ellipsoid; 3D is a plain tilted view).
+With `VITE_CESIUM_ION_TOKEN` (Cesium ion Community account) ion adds, each with a fallback:
 
 ```text
+every view       Cesium World Terrain           → ellipsoid if it fails
+Satellite        Bing Maps Aerial via ion        → Esri World Imagery if it fails
 3D + Satellite   Google Photorealistic 3D Tiles via Cesium ion (no Google key or billing)
-                 → fallback: Cesium World Terrain + Cesium OSM Buildings
-3D + Map         Cesium World Terrain + Cesium OSM Buildings
-                 → if nothing loads: the keyless tilted view stays
+                 → fallback: Cesium OSM Buildings on terrain
+3D + Map         Cesium OSM Buildings on terrain → if nothing loads: the tilted view stays
 ```
+
+The Map basemap stays Esri Canvas in every case (ion has no calm gray canvas). The ion token is
+part of the client bundle; use a token restricted to the app's URLs.
 
 Switching perspective re-pitches the camera around the point at the screen center; basemaps
 cross-fade once incoming tiles are ready. The token goes in `apps/control-center/.env.local`,
@@ -356,8 +388,21 @@ survives 2D/3D switches (top-down offset in 2D, behind-and-above in 3D). When th
 tracking on its own (zooming into a cluster), it reports back so the state never claims a follow
 the camera isn't doing.
 
-Attribution shows "Powered by Esri" plus each basemap's text exactly as the Esri service
-publishes it (`copyrightText`), on a flat glass strip above the map controls in the bottom row.
+Attribution shows "Powered by Esri" plus each Esri basemap's text exactly as the service
+publishes it (`copyrightText`), above the map controls in the bottom row. Cesium renders the ion
+credits itself (ion logo, ion imagery, terrain, 3D tiles) next to it.
+
+First view: until the map shows a complete first view (terrain in place, visible tiles loaded;
+each wait bounded), a placeholder in the basemap's land tone with a faint graticule covers the
+canvas, then fades away; a "Loading map" indicator appears only if that takes longer than
+400 ms. The WebGL canvas itself is never hidden — hiding it and showing it again stalls the main
+thread. The theme is applied before the first paint (`index.html`), so dark setups never flash
+the light canvas.
+
+Opening arrival (used by the startup sequence): the map store can hold the camera in orbit with
+map content hidden before the scene exists, fly in to the home view, reveal content, and settle
+(a cut arrival jumps home; a landed one leaves the camera where the user may already have moved
+it). Without a hold the map starts settled.
 
 Camera framing respects the floating panels: the layout reports the map area they leave free
 (the column between the side panels, below the header and above the bottom bar) as viewport

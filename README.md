@@ -48,7 +48,7 @@ Optional configuration (`apps/control-center/.env.local`, see `.env.example`):
 | `VITE_DEMO_AUTOSTART` | `false` | start the demo Area Scan on load |
 | `VITE_SIMULATOR_MODE` | `deterministic` | or `random` |
 | `VITE_TELEMETRY_FLUSH_MS` | `100` | telemetry → state flush interval |
-| `VITE_CESIUM_ION_TOKEN` | — | Cesium World Terrain, ion satellite imagery, 3D buildings in 3D view |
+| `VITE_CESIUM_ION_TOKEN` | — | Cesium World Terrain, ion satellite imagery, 3D buildings in 3D view; ships in the client bundle, so use a token restricted to the app's URLs |
 | `VITE_CINEMATIC_INTRO` | `true` | cinematic startup sequence (`app/startup/`); `false` opens directly |
 
 ## Core workflow
