@@ -90,21 +90,24 @@ Do not create additional packages until reuse or dependency isolation clearly ju
 ```text
 apps/control-center/src/
 ├── app/
-│   ├── bootstrap/
-│   ├── providers/
+│   ├── bootstrap/        # mock / remote composition, app creation
+│   ├── providers/        # AppServices injection, Query client
 │   ├── router/
+│   ├── styles/
 │   └── App.vue
 │
 ├── modules/
-│   ├── control-center/
+│   ├── control-center/   # route-level composition
 │   ├── map/
 │   ├── fleet/
 │   ├── mission-planning/
+│   ├── airspace/         # no-fly zones
 │   ├── incidents/
 │   ├── video-monitoring/
 │   └── demo-controls/
 │
 ├── shared/
+│   ├── brand/
 │   ├── config/
 │   ├── http/
 │   └── lib/
@@ -142,11 +145,12 @@ modules/control-center/
 
 `ControlCenterView.vue` composes:
 
-- map;
-- fleet panel;
-- UAV inspector;
-- mission status;
-- incidents;
+- map and map controls (2D/3D, reset view, imagery, attribution);
+- header (active mission, connection, event history);
+- fleet panel or mission builder (left);
+- UAV inspector with the video feed, and the video focus view;
+- mission status bar with the per-UAV mission details;
+- incident alerts;
 - demo controls when enabled.
 
 It does not own fleet, mission, video, realtime or Cesium business logic.
@@ -166,12 +170,13 @@ open inspector
 video module reacts
 ```
 
----
-
 Small screens (below `sm`, 640 px) keep the same composition: one panel at a time at full width
 (the inspector replaces the fleet list), the fleet list starts collapsed so the map shows first,
 the bottom row wraps (status bar on its own line, phase counts in its details popover), the
 clock is hidden, and popovers never exceed the screen width.
+
+---
+
 
 ## 6. Feature modules
 
@@ -208,8 +213,10 @@ Prefer focused composables:
 useFleetPanel()
 useUavInspector()
 useMissionBuilder()
-useMissionStatus()
+useMissionSync()
+useGeofences()
 useIncidentCenter()
+useDemoControls()
 ```
 
 Avoid one oversized `useModule()` file.
@@ -801,28 +808,25 @@ interface AppServices {
   missionPlanner: MissionPlanner
   airspaceRepository: AirspaceRepository
   videoProvider: VideoProvider
+  /** Simulator demo controls; null unless the mock backend runs with demo controls enabled. */
+  demoControl: DemoControl | null
 }
 ```
 
-Mock composition:
+Both compositions implement the same contracts:
 
 ```text
-MockFleetRepository
-MockRealtimeTransport
-MockMissionPlanner
-MockVideoProvider
+Contract              mock (app/bootstrap/mock-services.ts)      remote (app/bootstrap/remote-services.ts)
+FleetRepository       simulator snapshot → parseFleetSnapshot    createRestFleetRepository
+RealtimeTransport     createMockRealtimeTransport(simulator)     createWebSocketRealtimeTransport
+MissionPlanner        simulator plan/launch/abort                createRemoteMissionPlanner
+AirspaceRepository    simulator geofences → parseGeofences       createRestAirspaceRepository
+VideoProvider         Esri imagery source (synthetic feed)       createRemoteVideoProvider
+DemoControl           simulator demo commands (if enabled)       null
 ```
 
-Future remote composition:
-
-```text
-RestFleetRepository
-WebSocketRealtimeTransport
-RemoteMissionPlanner
-RemoteVideoProvider
-```
-
-Modules consume contracts, not concrete implementations.
+Mock payloads are cloned and run through the same parsers as REST responses, so both paths share
+one validation boundary. Modules consume contracts, not concrete implementations.
 
 Selection: `VITE_DATA_SOURCE=mock` (default) or `remote` with `VITE_API_URL` and `VITE_WS_URL`
 (validated; required in remote mode). Remote implementations:
@@ -845,16 +849,18 @@ and reconciles from a fresh REST snapshot — the same flow as in mock mode. The
 the same reconnect. Duplicate and out-of-order telemetry is dropped by the latest-state buffer. Demo controls exist
 only in mock mode.
 
-Placement:
+Placement (each contract is owned by the module that consumes it):
 
 ```text
-FleetRepository            modules/fleet (contract owned by the consuming module)
+FleetRepository            modules/fleet
+MissionPlanner             modules/mission-planning
+AirspaceRepository         modules/airspace
+VideoProvider              modules/video-monitoring
+DemoControl                modules/demo-controls
 RealtimeTransport          @horizon/realtime
 AppServices + injection    app/providers/services.ts
-mock composition           app/bootstrap/mock-services.ts
+composition selection      app/bootstrap/create-horizon-app.ts (by VITE_DATA_SOURCE)
 ```
-
-Contracts are added to `AppServices` as their features are implemented.
 
 Configuration is validated centrally:
 
@@ -991,17 +997,18 @@ warning
 critical
 ```
 
-Initial event types:
+Event types:
 
 ```text
 MISSION_STARTED
-WAYPOINT_REACHED
+WAYPOINT_REACHED      (defined, not emitted: too noisy for the feed)
+MISSION_COMPLETED
+MISSION_ABORTED
 LOW_BATTERY
 SIGNAL_DEGRADED
 TELEMETRY_STALE
 CONNECTION_LOST
 CONNECTION_RESTORED
-MISSION_COMPLETED
 GEOFENCE_BREACH
 ```
 

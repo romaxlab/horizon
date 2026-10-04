@@ -35,7 +35,7 @@ Use **Demo** (bottom left) to run scenarios: Normal, Incident (scripted failures
 | `pnpm dev` | Control Center dev server |
 | `pnpm check` | lint + typecheck + unit tests + build |
 | `pnpm test` | unit/integration tests (Vitest) |
-| `pnpm e2e` / `pnpm e2e:ui` | Playwright workflows (mission, inspection, recovery) |
+| `pnpm e2e` / `pnpm e2e:ui` | Playwright workflows (missions, inspection, follow, recovery) |
 | `pnpm build` | production build |
 
 Optional configuration (`apps/control-center/.env.local`, see `.env.example`):
@@ -54,9 +54,9 @@ Optional configuration (`apps/control-center/.env.local`, see `.env.example`):
 
 ```text
 Open Control Center
-→ Create Area Scan mission
-→ Define mission area
-→ Generate UAV-specific routes
+→ Create a mission: Area Scan, Patrol or Point Inspection
+→ Draw the area, loop or target on the map
+→ Generate UAV-specific routes (detouring around no-fly zones)
 → Launch mission
 → Monitor realtime execution
 → Inspect UAV telemetry and video
@@ -115,13 +115,15 @@ The MVP centers on one operational route:
 
 The 3D map remains the primary workspace. Mission planning, UAV inspection and incident handling are contextual modes and overlays rather than separate CRUD-style pages.
 
-Primary mission type:
+Mission types:
 
 ```text
-Area Scan
+Area Scan          polygon → one scan strip per UAV
+Patrol             closed loop → UAVs evenly spaced, set number of laps
+Point Inspection   target + radius → UAVs orbit it, set number of orbits
 ```
 
-The operator defines a polygon, altitude and UAV count. The planner generates deterministic UAV-specific routes that can be reviewed and launched.
+The operator sets altitude and UAV count and draws on the map. The planner generates deterministic UAV-specific routes that avoid fixed no-fly zones (detours on transit, scan lines and the way home); they can be reviewed and launched. During execution the status bar shows phase counts and per-UAV details (phase, lap, ETA, battery on landing).
 
 Standard demo dataset:
 
@@ -147,9 +149,10 @@ Standard demo dataset:
 ## Status
 
 MVP complete: the full workflow (plan → launch → monitor → inspect → incident → recover) runs
-end-to-end against the simulator, with Playwright coverage of the primary flows. Remote REST,
-WebSocket and video implementations can be added behind the existing contracts
-(`FleetRepository`, `RealtimeTransport`, `MissionPlanner`, `VideoProvider`).
+end-to-end against the simulator, with Playwright coverage of the primary flows. Remote REST and
+WebSocket implementations of every contract (`FleetRepository`, `RealtimeTransport`,
+`MissionPlanner`, `AirspaceRepository`, `VideoProvider`) exist and are selected with
+`VITE_DATA_SOURCE=remote`; the wire format is documented in `docs/ARCHITECTURE.md` §13.
 
 ## Disclaimer
 
