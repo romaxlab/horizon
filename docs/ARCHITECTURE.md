@@ -826,7 +826,8 @@ DemoControl           simulator demo commands (if enabled)       null
 ```
 
 Mock payloads are cloned and run through the same parsers as REST responses, so both paths share
-one validation boundary. Modules consume contracts, not concrete implementations.
+one validation boundary. Only the selected composition is loaded (dynamic import): a remote build never
+downloads the simulator or demo data. Modules consume contracts, not concrete implementations.
 
 Selection: `VITE_DATA_SOURCE=mock` (default) or `remote` with `VITE_API_URL` and `VITE_WS_URL`
 (validated; required in remote mode). Remote implementations:
@@ -861,7 +862,7 @@ VideoProvider              modules/video-monitoring
 DemoControl                modules/demo-controls
 RealtimeTransport          @horizon/realtime
 AppServices + injection    app/providers/services.ts
-composition selection      app/bootstrap/create-horizon-app.ts (by VITE_DATA_SOURCE)
+composition selection      app/bootstrap/create-horizon-app.ts (by VITE_DATA_SOURCE, lazy-loaded)
 ```
 
 Configuration is validated centrally:

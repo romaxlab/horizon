@@ -22,7 +22,7 @@ function renderStartupError(error: unknown) {
 import('@/app/bootstrap/create-horizon-app')
   .then(async ({ createHorizonApp }) => {
     const { appConfig } = await import('@/shared/config')
-    const app = createHorizonApp(appConfig)
+    const app = await createHorizonApp(appConfig)
     app.config.errorHandler = (error, _instance, info) => {
       console.error(`[horizon] unhandled error in ${info}`, error)
     }
