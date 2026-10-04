@@ -329,6 +329,14 @@ Map behavior:
 
 ---
 
+Camera follow is one shared state (`followUavId` in the map store), toggled from the UAV
+inspector — a UAV action; the map controls keep camera-wide actions only (2D/3D, Reset view,
+imagery). Following tracks the
+selected UAV, moves with the selection, stops when nothing is selected or on Reset view, and
+survives 2D/3D switches (top-down offset in 2D, behind-and-above in 3D). When the camera drops
+tracking on its own (zooming into a cluster), it reports back so the state never claims a follow
+the camera isn't doing.
+
 ## 8. Workspace packages
 
 ### `@horizon/domain`

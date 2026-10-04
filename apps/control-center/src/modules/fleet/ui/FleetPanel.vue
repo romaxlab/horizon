@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PanelLeftClose } from '@lucide/vue'
 import { BaseIconButton, BaseInput, BaseSegmentedControl, BaseText } from '@horizon/ui'
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useFleetPanel } from '../model/useFleetPanel'
 import FleetPanelRow from './FleetPanelRow.vue'
 
@@ -22,6 +22,30 @@ function onListFocus(event: FocusEvent) {
   const id = (event.target as HTMLElement).dataset.rowId
   if (id) focusedId.value = id
 }
+
+// Fade the bottom edge only while more rows are below (local presentation state).
+const moreBelow = ref(false)
+function updateMoreBelow() {
+  const el = list.value
+  moreBelow.value = !!el && el.scrollTop + el.clientHeight < el.scrollHeight - 1
+}
+// The panel resizes with the window and when other panels open.
+const resizeObserver = new ResizeObserver(updateMoreBelow)
+// The list mounts only once there are rows (loading/empty states come first).
+watch(list, (el, previous) => {
+  if (previous) resizeObserver.unobserve(previous)
+  if (el) resizeObserver.observe(el)
+  updateMoreBelow()
+})
+onBeforeUnmount(() => {
+  resizeObserver.disconnect()
+})
+watch(
+  () => rows.value.length,
+  () => {
+    void nextTick(updateMoreBelow)
+  },
+)
 
 function onListKeydown(event: KeyboardEvent) {
   const buttons = [...(list.value?.querySelectorAll<HTMLButtonElement>('[data-row-id]') ?? [])]
@@ -83,8 +107,10 @@ function onListKeydown(event: KeyboardEvent) {
       v-else
       ref="list"
       class="min-h-0 flex-1 overflow-y-auto px-2 pb-2"
+      :class="moreBelow && 'fleet-list--more'"
       @keydown="onListKeydown"
       @focusin="onListFocus"
+      @scroll.passive="updateMoreBelow"
     >
       <li v-for="row in rows" :key="row.id">
         <FleetPanelRow
@@ -96,3 +122,10 @@ function onListKeydown(event: KeyboardEvent) {
     </ul>
   </section>
 </template>
+
+<style scoped>
+/* Rows fade out at the bottom edge while the list continues, instead of being cut mid-row. */
+.fleet-list--more {
+  mask-image: linear-gradient(to bottom, black calc(100% - 3rem), transparent);
+}
+</style>

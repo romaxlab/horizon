@@ -99,7 +99,16 @@
   --media-text: var(--white);
   --media-text-muted: rgba(255, 255, 255, 0.72);
   --media-text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-  --media-vignette: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+  /* Top and bottom bands keep HUD text legible on bright imagery; the corners stay soft. */
+  --media-vignette:
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.55) 0%,
+      transparent 30%,
+      transparent 62%,
+      rgba(0, 0, 0, 0.6) 100%
+    ),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
   --media-scrim: rgba(0, 0, 0, 0.45);
 }
 

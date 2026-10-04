@@ -213,7 +213,7 @@ watch(selectedUavId, (id) => {
             </BaseSurface>
           </Transition>
 
-          <MapControls :selected-uav-id="selectedUavId" class="pointer-events-auto mt-auto" />
+          <MapControls class="pointer-events-auto mt-auto" />
         </div>
       </div>
 

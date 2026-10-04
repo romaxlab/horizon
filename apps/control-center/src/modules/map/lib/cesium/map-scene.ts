@@ -80,6 +80,8 @@ export interface MapSceneOptions {
   onSelect: (uavId: string | null) => void
   /** Ground point clicked while drawing mode is on. */
   onDraw: (point: GeoPoint) => void
+  /** The camera stopped following on its own (e.g. zooming into a cluster). */
+  onFollowStopped: () => void
 }
 
 /** Public surface of the 3D map, independent of Vue. */
@@ -119,6 +121,7 @@ export function createMapScene({
   ionToken,
   onSelect,
   onDraw,
+  onFollowStopped,
 }: MapSceneOptions): MapScene {
   if (ionToken) Ion.defaultAccessToken = ionToken
 
@@ -178,7 +181,7 @@ export function createMapScene({
     layer.setGroundHeight(meters)
     missionLayer.setGroundHeight(meters)
   }
-  const camera = createCameraController(viewer, layer, perspective === '3d')
+  const camera = createCameraController(viewer, layer, perspective === '3d', onFollowStopped)
   camera.home(false)
 
   const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches

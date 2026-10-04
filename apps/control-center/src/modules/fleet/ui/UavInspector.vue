@@ -3,13 +3,13 @@ import { Crosshair, Navigation, X } from '@lucide/vue'
 import {
   BaseAlert,
   BaseBadge,
-  BaseButton,
   BaseDivider,
   BaseIconButton,
   BaseMetric,
   BaseProgress,
   BaseSparkline,
   BaseText,
+  BaseTooltip,
 } from '@horizon/ui'
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { InspectorMission } from '../model/fleet.types'
@@ -52,9 +52,30 @@ onBeforeUnmount(() => {
         </div>
         <BaseText variant="caption" tone="muted" truncate>{{ inspector.subtitle }}</BaseText>
       </div>
-      <BaseIconButton size="sm" label="Close inspector" @click="emit('close')">
-        <X />
-      </BaseIconButton>
+      <!-- Primary UAV actions stay in reach: the body scrolls, the header doesn't. -->
+      <div class="flex shrink-0 items-center gap-0.5">
+        <BaseTooltip text="Center on map" placement="bottom">
+          <BaseIconButton size="sm" label="Center on map" @click="emit('focus')">
+            <Crosshair />
+          </BaseIconButton>
+        </BaseTooltip>
+        <BaseTooltip
+          :text="following ? 'Stop following' : 'Follow with the camera'"
+          placement="bottom"
+        >
+          <BaseIconButton
+            size="sm"
+            label="Follow"
+            :pressed="following"
+            @click="emit('toggleFollow')"
+          >
+            <Navigation />
+          </BaseIconButton>
+        </BaseTooltip>
+        <BaseIconButton size="sm" label="Close inspector" @click="emit('close')">
+          <X />
+        </BaseIconButton>
+      </div>
     </header>
 
     <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
@@ -141,23 +162,6 @@ onBeforeUnmount(() => {
             </BaseText>
           </div>
         </template>
-      </div>
-
-      <div class="flex gap-2">
-        <BaseButton size="sm" class="flex-1" @click="emit('focus')">
-          <Crosshair />
-          Center
-        </BaseButton>
-        <BaseButton
-          size="sm"
-          :variant="following ? 'primary' : 'secondary'"
-          :aria-pressed="following"
-          class="flex-1"
-          @click="emit('toggleFollow')"
-        >
-          <Navigation />
-          {{ following ? 'Following' : 'Follow' }}
-        </BaseButton>
       </div>
     </div>
   </section>

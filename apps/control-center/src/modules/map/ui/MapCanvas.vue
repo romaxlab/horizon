@@ -52,6 +52,9 @@ onMounted(async () => {
       onDraw: (point) => {
         emit('draw', point)
       },
+      onFollowStopped: () => {
+        map.setFollow(null)
+      },
     })
     const created = scene.value
     created.sync(props.fleet.current())

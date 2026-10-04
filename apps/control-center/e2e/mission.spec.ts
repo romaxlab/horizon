@@ -49,7 +49,7 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
   await expect(details).toContainText('En route')
   await status.getByRole('button', { name: 'Hide mission details' }).click()
   await expect(details).toBeHidden()
-  await expect(page.getByRole('button', { name: 'New Mission' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'New Mission' })).toBeHidden()
 
   // The mission UAVs are flying: Active in the fleet, moving and climbing in the inspector.
   // (Waypoint-based progress itself is covered by unit tests; it needs minutes of flight.)

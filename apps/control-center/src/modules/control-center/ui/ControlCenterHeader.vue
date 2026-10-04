@@ -55,7 +55,8 @@ const clock = computed(() => clockFormat.format(now.value))
     <BaseSurface
       variant="floating"
       shape="pill"
-      class="pointer-events-auto flex h-10 min-w-0 items-center gap-1.5 pr-1 pl-2"
+      class="pointer-events-auto flex h-10 min-w-0 items-center gap-1.5 pl-2"
+      :class="canCreateMission ? 'pr-1' : 'pr-3'"
     >
       <!-- The logo carries its own clear space (~8px each side), hence the tight padding. -->
       <HorizonLogo />
@@ -63,11 +64,13 @@ const clock = computed(() => clockFormat.format(now.value))
         <BaseText variant="body-md" truncate>{{ missionTitle }}</BaseText>
         <BaseBadge variant="info">{{ missionContext }}</BaseBadge>
       </template>
+      <!-- Shown only when a mission can be created; a disabled primary button read as a stray
+           blue blot on glass. During a mission the header names it instead. -->
       <BaseButton
+        v-if="canCreateMission"
         size="sm"
         variant="primary"
         class="ml-2"
-        :disabled="!canCreateMission"
         @click="emit('newMission')"
       >
         <Plus />

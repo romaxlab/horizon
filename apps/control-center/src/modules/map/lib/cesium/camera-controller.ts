@@ -35,13 +35,30 @@ export interface CameraController {
   groundPointAt(position: Cartesian2): GeoPoint | null
 }
 
+/** Follow offsets in the UAV's local frame: behind and above in 3D, straight down in 2D. */
+const FOLLOW_OFFSET_TILTED = new Cartesian3(0, -700, 450)
+const FOLLOW_OFFSET_TOP_DOWN = new Cartesian3(0, -1, 900)
+
 export function createCameraController(
   viewer: Viewer,
   layer: UavLayer,
   initiallyTilted: boolean,
+  /** The camera stopped following on its own (e.g. zooming into a cluster); state must follow. */
+  onFollowStopped: () => void = () => undefined,
 ): CameraController {
   const { camera, scene } = viewer
   let tilted = initiallyTilted
+  /** UAV the camera tracks; the single source for whether following is on. */
+  let followedId: string | null = null
+
+  /** (Re)attaches tracking with the offset for the current perspective. */
+  function track(uavId: string | null) {
+    followedId = uavId
+    const entity = uavId ? layer.getEntity(uavId) : undefined
+    if (entity) entity.viewFrom = tilted ? FOLLOW_OFFSET_TILTED : FOLLOW_OFFSET_TOP_DOWN
+    viewer.trackedEntity = undefined
+    viewer.trackedEntity = entity
+  }
   const duration = () => (prefersReducedMotion() ? 0 : FLIGHT_SECONDS)
   const pitch = () => (tilted ? TILTED_PITCH : TOP_DOWN_PITCH)
 
@@ -62,6 +79,7 @@ export function createCameraController(
 
   return {
     home(animate) {
+      followedId = null
       viewer.trackedEntity = undefined
       flyAround(site, HOME_RANGE_METERS, animate)
     },
@@ -69,6 +87,11 @@ export function createCameraController(
     setTilted(next) {
       if (next === tilted) return
       tilted = next
+      // Following survives the perspective switch, with the matching view.
+      if (followedId) {
+        track(followedId)
+        return
+      }
       viewer.trackedEntity = undefined
       const target = screenCenterTarget()
       if (!target) {
@@ -79,12 +102,21 @@ export function createCameraController(
     },
 
     focusUav(uavId) {
+      // Centering the followed UAV snaps the follow view back instead of fighting it.
+      if (uavId === followedId) {
+        track(uavId)
+        return
+      }
       const position = layer.positionOf(uavId)
       if (position) flyAround(position, FOCUS_RANGE_METERS)
     },
 
     focusArea(sphere) {
       viewer.trackedEntity = undefined
+      if (followedId) {
+        followedId = null
+        onFollowStopped()
+      }
       flyAround(sphere.center, Math.max(sphere.radius * 6, FOCUS_RANGE_METERS / 2))
     },
 
@@ -99,9 +131,7 @@ export function createCameraController(
     },
 
     follow(uavId) {
-      const entity = uavId ? layer.getEntity(uavId) : undefined
-      if (entity) entity.viewFrom = new Cartesian3(0, -700, 450)
-      viewer.trackedEntity = entity
+      track(uavId)
     },
   }
 }
