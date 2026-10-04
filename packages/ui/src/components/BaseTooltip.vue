@@ -91,7 +91,7 @@ onBeforeUnmount(() => {
       :id="id"
       role="tooltip"
       :style="style"
-      class="pointer-events-none fixed z-50 max-w-64 rounded-md bg-surface-raised px-2.5 py-1.5 text-caption text-text-primary shadow-floating"
+      class="pointer-events-none fixed z-50 w-max max-w-64 rounded-md bg-surface-raised px-2.5 py-1.5 text-caption text-text-primary shadow-floating"
     >
       {{ text }}
     </div>

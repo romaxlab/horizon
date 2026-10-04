@@ -18,6 +18,7 @@ import {
   type Cesium3DTileset,
 } from 'cesium'
 import type { MapBasemap, MapPerspective } from '../../model/map.store'
+import type { ViewportInsets } from '../../model/map.store'
 import { createCameraController, OPERATING_SITE } from './camera-controller'
 import { createClusterLayer } from './cluster-layer'
 import { createGeofenceLayer, type GeofenceOverlay } from './geofence-layer'
@@ -82,6 +83,8 @@ export interface MapSceneOptions {
   onDraw: (point: GeoPoint) => void
   /** The camera stopped following on its own (e.g. zooming into a cluster). */
   onFollowStopped: () => void
+  /** Panels already covering the map, so the first view is framed in the free area. */
+  viewportInsets: ViewportInsets
 }
 
 /** Public surface of the 3D map, independent of Vue. */
@@ -94,6 +97,8 @@ export interface MapScene {
   setPerspective(perspective: MapPerspective): void
   setMissionOverlay(overlay: MissionOverlay | null): void
   setGeofences(zones: readonly GeofenceOverlay[]): void
+  /** Panels covering the map; the camera frames targets in the area they leave free. */
+  setViewportInsets(insets: ViewportInsets): void
   /** While drawing, clicks add area points instead of selecting UAVs. */
   setDrawing(drawing: boolean): void
   home(): void
@@ -122,6 +127,7 @@ export function createMapScene({
   onSelect,
   onDraw,
   onFollowStopped,
+  viewportInsets,
 }: MapSceneOptions): MapScene {
   if (ionToken) Ion.defaultAccessToken = ionToken
 
@@ -182,6 +188,7 @@ export function createMapScene({
     missionLayer.setGroundHeight(meters)
   }
   const camera = createCameraController(viewer, layer, perspective === '3d', onFollowStopped)
+  camera.setInsets(viewportInsets)
   camera.home(false)
 
   const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -455,6 +462,9 @@ export function createMapScene({
     },
     focusUav: (uavId) => {
       camera.focusUav(uavId)
+    },
+    setViewportInsets: (insets: ViewportInsets) => {
+      camera.setInsets(insets)
     },
     follow: withRender((uavId: string | null) => {
       camera.follow(uavId)

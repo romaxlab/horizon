@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PanelLeftOpen } from '@lucide/vue'
 import { BaseButton, BaseIconButton, BasePopover, BaseSurface, BaseText } from '@horizon/ui'
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { FleetPanel, UavInspector } from '@/modules/fleet'
 import { MapCanvas, MapControls } from '@/modules/map'
 import { DemoControlsPanel } from '@/modules/demo-controls'
@@ -36,8 +36,30 @@ const {
   stoppingMission,
   stopError,
   selectedMission,
+  setMapViewportInsets,
   missionUavs,
 } = useControlCenter()
+
+// The free map area between the panels, reported as insets for camera framing.
+const freeArea = useTemplateRef<HTMLElement>('freeArea')
+function reportFreeArea() {
+  const rect = freeArea.value?.getBoundingClientRect()
+  if (!rect) return
+  setMapViewportInsets({
+    top: Math.round(rect.top),
+    left: Math.round(rect.left),
+    right: Math.round(window.innerWidth - rect.right),
+    bottom: Math.round(window.innerHeight - rect.bottom),
+  })
+}
+const freeAreaObserver = new ResizeObserver(reportFreeArea)
+onMounted(() => {
+  if (freeArea.value) freeAreaObserver.observe(freeArea.value)
+  reportFreeArea()
+})
+onBeforeUnmount(() => {
+  freeAreaObserver.disconnect()
+})
 
 /** Local presentation state: per-UAV mission details shown above the status bar. */
 const detailsOpen = ref(false)
@@ -139,8 +161,9 @@ watch(selectedUavId, (id) => {
           </BaseSurface>
         </Transition>
 
-        <!-- Large floating video focus view; the map stays visible around it. -->
-        <div class="flex min-w-0 flex-1 items-center justify-center self-stretch">
+        <!-- Large floating video focus view; the map stays visible around it. This column is
+             also the map area the panels leave free, measured for camera framing. -->
+        <div ref="freeArea" class="flex min-w-0 flex-1 items-center justify-center self-stretch">
           <Transition
             enter-active-class="transition duration-200 ease-out"
             enter-from-class="scale-95 opacity-0"

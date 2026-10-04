@@ -1,5 +1,13 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
+
+/** Screen space covered by floating panels, CSS px from each map edge. */
+export interface ViewportInsets {
+  top: number
+  right: number
+  bottom: number
+  left: number
+}
 
 /** Basemap imagery: muted gray map or satellite. */
 export type MapBasemap = 'map' | 'satellite'
@@ -17,6 +25,8 @@ export const useMapStore = defineStore('map', () => {
   const homeRequest = ref(0)
   const basemap = ref<MapBasemap>('map')
   const perspective = ref<MapPerspective>('2d')
+  /** Reported by the layout; the camera centers things in the area the panels leave free. */
+  const viewportInsets = shallowRef<ViewportInsets>({ top: 0, right: 0, bottom: 0, left: 0 })
 
   function focusUav(uavId: string) {
     focusRequest.value = { uavId, seq: (focusRequest.value?.seq ?? 0) + 1 }
@@ -39,16 +49,30 @@ export const useMapStore = defineStore('map', () => {
     perspective.value = next
   }
 
+  function setViewportInsets(next: ViewportInsets) {
+    const current = viewportInsets.value
+    if (
+      current.top === next.top &&
+      current.right === next.right &&
+      current.bottom === next.bottom &&
+      current.left === next.left
+    )
+      return
+    viewportInsets.value = next
+  }
+
   return {
     followUavId,
     focusRequest,
     homeRequest,
     basemap,
     perspective,
+    viewportInsets,
     focusUav,
     setFollow,
     resetView,
     setBasemap,
     setPerspective,
+    setViewportInsets,
   }
 })

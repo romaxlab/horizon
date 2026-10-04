@@ -391,5 +391,7 @@ export function useControlCenter() {
     selectUav,
     focusSelected,
     toggleFollow,
+    /** The layout reports what the floating panels cover, so the camera frames around them. */
+    setMapViewportInsets: map.setViewportInsets,
   }
 }

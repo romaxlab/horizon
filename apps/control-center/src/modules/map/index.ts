@@ -1,4 +1,4 @@
-export { useMapStore } from './model/map.store'
+export { useMapStore, type ViewportInsets } from './model/map.store'
 export { default as MapCanvas } from './ui/MapCanvas.vue'
 export { default as MapControls } from './ui/MapControls.vue'
 export type { GeofenceOverlay } from './lib/cesium/geofence-layer'

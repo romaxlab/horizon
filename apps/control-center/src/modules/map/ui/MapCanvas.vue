@@ -29,7 +29,8 @@ const failed = ref(false)
 
 const { theme } = useTheme()
 const map = useMapStore()
-const { followUavId, focusRequest, homeRequest, basemap, perspective } = storeToRefs(map)
+const { followUavId, focusRequest, homeRequest, basemap, perspective, viewportInsets } =
+  storeToRefs(map)
 const ionToken = appConfig.cesiumIonToken
 
 let unsubscribeFleet: (() => void) | null = null
@@ -55,6 +56,7 @@ onMounted(async () => {
       onFollowStopped: () => {
         map.setFollow(null)
       },
+      viewportInsets: viewportInsets.value,
     })
     const created = scene.value
     created.sync(props.fleet.current())
@@ -103,6 +105,9 @@ watch(
 )
 watch(theme, (next) => {
   scene.value?.setTheme(next)
+})
+watch([viewportInsets, scene], ([insets]) => {
+  scene.value?.setViewportInsets(insets)
 })
 watch([followUavId, scene], ([uavId]) => {
   scene.value?.follow(uavId)

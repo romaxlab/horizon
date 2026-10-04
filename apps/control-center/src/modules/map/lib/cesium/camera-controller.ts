@@ -5,9 +5,13 @@ import {
   Cartographic,
   Math as CesiumMath,
   HeadingPitchRange,
+  Matrix4,
+  PerspectiveFrustum,
+  Transforms,
   type Viewer,
 } from 'cesium'
 import type { GeoPoint } from '@horizon/domain'
+import type { ViewportInsets } from '../../model/map.store'
 import type { UavLayer } from './uav-layer'
 
 /** Center of the operating area: between the stadium base and the demo mission area. */
@@ -33,11 +37,14 @@ export interface CameraController {
   follow(uavId: string | null): void
   /** Geographic point under a screen position (on the ellipsoid), if any. */
   groundPointAt(position: Cartesian2): GeoPoint | null
+  /** Panels covering the map: framing centers targets in the remaining free area. */
+  setInsets(insets: ViewportInsets): void
 }
 
-/** Follow offsets in the UAV's local frame: behind and above in 3D, straight down in 2D. */
-const FOLLOW_OFFSET_TILTED = new Cartesian3(0, -700, 450)
-const FOLLOW_OFFSET_TOP_DOWN = new Cartesian3(0, -1, 900)
+/** Follow distance; the user can zoom and orbit while following, which is kept. */
+const FOLLOW_RANGE_METERS = 850
+
+const NO_INSETS: ViewportInsets = { top: 0, right: 0, bottom: 0, left: 0 }
 
 export function createCameraController(
   viewer: Viewer,
@@ -48,39 +55,107 @@ export function createCameraController(
 ): CameraController {
   const { camera, scene } = viewer
   let tilted = initiallyTilted
-  /** UAV the camera tracks; the single source for whether following is on. */
-  let followedId: string | null = null
-
-  /** (Re)attaches tracking with the offset for the current perspective. */
-  function track(uavId: string | null) {
-    followedId = uavId
-    const entity = uavId ? layer.getEntity(uavId) : undefined
-    if (entity) entity.viewFrom = tilted ? FOLLOW_OFFSET_TILTED : FOLLOW_OFFSET_TOP_DOWN
-    viewer.trackedEntity = undefined
-    viewer.trackedEntity = entity
-  }
+  let insets = NO_INSETS
   const duration = () => (prefersReducedMotion() ? 0 : FLIGHT_SECONDS)
   const pitch = () => (tilted ? TILTED_PITCH : TOP_DOWN_PITCH)
 
-  function flyAround(target: Cartesian3, range: number, animate = true) {
-    camera.flyToBoundingSphere(new BoundingSphere(target, 0), {
-      offset: new HeadingPitchRange(tilted ? camera.heading : 0, pitch(), range),
+  /**
+   * Point the camera must look at so `target` appears in the middle of the free map area (the
+   * part not covered by panels) rather than the middle of the canvas. Only the look-at point
+   * moves; the projection stays centered, so picking (clicks, drawing) stays exact.
+   */
+  function framed(target: Cartesian3, range: number, heading: number, viewPitch: number) {
+    const dx = (insets.left - insets.right) / 2
+    const dy = (insets.top - insets.bottom) / 2
+    if (dx === 0 && dy === 0) return target
+    const height = scene.canvas.clientHeight || 1
+    const fovy =
+      (camera.frustum instanceof PerspectiveFrustum ? camera.frustum.fovy : undefined) ??
+      Math.PI / 3
+    const metersPerPixel = (2 * range * Math.tan(fovy / 2)) / height
+    // Screen right/up as ground directions for this heading; tilt stretches the vertical.
+    const right = -dx * metersPerPixel
+    const up = (dy * metersPerPixel) / Math.max(0.3, Math.abs(Math.sin(viewPitch)))
+    const east = Math.cos(heading) * right + Math.sin(heading) * up
+    const north = -Math.sin(heading) * right + Math.cos(heading) * up
+    const frame = Transforms.eastNorthUpToFixedFrame(target)
+    return Matrix4.multiplyByPoint(frame, new Cartesian3(east, north, 0), new Cartesian3())
+  }
+
+  function flyAround(target: Cartesian3, range: number, animate = true, onComplete?: () => void) {
+    const heading = tilted ? camera.heading : 0
+    camera.flyToBoundingSphere(new BoundingSphere(framed(target, range, heading, pitch()), 0), {
+      offset: new HeadingPitchRange(heading, pitch(), range),
       duration: animate ? duration() : 0,
+      complete: onComplete,
     })
   }
 
-  /** Ground point under the screen center, if the view looks at the globe. */
-  function screenCenterTarget(): Cartesian3 | undefined {
-    const canvas = scene.canvas
-    return camera.pickEllipsoid(new Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2))
+  /** Ground point in the middle of the free map area, if the view looks at the globe. */
+  function freeCenterTarget(): Cartesian3 | undefined {
+    const { clientWidth, clientHeight } = scene.canvas
+    return camera.pickEllipsoid(
+      new Cartesian2(
+        (insets.left + clientWidth - insets.right) / 2,
+        (insets.top + clientHeight - insets.bottom) / 2,
+      ),
+    )
   }
+
+  /*
+   * Follow: the camera orbits a look-at point re-framed every frame around the UAV, so the UAV
+   * stays in the middle of the free area. Zoom and orbit by the user are read back each frame
+   * and kept. `followedId` is the single source for whether following is on.
+   */
+  let followedId: string | null = null
+  /** Waiting for the fly-in to finish before the per-frame follow takes over. */
+  let followArmed = false
+  const followView = { heading: 0, pitch: TOP_DOWN_PITCH, range: FOLLOW_RANGE_METERS }
+
+  function release() {
+    followArmed = false
+    camera.lookAtTransform(Matrix4.IDENTITY)
+  }
+
+  function startFollow(uavId: string) {
+    release()
+    followedId = uavId
+    const position = layer.positionOf(uavId)
+    followView.heading = tilted ? camera.heading : 0
+    followView.pitch = pitch()
+    followView.range = FOLLOW_RANGE_METERS
+    if (!position) {
+      followArmed = true
+      return
+    }
+    flyAround(position, FOLLOW_RANGE_METERS, true, () => {
+      if (followedId === uavId) followArmed = true
+    })
+  }
+
+  scene.preRender.addEventListener(() => {
+    if (!followedId || !followArmed) return
+    const position = layer.positionOf(followedId)
+    if (!position) return
+    // Read back what the user did since the last frame (zoom, orbit) while locked on.
+    if (!Matrix4.equals(camera.transform, Matrix4.IDENTITY)) {
+      followView.heading = camera.heading
+      followView.pitch = camera.pitch
+      followView.range = Cartesian3.magnitude(camera.position)
+    }
+    const { heading, pitch: viewPitch, range } = followView
+    camera.lookAt(
+      framed(position, range, heading, viewPitch),
+      new HeadingPitchRange(heading, viewPitch, range),
+    )
+  })
 
   const site = Cartesian3.fromDegrees(OPERATING_SITE.longitude, OPERATING_SITE.latitude)
 
   return {
     home(animate) {
       followedId = null
-      viewer.trackedEntity = undefined
+      release()
       flyAround(site, HOME_RANGE_METERS, animate)
     },
 
@@ -89,11 +164,10 @@ export function createCameraController(
       tilted = next
       // Following survives the perspective switch, with the matching view.
       if (followedId) {
-        track(followedId)
+        startFollow(followedId)
         return
       }
-      viewer.trackedEntity = undefined
-      const target = screenCenterTarget()
+      const target = freeCenterTarget()
       if (!target) {
         flyAround(site, HOME_RANGE_METERS)
         return
@@ -104,7 +178,7 @@ export function createCameraController(
     focusUav(uavId) {
       // Centering the followed UAV snaps the follow view back instead of fighting it.
       if (uavId === followedId) {
-        track(uavId)
+        startFollow(uavId)
         return
       }
       const position = layer.positionOf(uavId)
@@ -112,7 +186,7 @@ export function createCameraController(
     },
 
     focusArea(sphere) {
-      viewer.trackedEntity = undefined
+      release()
       if (followedId) {
         followedId = null
         onFollowStopped()
@@ -131,7 +205,16 @@ export function createCameraController(
     },
 
     follow(uavId) {
-      track(uavId)
+      if (uavId === null) {
+        followedId = null
+        release()
+        return
+      }
+      startFollow(uavId)
+    },
+
+    setInsets(next) {
+      insets = next
     },
   }
 }

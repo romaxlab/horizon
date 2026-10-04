@@ -337,6 +337,13 @@ survives 2D/3D switches (top-down offset in 2D, behind-and-above in 3D). When th
 tracking on its own (zooming into a cluster), it reports back so the state never claims a follow
 the camera isn't doing.
 
+Camera framing respects the floating panels: the layout reports the map area they leave free
+(the column between the side panels, below the header and above the bottom bar) as viewport
+insets, and the camera places home, "Center on map", cluster zoom and the followed UAV in the
+middle of that area. Only the look-at point is shifted — the projection stays centered — so
+picking (selection, area drawing) is unaffected. Follow is a per-frame look-at that keeps the
+user's zoom and orbit.
+
 ## 8. Workspace packages
 
 ### `@horizon/domain`
