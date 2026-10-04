@@ -22,7 +22,9 @@ const surface = cva('', {
   variants: {
     variant: {
       panel: 'bg-surface',
-      floating: 'bg-glass shadow-floating backdrop-blur-2xl backdrop-saturate-150',
+      // Glass material: tint, blur, saturation and edge highlight all come from tokens.
+      floating:
+        'bg-glass shadow-floating backdrop-blur-(--glass-blur) backdrop-saturate-(--glass-saturation)',
       subtle: 'bg-fill',
       raised: 'bg-surface-raised shadow-raised',
     },

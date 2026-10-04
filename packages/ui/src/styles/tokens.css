@@ -57,8 +57,15 @@
   --bg-surface: var(--gray-0);
   --bg-surface-raised: var(--gray-0);
   --bg-surface-sunken: var(--gray-50);
-  /* Translucent material for panels floating over the map. */
-  --bg-glass: color-mix(in oklab, var(--gray-0) 88%, transparent);
+  /*
+   * Glass material for panels floating over the map (both themes): tint opacity, background
+   * blur, saturation boost of what shows through, and a thin light edge highlight.
+   */
+  --glass-opacity: 65%;
+  --glass-blur: 15px;
+  --glass-saturation: 150%;
+  --glass-highlight: inset 0 0 0 0 transparent;
+  --bg-glass: color-mix(in oklab, var(--gray-0) var(--glass-opacity), transparent);
   /* Neutral fills for controls, hover and selection; work on any surface. */
   --bg-fill: color-mix(in oklab, var(--black) 5%, transparent);
   --bg-fill-strong: color-mix(in oklab, var(--black) 9%, transparent);
@@ -84,7 +91,8 @@
   --status-info: var(--blue-text);
   --status-neutral: var(--gray-600);
 
-  --elevation-floating: var(--shadow-hairline-light), var(--shadow-soft-light);
+  --elevation-floating:
+    var(--glass-highlight), var(--shadow-hairline-light), var(--shadow-soft-light);
   --elevation-raised: var(--shadow-hairline-light), 0 2px 8px rgb(0 0 0 / 0.06);
 
   /* Map overlays sit on arbitrary imagery: a white halo and soft shadow keep them legible on
@@ -119,7 +127,7 @@
   --bg-surface: var(--gray-d-800);
   --bg-surface-raised: var(--gray-d-700);
   --bg-surface-sunken: var(--gray-d-700);
-  --bg-glass: color-mix(in oklab, var(--gray-d-800) 88%, transparent);
+  --bg-glass: color-mix(in oklab, var(--gray-d-800) var(--glass-opacity), transparent);
   --bg-fill: color-mix(in oklab, var(--white) 8%, transparent);
   --bg-fill-strong: color-mix(in oklab, var(--white) 13%, transparent);
 
@@ -141,6 +149,23 @@
   --status-info: var(--blue-text-dark);
   --status-neutral: var(--gray-d-300);
 
-  --elevation-floating: var(--shadow-hairline-dark), var(--shadow-soft-dark);
+  --elevation-floating:
+    var(--glass-highlight), var(--shadow-hairline-dark), var(--shadow-soft-dark);
   --elevation-raised: var(--shadow-hairline-dark), 0 2px 8px rgb(0 0 0 / 0.3);
+}
+
+/*
+ * System accessibility settings: "Reduce transparency" and "Increase contrast" turn the glass
+ * solid (panels stay readable over any imagery; the blur then has nothing to show through).
+ */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-opacity: 100%;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --glass-opacity: 100%;
+  }
 }
