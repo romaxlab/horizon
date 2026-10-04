@@ -180,7 +180,13 @@ watch(homeRequest, () => {
 <template>
   <div class="absolute inset-0">
     <!-- data-map-ready: the 3D scene is interactive (also a stable hook for E2E). -->
-    <div ref="container" class="absolute inset-0" :data-map-ready="scene !== undefined" />
+    <!-- data-map-ready / data-drawing: the scene's state, also stable hooks for E2E. -->
+    <div
+      ref="container"
+      class="absolute inset-0"
+      :data-map-ready="scene !== undefined"
+      :data-drawing="scene !== undefined && drawing"
+    />
     <!-- Stands in for the map until its first view is complete, then fades away with its loader.
          The WebGL canvas itself stays visible: hiding it stalls the main thread when shown. -->
     <Transition

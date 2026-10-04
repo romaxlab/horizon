@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openControlCenter } from './control-center'
+import { drawOnMap, openControlCenter } from './control-center'
 
 test('create an Area Scan mission, generate the plan, launch and observe execution', async ({
   page,
@@ -14,11 +14,7 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
   await planning.getByRole('button', { name: 'Continue' }).click()
 
   // Draw a square scan area around the map center.
-  const map = page.getByRole('main', { name: 'Operational map' })
-  const box = await map.boundingBox()
-  if (!box) throw new Error('map not visible')
-  const cx = box.x + box.width / 2
-  const cy = box.y + box.height / 2
+  const click = await drawOnMap(page)
   const corners = [
     [-160, -110],
     [160, -110],
@@ -28,7 +24,7 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
   // One corner at a time: a slow runner gets to register each click, and a failure names the
   // click that was lost.
   for (const [index, [dx, dy]] of corners.entries()) {
-    await page.mouse.click(cx + dx, cy + dy)
+    await click(dx, dy)
     await expect(planning.getByText(`${String(index + 1)} points`)).toBeVisible()
   }
 

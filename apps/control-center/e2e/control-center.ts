@@ -21,3 +21,17 @@ export async function demoControls(page: Page): Promise<Locator> {
   await expect(panel).toBeVisible()
   return panel
 }
+
+/**
+ * Clicks on the map canvas at offsets from its center, once the scene is in drawing mode.
+ * Clicking the canvas element (not raw coordinates) makes Playwright verify the canvas receives
+ * the click and name any element covering it.
+ */
+export async function drawOnMap(page: Page) {
+  await expect(page.locator('[data-drawing="true"]')).toBeAttached()
+  const canvas = page.getByRole('main', { name: 'Operational map' }).locator('canvas').first()
+  const box = await canvas.boundingBox()
+  if (!box) throw new Error('map canvas not visible')
+  return (dx: number, dy: number) =>
+    canvas.click({ position: { x: box.width / 2 + dx, y: box.height / 2 + dy } })
+}

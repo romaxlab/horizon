@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openControlCenter } from './control-center'
+import { drawOnMap, openControlCenter } from './control-center'
 
 test('create a Patrol: pick the type, draw the loop, plan and launch', async ({ page }) => {
   test.setTimeout(180_000)
@@ -14,17 +14,13 @@ test('create a Patrol: pick the type, draw the loop, plan and launch', async ({ 
   await planning.getByRole('button', { name: 'Continue' }).click()
 
   // A triangle loop around the map center.
-  const map = page.getByRole('main', { name: 'Operational map' })
-  const box = await map.boundingBox()
-  if (!box) throw new Error('map not visible')
-  const cx = box.x + box.width / 2
-  const cy = box.y + box.height / 2
+  const click = await drawOnMap(page)
   for (const [dx, dy] of [
     [-150, 100],
     [0, -120],
     [150, 100],
   ] as const) {
-    await page.mouse.click(cx + dx, cy + dy)
+    await click(dx, dy)
   }
   await expect(planning.getByText('3 points')).toBeVisible()
 

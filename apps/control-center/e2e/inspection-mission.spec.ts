@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openControlCenter } from './control-center'
+import { drawOnMap, openControlCenter } from './control-center'
 
 test('create a Point Inspection: place the target, plan the orbit and launch', async ({ page }) => {
   test.setTimeout(180_000)
@@ -15,11 +15,9 @@ test('create a Point Inspection: place the target, plan the orbit and launch', a
   await planning.getByRole('button', { name: 'Continue' }).click()
 
   // The second click moves the target instead of adding a point.
-  const map = page.getByRole('main', { name: 'Operational map' })
-  const box = await map.boundingBox()
-  if (!box) throw new Error('map not visible')
-  await page.mouse.click(box.x + box.width / 2 - 80, box.y + box.height / 2)
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  const click = await drawOnMap(page)
+  await click(-80, 0)
+  await click(0, 0)
   await expect(planning.getByText('Target set')).toBeVisible()
 
   await planning.getByRole('button', { name: 'Generate plan' }).click()
