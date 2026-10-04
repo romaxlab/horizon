@@ -522,6 +522,10 @@ shows phase counts ("2 en route · 3 scanning · 1 returning · ETA"); a low-bat
 counted apart in warning tone, since color signals status, not phase. The UAV inspector shows
 the UAV's phase with its lap ("Patrolling · lap 2 of 3"), its own progress and ETA to landing,
 passed in by the route-level composition because the fleet module does not own missions.
+The status bar expands into a per-UAV list (phase, lap, progress, ETA, battery on landing);
+choosing a row selects and focuses that UAV. Telemetry carries the backend's `landing_battery_pct`
+estimate (rest of the route plus the way home, from its battery model; optional for backends
+without one); below the low-battery threshold it is shown in warning tone.
 
 Mission types (planned by the backend, `@horizon/simulator`):
 

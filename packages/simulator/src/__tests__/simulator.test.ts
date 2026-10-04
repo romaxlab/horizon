@@ -673,6 +673,39 @@ describe('createSimulator', () => {
     expect(result).toMatchObject({ ok: false, geofenceIds: ['nfz-marina'] })
   })
 
+  it('estimates the battery on landing close to what the UAV lands with', () => {
+    const { simulator, messages } = record()
+    const plan = simulator.planMission({
+      type: 'patrol',
+      name: 'Estimate',
+      area: {
+        polygon: [
+          { lat: 24.455, lon: 54.385 },
+          { lat: 24.455, lon: 54.388 },
+          { lat: 24.458, lon: 54.388 },
+        ],
+      },
+      altitude_m: 60,
+      uav_count: 1,
+      laps: 2,
+    })
+    if (!plan.ok) throw new Error(plan.reason)
+    const uavId = plan.mission.assigned_uav_ids[0] ?? ''
+    simulator.dispatch({ type: 'launchMission', missionId: plan.mission.id })
+    simulator.step(30_000)
+    const estimate = telemetryOf(messages, uavId).at(-1)?.landing_battery_pct ?? 0
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      3600,
+    )
+    const landed = telemetryOf(messages, uavId).at(-1)
+    expect(landed?.landing_battery_pct).toBeNull()
+    expect(Math.abs((landed?.battery_pct ?? 0) - estimate)).toBeLessThan(2)
+  })
+
   it('reports whether there is anything to reset', () => {
     const { simulator } = record()
     expect(simulator.pristine).toBe(true)

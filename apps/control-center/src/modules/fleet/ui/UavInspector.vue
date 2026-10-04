@@ -129,9 +129,17 @@ onBeforeUnmount(() => {
         </div>
         <template v-if="mission?.ratio != null">
           <BaseProgress label="UAV mission progress" :value="mission.ratio" />
-          <BaseText v-if="mission.eta" variant="caption" tone="secondary" numeric>
-            {{ mission.eta }}
-          </BaseText>
+          <div class="flex items-center justify-between gap-3">
+            <BaseText variant="caption" tone="secondary" numeric>{{ mission.eta }}</BaseText>
+            <BaseText
+              v-if="mission.landingBattery"
+              variant="caption"
+              :tone="mission.landingBattery.tone"
+              numeric
+            >
+              Battery on landing {{ mission.landingBattery.label }}
+            </BaseText>
+          </div>
         </template>
       </div>
 

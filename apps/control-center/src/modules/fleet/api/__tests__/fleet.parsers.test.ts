@@ -16,6 +16,7 @@ const telemetryDto = {
   waypoint_index: 3,
   flight_phase: 'mission',
   return_reason: null,
+  landing_battery_pct: 42.5,
 }
 
 describe('parseTelemetryMessage', () => {
@@ -35,6 +36,7 @@ describe('parseTelemetryMessage', () => {
         currentWaypoint: 3,
         flightPhase: 'mission',
         returnReason: null,
+        landingBattery: 42.5,
       },
     })
   })
@@ -49,6 +51,12 @@ describe('parseTelemetryMessage', () => {
       expect(parseTelemetryMessage({ type: 'telemetry', data }).kind).toBe('invalid')
     }
     expect(parseTelemetryMessage('garbage').kind).toBe('invalid')
+    // The landing estimate is optional: backends without a battery model omit it.
+    const parsed = parseTelemetryMessage({
+      type: 'telemetry',
+      data: { ...telemetryDto, landing_battery_pct: undefined },
+    })
+    expect(parsed.kind === 'telemetry' && parsed.telemetry.landingBattery).toBeNull()
   })
 
   it('leaves other message types to other consumers', () => {

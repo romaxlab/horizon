@@ -26,5 +26,6 @@ export const telemetry = (
   currentWaypoint: null,
   flightPhase: 'parked',
   returnReason: null,
+  landingBattery: null,
   ...overrides,
 })

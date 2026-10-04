@@ -24,6 +24,8 @@ export interface InspectorMission {
   ratio: number | null
   /** e.g. "Lands in 4:12". */
   eta: string | null
+  /** Estimated battery on landing, e.g. "≈ 27%"; warning when it would land below the reserve. */
+  landingBattery: { label: string; tone: 'secondary' | 'warning' } | null
 }
 
 /** Fleet change notification: a full reset (snapshot) or the UAVs updated in one batch. */

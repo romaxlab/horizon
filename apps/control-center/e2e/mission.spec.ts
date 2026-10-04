@@ -41,6 +41,14 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
   const status = page.getByLabel('Mission status')
   await expect(status).toContainText('6 en route')
   await expect(status.getByRole('progressbar', { name: 'Mission progress' })).toBeVisible()
+
+  // Per-UAV details expand from the status bar.
+  await status.getByRole('button', { name: 'Show mission details' }).click()
+  const details = page.getByLabel('Mission details', { exact: true })
+  await expect(details.getByRole('listitem')).toHaveCount(6)
+  await expect(details).toContainText('En route')
+  await status.getByRole('button', { name: 'Hide mission details' }).click()
+  await expect(details).toBeHidden()
   await expect(page.getByRole('button', { name: 'New Mission' })).toBeDisabled()
 
   // The mission UAVs are flying: Active in the fleet, moving and climbing in the inspector.

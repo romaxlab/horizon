@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Square } from '@lucide/vue'
-import { BaseButton, BaseProgress, BaseSurface, BaseText } from '@horizon/ui'
+import { ChevronUp, Square } from '@lucide/vue'
+import { BaseButton, BaseIconButton, BaseProgress, BaseSurface, BaseText } from '@horizon/ui'
 import { ref, watch } from 'vue'
 
 const props = defineProps<{
@@ -14,9 +14,11 @@ const props = defineProps<{
   stopping: boolean
   /** Last failed stop attempt; cleared by the next one. */
   stopError: string | null
+  /** Whether the per-UAV mission details are shown; null hides the toggle. */
+  detailsOpen: boolean | null
 }>()
 
-const emit = defineEmits<{ stop: [] }>()
+const emit = defineEmits<{ stop: []; toggleDetails: [] }>()
 
 /** Stopping recalls every UAV, so it takes an explicit second click. */
 const confirming = ref(false)
@@ -75,6 +77,16 @@ function confirmStop() {
       >
         Stop failed
       </BaseText>
+      <BaseIconButton
+        v-if="detailsOpen !== null"
+        size="sm"
+        :label="detailsOpen ? 'Hide mission details' : 'Show mission details'"
+        :aria-expanded="detailsOpen"
+        aria-controls="mission-details"
+        @click="emit('toggleDetails')"
+      >
+        <ChevronUp class="transition-transform" :class="detailsOpen && 'rotate-180'" />
+      </BaseIconButton>
       <BaseButton
         v-if="canStop"
         size="sm"

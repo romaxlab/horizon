@@ -26,6 +26,7 @@ export function mapTelemetry(dto: TelemetryDto): UavTelemetry {
     currentWaypoint: dto.waypoint_index,
     flightPhase: dto.flight_phase,
     returnReason: dto.return_reason,
+    landingBattery: dto.landing_battery_pct ?? null,
   }
 }
 

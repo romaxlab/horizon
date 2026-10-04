@@ -30,6 +30,11 @@ export interface TelemetryDto {
   flight_phase: 'parked' | 'mission' | 'returning'
   /** Why a returning UAV is heading home; null otherwise. */
   return_reason: 'completed' | 'aborted' | 'low-battery' | null
+  /**
+   * Estimated battery on landing if the UAV flies the rest of its route and returns home;
+   * null while parked.
+   */
+  landing_battery_pct: number | null
 }
 
 export interface FleetSnapshotDto {

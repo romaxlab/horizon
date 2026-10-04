@@ -30,6 +30,8 @@ export interface UavTelemetry {
   flightPhase: FlightPhase
   /** Why a returning UAV is heading home; null otherwise. */
   returnReason: ReturnReason | null
+  /** Backend estimate of the battery on landing (rest of route + way home), %; null if unknown. */
+  landingBattery: number | null
 }
 
 export type FlightPhase = 'parked' | 'mission' | 'returning'

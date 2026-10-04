@@ -155,6 +155,8 @@ interface UavRuntime {
   waypointIndex: number
   /** Turn points around no-fly zones on the way home, flown at the return layer. */
   returnPath: GeoPoint[]
+  /** Route distance from each waypoint to the last one, meters (for the landing estimate). */
+  routeRemaining: number[]
   /** Off-route point the UAV drifts to and holds (geofence breach demo); null on route. */
   diversion: GeoPosition | null
   /** Battery level before the low-battery injection; null when not injected. */
@@ -225,12 +227,14 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       route: [],
       waypointIndex: 0,
       returnPath: [],
+      routeRemaining: [],
       diversion: null,
       batteryBeforeLow: null,
     }))
   }
 
   function toTelemetryDto(state: UavRuntime): TelemetryDto {
+    const landing = landingBattery(state)
     return {
       uav_id: state.uav.id,
       ts: now,
@@ -246,6 +250,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       waypoint_index: state.phase === 'parked' ? null : state.waypointIndex,
       flight_phase: state.phase,
       return_reason: state.returnReason,
+      landing_battery_pct: landing === null ? null : round(landing, 1),
     }
   }
 
@@ -289,13 +294,35 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   const returnLayer = () => (mission?.altitude_m ?? 0) + RETURN_LAYER_OFFSET_METERS
 
   /** Battery (%) needed to climb to the return layer, fly home and land, plus a reserve. */
-  function batteryNeededToReturn(state: UavRuntime): number {
+  /** Flight time to climb to the return layer, fly home around no-fly zones and land. */
+  function returnSeconds(state: UavRuntime, from: GeoPoint, altitude: number): number {
     const layer = returnLayer()
-    const seconds =
-      Math.max(0, layer - state.position.altitude) / CLIMB_RATE_MPS +
-      airspace.distance(state.position, state.home) / CRUISE_SPEED_MPS +
+    return (
+      Math.max(0, layer - altitude) / CLIMB_RATE_MPS +
+      airspace.distance(from, state.home) / CRUISE_SPEED_MPS +
       layer / CLIMB_RATE_MPS
+    )
+  }
+
+  function batteryNeededToReturn(state: UavRuntime): number {
+    const seconds = returnSeconds(state, state.position, state.position.altitude)
     return seconds * BATTERY_DRAIN_PCT_PER_SEC + RETURN_RESERVE_PCT
+  }
+
+  /** Battery expected on landing: rest of the route (if on mission), then the way home. */
+  function landingBattery(state: UavRuntime): number | null {
+    if (state.phase === 'parked') return null
+    let seconds: number
+    const next = state.route[state.waypointIndex]
+    const last = state.route.at(-1)
+    if (state.phase === 'mission' && next && last) {
+      const remaining =
+        distanceMeters(state.position, next) + (state.routeRemaining[state.waypointIndex] ?? 0)
+      seconds = remaining / CRUISE_SPEED_MPS + returnSeconds(state, last, last.altitude)
+    } else {
+      seconds = returnSeconds(state, state.position, state.position.altitude)
+    }
+    return Math.max(0, state.battery - seconds * BATTERY_DRAIN_PCT_PER_SEC)
   }
 
   function returnHome(state: UavRuntime, reason: ReturnReason) {
@@ -538,6 +565,14 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
         order: w.order,
       }))
       state.waypointIndex = 0
+      // Suffix sums: distance from each waypoint to the end of the route.
+      state.routeRemaining = state.route.map(() => 0)
+      for (let i = state.route.length - 2; i >= 0; i--) {
+        const a = state.route[i]
+        const b = state.route[i + 1]
+        state.routeRemaining[i] =
+          (state.routeRemaining[i + 1] ?? 0) + (a && b ? distanceMeters(a, b) : 0)
+      }
     }
     plannedMissions.delete(missionId)
     mission = { ...planned, status: 'active', started_at: now }

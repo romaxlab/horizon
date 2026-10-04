@@ -28,6 +28,8 @@ export const telemetryDtoSchema = z.object({
   waypoint_index: z.number().int().nonnegative().nullable(),
   flight_phase: z.enum(['parked', 'mission', 'returning']),
   return_reason: z.enum(['completed', 'aborted', 'low-battery']).nullable(),
+  /** Optional: backends without a battery model omit it. */
+  landing_battery_pct: percent.nullish(),
 })
 
 export const fleetSnapshotDtoSchema = z.object({

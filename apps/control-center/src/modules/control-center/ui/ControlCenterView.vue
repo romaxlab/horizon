@@ -10,6 +10,7 @@ import { MissionBuilderPanel } from '@/modules/mission-planning'
 import { VideoFeed } from '@/modules/video-monitoring'
 import { useControlCenter } from '../model/useControlCenter'
 import ControlCenterHeader from './ControlCenterHeader.vue'
+import MissionDetailsPanel from './MissionDetailsPanel.vue'
 import MissionStatusBar from './MissionStatusBar.vue'
 
 const {
@@ -35,7 +36,14 @@ const {
   stoppingMission,
   stopError,
   selectedMission,
+  missionUavs,
 } = useControlCenter()
+
+/** Local presentation state: per-UAV mission details shown above the status bar. */
+const detailsOpen = ref(false)
+function inspectMissionUav(uavId: string) {
+  selectUav(uavId, { focus: true })
+}
 
 /** Local presentation state: fleet panel expansion and the large video focus view. */
 const fleetOpen = ref(true)
@@ -206,6 +214,12 @@ watch(selectedUavId, (id) => {
         <div v-if="demo" class="absolute bottom-0 left-0">
           <DemoControlsPanel :controls="demo" />
         </div>
+        <div
+          v-if="detailsOpen && missionUavs.length > 0"
+          class="absolute bottom-full mb-3 flex w-96 justify-center"
+        >
+          <MissionDetailsPanel :uavs="missionUavs" @inspect="inspectMissionUav" />
+        </div>
         <MissionStatusBar
           :state="mission.state"
           :detail="mission.detail"
@@ -214,7 +228,9 @@ watch(selectedUavId, (id) => {
           :can-stop="missionActive"
           :stopping="stoppingMission"
           :stop-error="stopError"
+          :details-open="missionUavs.length > 0 ? detailsOpen : null"
           @stop="stopMission"
+          @toggle-details="detailsOpen = !detailsOpen"
         />
       </div>
     </div>

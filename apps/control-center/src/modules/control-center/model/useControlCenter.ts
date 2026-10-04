@@ -8,6 +8,7 @@ import {
   healthIssues,
   useFleetStore,
   useFleetSync,
+  LOW_BATTERY_PCT,
   type ConnectionStatus,
   type InspectorMission,
 } from '@/modules/fleet'
@@ -182,6 +183,40 @@ export function useControlCenter() {
     })),
   )
 
+  /**
+   * Each mission UAV's part in the active mission (phase, lap, progress, ETA, battery on landing),
+   * for the mission details list and the inspector.
+   */
+  const missionUavs = computed<(InspectorMission & { uavId: string; uavName: string })[]>(() => {
+    const current = missions.current
+    const progress = missionProgress.value
+    if (!current || !progress || current.status !== 'active') return []
+    return progress.uavs.map((status) => {
+      const state = fleet.uavsById[status.uavId]
+      const flying = status.phase !== 'pending' && status.phase !== 'landed'
+      const landing = flying ? (state?.telemetry?.landingBattery ?? null) : null
+      return {
+        uavId: status.uavId,
+        uavName: state?.uav.name ?? status.uavId,
+        name: current.name,
+        phase: phaseLabel(current.type, status),
+        tone:
+          status.phase === 'returning' && status.returnReason === 'low-battery'
+            ? 'warning'
+            : 'secondary',
+        ratio: flying ? status.ratio : null,
+        eta: flying && status.etaSec !== null ? `Lands in ${formatDuration(status.etaSec)}` : null,
+        landingBattery:
+          landing === null
+            ? null
+            : {
+                label: `≈ ${String(Math.round(landing))}%`,
+                tone: landing < LOW_BATTERY_PCT ? 'warning' : 'secondary',
+              },
+      }
+    })
+  })
+
   const { missionPlanner, demoControl } = useAppServices()
   const abortMutation = useMutation({
     mutationFn: (missionId: string) => missionPlanner.abort(missionId),
@@ -335,23 +370,10 @@ export function useControlCenter() {
     fleetFeed: { current: () => fleet.uavs, subscribe: fleet.subscribe },
     selectedUavId: computed(() => fleet.selectedUavId),
     /** The selected UAV's part in the current mission, for the inspector. */
-    selectedMission: computed<InspectorMission | null>(() => {
-      const current = missions.current
-      const uavId = fleet.selectedUavId
-      const status = missionProgress.value?.uavs.find((u) => u.uavId === uavId)
-      if (!current || !status || current.status !== 'active') return null
-      const flying = status.phase !== 'pending' && status.phase !== 'landed'
-      return {
-        name: current.name,
-        phase: phaseLabel(current.type, status),
-        tone:
-          status.phase === 'returning' && status.returnReason === 'low-battery'
-            ? 'warning'
-            : 'secondary',
-        ratio: flying ? status.ratio : null,
-        eta: flying && status.etaSec !== null ? `Lands in ${formatDuration(status.etaSec)}` : null,
-      }
-    }),
+    selectedMission: computed<InspectorMission | null>(
+      () => missionUavs.value.find((row) => row.uavId === fleet.selectedUavId) ?? null,
+    ),
+    missionUavs,
     inspectorOpen: computed(() => fleet.selectedUav !== null),
     following: computed(() => map.followUavId !== null),
     builder,
