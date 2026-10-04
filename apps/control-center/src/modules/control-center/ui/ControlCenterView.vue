@@ -140,8 +140,10 @@ watch(selectedUavId, (id) => {
 
     <!-- Floating panels. The overlay ignores pointer events so the map stays interactive. -->
     <div class="pointer-events-none absolute inset-0 flex flex-col gap-3 p-3">
+      <!-- data-reveal: groups of the staged startup reveal (app/startup); inert without it. -->
       <ControlCenterHeader
         v-model:events-open="eventsOpen"
+        data-reveal="0"
         :connection="connection"
         :mission-title="mission.title"
         :can-create-mission="canCreateMission"
@@ -176,6 +178,7 @@ watch(selectedUavId, (id) => {
             as="aside"
             variant="floating"
             :class="[SIDE_PANEL_CLASS, hiddenOnPhoneUnless('side-panel')]"
+            data-reveal="1"
             aria-label="Mission planning"
           >
             <MissionBuilderPanel />
@@ -185,6 +188,7 @@ watch(selectedUavId, (id) => {
             as="aside"
             variant="floating"
             :class="[SIDE_PANEL_CLASS, hiddenOnPhoneUnless('side-panel')]"
+            data-reveal="1"
             aria-label="Fleet"
           >
             <FleetPanel
@@ -198,6 +202,7 @@ watch(selectedUavId, (id) => {
             shape="pill"
             class="pointer-events-auto p-1"
             :class="hiddenOnPhoneUnless('map')"
+            data-reveal="1"
           >
             <BaseIconButton label="Show fleet panel" @click="fleetOpen = true">
               <PanelLeftOpen />
@@ -298,8 +303,12 @@ watch(selectedUavId, (id) => {
            slots: equal flex-1 sides keep the status bar exactly centered, no absolute layout. -->
       <div class="relative flex items-end gap-3 max-sm:flex-wrap">
         <!-- Map attribution, right-aligned above the whole row (also when it wraps on phones). -->
-        <div :id="MAP_ATTRIBUTION_TARGET_ID" class="absolute right-0 bottom-full mb-2" />
-        <div class="flex min-w-0 flex-1 justify-start">
+        <div
+          :id="MAP_ATTRIBUTION_TARGET_ID"
+          class="absolute right-0 bottom-full mb-2"
+          data-reveal="3"
+        />
+        <div class="flex min-w-0 flex-1 justify-start" data-reveal="3">
           <DemoControlsPanel v-if="demo" :controls="demo" />
         </div>
         <BasePopover
@@ -311,6 +320,7 @@ watch(selectedUavId, (id) => {
           panel-class="flex w-96 flex-col overflow-hidden"
           max-height="20rem"
           class="flex shrink-0 max-sm:order-first max-sm:w-full"
+          data-reveal="2"
           @update:open="detailsOpen = $event"
         >
           <template #trigger>
@@ -329,7 +339,7 @@ watch(selectedUavId, (id) => {
           </template>
           <MissionDetailsPanel :uavs="missionUavs" @inspect="inspectMissionUav" />
         </BasePopover>
-        <div class="flex min-w-0 flex-1 justify-end">
+        <div class="flex min-w-0 flex-1 justify-end" data-reveal="3">
           <MapControls class="pointer-events-auto" />
         </div>
       </div>

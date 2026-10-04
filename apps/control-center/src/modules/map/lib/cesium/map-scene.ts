@@ -88,6 +88,8 @@ export interface MapSceneOptions {
   onFollowStopped: () => void
   /** Panels already covering the map, so the first view is framed in the free area. */
   viewportInsets: ViewportInsets
+  /** Start high above the operating area with content hidden, awaiting `arrive()`. */
+  startInOrbit?: boolean
 }
 
 /** Public surface of the 3D map, independent of Vue. */
@@ -105,6 +107,10 @@ export interface MapScene {
   /** While drawing, clicks add area points instead of selecting UAVs. */
   setDrawing(drawing: boolean): void
   home(): void
+  /** Opening arrival from orbit into the home view. */
+  arrive(durationMs: number): void
+  /** Shows or hides map content (UAVs, clusters, mission and no-fly overlays). */
+  setContentVisible(visible: boolean): void
   focusUav(uavId: string): void
   follow(uavId: string | null): void
   destroy(): void
@@ -131,6 +137,7 @@ export function createMapScene({
   onDraw,
   onFollowStopped,
   viewportInsets,
+  startInOrbit = false,
 }: MapSceneOptions): MapScene {
   if (ionToken) Ion.defaultAccessToken = ionToken
 
@@ -211,7 +218,12 @@ export function createMapScene({
   }
   const camera = createCameraController(viewer, layer, perspective === '3d', onFollowStopped)
   camera.setInsets(viewportInsets)
-  camera.home(false)
+  if (startInOrbit) {
+    camera.orbit()
+    viewer.entities.show = false
+  } else {
+    camera.home(false)
+  }
 
   const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -550,6 +562,12 @@ export function createMapScene({
     home: () => {
       camera.home(true)
     },
+    arrive: (durationMs: number) => {
+      camera.arrive(durationMs / 1000)
+    },
+    setContentVisible: withRender((visible: boolean) => {
+      viewer.entities.show = visible
+    }),
     focusUav: (uavId) => {
       camera.focusUav(uavId)
     },

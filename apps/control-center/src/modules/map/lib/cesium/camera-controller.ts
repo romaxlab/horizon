@@ -3,6 +3,7 @@ import {
   Cartesian2,
   Cartesian3,
   Cartographic,
+  EasingFunction,
   Math as CesiumMath,
   HeadingPitchRange,
   Matrix4,
@@ -23,11 +24,18 @@ const TILTED_PITCH = CesiumMath.toRadians(-42)
 const HOME_RANGE_METERS = 6_000
 const FOCUS_RANGE_METERS = 900
 const FLIGHT_SECONDS = 1.2
+/** Opening arrival: starts high above the region, slightly rotated, and settles into home. */
+const ORBIT_HEIGHT_METERS = 2_200_000
+const ORBIT_HEADING = CesiumMath.toRadians(-20)
 
 const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export interface CameraController {
   home(animate: boolean): void
+  /** Places the camera high above the operating area: the start of the opening arrival. */
+  orbit(): void
+  /** Flies from the orbit down into the home view, easing in and out (instant on reduced motion). */
+  arrive(seconds: number): void
   /** Switches between top-down and tilted perspective around the point at the screen center. */
   setTilted(tilted: boolean): void
   focusUav(uavId: string): void
@@ -84,11 +92,24 @@ export function createCameraController(
     return Matrix4.multiplyByPoint(frame, new Cartesian3(east, north, 0), new Cartesian3())
   }
 
-  function flyAround(target: Cartesian3, range: number, animate = true, onComplete?: () => void) {
-    const heading = tilted ? camera.heading : 0
+  function flyAround(
+    target: Cartesian3,
+    range: number,
+    animate = true,
+    onComplete?: () => void,
+    flight: {
+      heading?: number
+      seconds?: number
+      easing?: EasingFunction.Callback
+      maximumHeight?: number
+    } = {},
+  ) {
+    const heading = flight.heading ?? (tilted ? camera.heading : 0)
     camera.flyToBoundingSphere(new BoundingSphere(framed(target, range, heading, pitch()), 0), {
       offset: new HeadingPitchRange(heading, pitch(), range),
-      duration: animate ? duration() : 0,
+      duration: animate ? (flight.seconds ?? duration()) : 0,
+      easingFunction: flight.easing,
+      maximumHeight: flight.maximumHeight,
       complete: onComplete,
     })
   }
@@ -159,6 +180,29 @@ export function createCameraController(
       followedId = null
       release()
       flyAround(site, HOME_RANGE_METERS, animate)
+    },
+
+    orbit() {
+      camera.setView({
+        destination: Cartesian3.fromDegrees(
+          OPERATING_SITE.longitude,
+          OPERATING_SITE.latitude,
+          ORBIT_HEIGHT_METERS,
+        ),
+        orientation: { heading: ORBIT_HEADING, pitch: TOP_DOWN_PITCH, roll: 0 },
+      })
+    },
+
+    arrive(seconds) {
+      followedId = null
+      release()
+      // Straight down from orbit (never climbing first), slow out of orbit and into home.
+      flyAround(site, HOME_RANGE_METERS, !prefersReducedMotion(), undefined, {
+        heading: 0,
+        seconds,
+        easing: EasingFunction.QUARTIC_IN_OUT,
+        maximumHeight: ORBIT_HEIGHT_METERS,
+      })
     },
 
     setTilted(next) {

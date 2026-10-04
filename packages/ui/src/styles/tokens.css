@@ -118,6 +118,8 @@
     ),
     radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
   --media-scrim: rgba(0, 0, 0, 0.45);
+  /* Faint light at the center of a full-screen media backdrop (startup screen). */
+  --media-glow: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.07) 0%, transparent 62%);
 }
 
 :root[data-theme='dark'] {

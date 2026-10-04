@@ -30,8 +30,16 @@ const failed = ref(false)
 
 const { theme } = useTheme()
 const map = useMapStore()
-const { followUavId, focusRequest, homeRequest, basemap, perspective, viewportInsets } =
-  storeToRefs(map)
+const {
+  followUavId,
+  focusRequest,
+  homeRequest,
+  basemap,
+  perspective,
+  viewportInsets,
+  arrival,
+  contentHidden,
+} = storeToRefs(map)
 const ionToken = appConfig.cesiumIonToken
 /** Satellite imagery comes from Cesium ion until it fails; then the scene falls back to Esri. */
 const ionImagery = ref(ionToken !== null)
@@ -64,6 +72,7 @@ onMounted(async () => {
         map.setFollow(null)
       },
       viewportInsets: viewportInsets.value,
+      startInOrbit: arrival.value.stage !== 'settled',
     })
     const created = scene.value
     created.sync(props.fleet.current())
@@ -75,6 +84,10 @@ onMounted(async () => {
     scene.value.setMissionOverlay(props.missionOverlay)
     scene.value.setGeofences(props.geofences)
     scene.value.setDrawing(props.drawing)
+    // The arrival may have moved on while Cesium loaded: catch up with it.
+    applyArrival(arrival.value)
+    scene.value.setContentVisible(!contentHidden.value)
+    map.setSceneReady(true)
   } catch (error) {
     console.error('[map] failed to initialize', error)
     failed.value = true
@@ -82,6 +95,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  map.setSceneReady(false)
   unsubscribeFleet?.()
   scene.value?.destroy()
 })
@@ -127,6 +141,15 @@ watch(basemap, (next) => {
 })
 watch(perspective, (next) => {
   scene.value?.setPerspective(next)
+})
+/** Opening arrival: fly in from orbit, or jump straight home when it is cut short. */
+function applyArrival(next: typeof arrival.value) {
+  if (next.stage === 'flying') scene.value?.arrive(next.durationMs)
+  else if (next.stage === 'settled' && next.cut) scene.value?.arrive(0)
+}
+watch(arrival, applyArrival)
+watch(contentHidden, (hidden) => {
+  scene.value?.setContentVisible(!hidden)
 })
 watch(homeRequest, () => {
   scene.value?.home()

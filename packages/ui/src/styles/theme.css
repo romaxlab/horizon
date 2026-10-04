@@ -100,6 +100,11 @@
   --text-label-sm--letter-spacing: 0.01em;
   --text-caption: 0.6875rem;
   --text-caption--line-height: 0.875rem;
+  /* Spaced capitals for a product line under a logo (startup screen); use with `uppercase`. */
+  --text-overline: 0.6875rem;
+  --text-overline--line-height: 1rem;
+  --text-overline--font-weight: 500;
+  --text-overline--letter-spacing: 0.28em;
   /* Fine print (map attribution): legible, deliberately below the UI's reading sizes. */
   --text-micro: 0.625rem;
   --text-micro--line-height: 0.75rem;

@@ -35,6 +35,7 @@ export default defineConfig({
       VITE_SIMULATOR_MODE: 'deterministic',
       VITE_TELEMETRY_FLUSH_MS: '100',
       VITE_CESIUM_ION_TOKEN: '',
+      VITE_CINEMATIC_INTRO: 'false',
     },
   },
 })
