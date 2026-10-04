@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RealtimeEvent } from '../transport'
-import { createWebSocketRealtimeTransport, type WebSocketLike } from '../websocket-transport'
+import {
+  createWebSocketRealtimeTransport,
+  IDLE_CLOSE_CODE,
+  type WebSocketLike,
+} from '../websocket-transport'
 
 class FakeSocket implements WebSocketLike {
   readyState = 0
@@ -89,5 +93,32 @@ describe('createWebSocketRealtimeTransport', () => {
     expect(sockets[0]?.close).toHaveBeenCalledWith(1000, 'client disconnect')
     expect(events.at(-1)).toEqual({ type: 'status', status: 'closed' })
     expect(events.some((e) => e.type === 'message')).toBe(false)
+  })
+
+  it('closes a silent link after the idle timeout; any message keeps it alive', async () => {
+    vi.useFakeTimers()
+    try {
+      const { transport, sockets, events } = setup()
+      const connected = transport.connect()
+      sockets[0]?.open()
+      await connected
+
+      vi.advanceTimersByTime(10_000)
+      sockets[0]?.receive('{"type":"heartbeat","data":{"server_time":1}}')
+      vi.advanceTimersByTime(10_000)
+      expect(sockets[0]?.close).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(5_000)
+      expect(sockets[0]?.close).toHaveBeenCalledWith(IDLE_CLOSE_CODE, 'idle timeout')
+      expect(events.at(-1)).toEqual({ type: 'status', status: 'closed' })
+
+      // Reconnecting uses a fresh socket and a fresh watchdog.
+      const again = transport.connect()
+      sockets[1]?.open()
+      await again
+      expect(sockets).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

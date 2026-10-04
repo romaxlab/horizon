@@ -14,8 +14,8 @@ export class MissionPlanningError extends Error {
 
   constructor(
     message: string,
-    /** No-fly zone the plan conflicts with, when that is the reason. */
-    readonly geofenceId: string | null = null,
+    /** No-fly zones the plan conflicts with, when that is the reason. */
+    readonly geofenceIds: readonly string[] = [],
   ) {
     super(message)
   }

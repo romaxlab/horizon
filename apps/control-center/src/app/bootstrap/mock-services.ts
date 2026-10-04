@@ -60,7 +60,7 @@ export function createMockServices(config: AppConfig): AppServices {
     async plan(planRequest, signal) {
       await backendCall(signal)
       const result = simulator.planMission(toPlanRequestDto(planRequest))
-      if (!result.ok) throw new MissionPlanningError(result.reason, result.geofenceId)
+      if (!result.ok) throw new MissionPlanningError(result.reason, result.geofenceIds)
       return parseMission(structuredClone(result.mission))
     },
     async launch(missionId) {

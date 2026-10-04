@@ -89,4 +89,7 @@ export interface MissionPlanRequestDto {
 }
 
 export type SimulatorMessage =
-  { type: 'telemetry'; data: TelemetryDto } | { type: 'mission'; data: MissionDto }
+  | { type: 'telemetry'; data: TelemetryDto }
+  | { type: 'mission'; data: MissionDto }
+  /** Link liveness beat, sent every few seconds even when nothing else changes. */
+  | { type: 'heartbeat'; data: { server_time: number } }

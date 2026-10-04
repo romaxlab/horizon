@@ -496,7 +496,7 @@ describe('createSimulator', () => {
     }
     expect(
       simulator.planMission({ name: 'x', area: inside, altitude_m: 40, uav_count: 1 }),
-    ).toMatchObject({ ok: false, geofenceId: marina?.id })
+    ).toMatchObject({ ok: false, geofenceIds: [marina?.id] })
   })
 
   it('holds a mission UAV in the nearest no-fly zone until the breach is switched off', () => {
@@ -527,6 +527,13 @@ describe('createSimulator', () => {
     runUntil(step, () => !inAnyZone(), 600)
     const phase = simulator.getFleetSnapshot().telemetry.find((x) => x.uav_id === uavId)
     expect(phase?.flight_phase).toBe('mission')
+  })
+
+  it('sends a heartbeat every 5 s of simulated time', () => {
+    const { simulator, messages } = record()
+    simulator.step(20_000)
+    const beats = messages.flatMap((m) => (m.type === 'heartbeat' ? [m.data.server_time] : []))
+    expect(beats).toEqual([START + 5_000, START + 10_000, START + 15_000, START + 20_000])
   })
 
   it('reports whether there is anything to reset', () => {

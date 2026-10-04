@@ -104,7 +104,8 @@ export function useControlCenter() {
     geofences.value.map((zone) => ({
       ...zone,
       highlighted:
-        zone.id === builder.conflictGeofenceId.value || breachedZoneIds.value.includes(zone.id),
+        builder.conflictGeofenceIds.value.includes(zone.id) ||
+        breachedZoneIds.value.includes(zone.id),
     })),
   )
 

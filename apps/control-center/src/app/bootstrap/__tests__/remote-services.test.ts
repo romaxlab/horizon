@@ -89,7 +89,7 @@ describe('createRemoteMissionPlanner', () => {
     await expect(planner.launch('m-1')).rejects.toMatchObject({ name: 'HttpError', status: 503 })
   })
 
-  it('keeps the conflicting no-fly zone of a rejected plan', async () => {
+  it('keeps every conflicting no-fly zone of a rejected plan, ignoring invalid ids', async () => {
     const planner = createRemoteMissionPlanner(
       createHttpClient({
         baseUrl: API,
@@ -97,15 +97,17 @@ describe('createRemoteMissionPlanner', () => {
           'POST missions/plan': () => ({
             status: 409,
             body: {
-              message: 'Mission area lies inside no-fly zone "Marina"',
-              geofence_id: 'nfz-marina',
+              message: 'Mission area lies inside no-fly zones "Marina", "Palace grounds"',
+              geofence_ids: ['nfz-marina', 'nfz-palace', 42],
             },
           }),
         }),
       }),
     )
     const request = { name: 'x', area: { polygon: [] }, altitude: 120, uavCount: 1 }
-    await expect(planner.plan(request)).rejects.toMatchObject({ geofenceId: 'nfz-marina' })
+    await expect(planner.plan(request)).rejects.toMatchObject({
+      geofenceIds: ['nfz-marina', 'nfz-palace'],
+    })
   })
 })
 

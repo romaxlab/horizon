@@ -78,8 +78,8 @@ export type SimulatorCommand =
 
 export type PlanResult =
   | { ok: true; mission: MissionDto }
-  /** `geofenceId`: the no-fly zone the plan conflicts with, if that is the reason. */
-  | { ok: false; reason: string; geofenceId?: string }
+  /** `geofenceIds`: every no-fly zone the plan conflicts with, when that is the reason. */
+  | { ok: false; reason: string; geofenceIds?: string[] }
 
 export type CommandResult = { ok: true } | { ok: false; reason: string }
 
@@ -117,6 +117,8 @@ const CRUISE_SPEED_MPS = 14
 const CLIMB_RATE_MPS = 4
 const BATTERY_DRAIN_PCT_PER_SEC = 0.07
 const PARKED_TELEMETRY_EVERY_TICKS = 4
+/** Heartbeat period (simulated time); clients treat ~3 missed beats as a dead link. */
+const HEARTBEAT_EVERY_MS = 5_000
 const ARRIVAL_TOLERANCE_METERS = 0.5
 /** Returning UAVs climb to their own layer above the scan altitude before heading home. */
 const RETURN_LAYER_OFFSET_METERS = 20
@@ -385,6 +387,9 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       }
     })
     updateMissionCompletion()
+    if (tick % Math.max(1, Math.round(HEARTBEAT_EVERY_MS / tickMs)) === 0) {
+      emit({ type: 'heartbeat', data: { server_time: now } })
+    }
     while (scheduled[0] && scheduled[0].at <= now) {
       const next = scheduled.shift()
       if (next) dispatch(next.command)
@@ -418,13 +423,15 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     }
 
     if (routes.every((route) => route.waypoints.length === 0)) {
-      const zone = DEMO_GEOFENCES.find((z) => polygonsOverlap(area, z.polygon))
+      const zones = DEMO_GEOFENCES.filter((z) => polygonsOverlap(area, z.polygon))
+      const names = zones.map((z) => `"${z.name}"`).join(', ')
       return {
         ok: false,
-        reason: zone
-          ? `Mission area lies inside no-fly zone "${zone.name}"`
-          : 'Mission area has nothing to scan',
-        geofenceId: zone?.id,
+        reason:
+          zones.length === 0
+            ? 'Mission area has nothing to scan'
+            : `Mission area lies inside no-fly ${zones.length === 1 ? 'zone' : 'zones'} ${names}`,
+        geofenceIds: zones.map((z) => z.id),
       }
     }
 

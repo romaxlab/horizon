@@ -761,17 +761,20 @@ Selection: `VITE_DATA_SOURCE=mock` (default) or `remote` with `VITE_API_URL` and
 
 ```text
 RestFleetRepository        GET  {api}/fleet/snapshot              → FleetSnapshotDto
-RemoteMissionPlanner       POST {api}/missions/plan               → MissionDto (409/422 + {message, geofence_id?} = planning error)
+RemoteMissionPlanner       POST {api}/missions/plan               → MissionDto (409/422 + {message, geofence_ids?} = planning error)
                            POST {api}/missions/{id}/launch | abort → 204
                            GET  {api}/missions/current            → MissionDto | empty
 RemoteVideoProvider        GET  {api}/uavs/{id}/video             → VideoSourceDto | 404
 RestAirspaceRepository     GET  {api}/airspace/geofences          → [{id, name, polygon: [{lat, lon}]}]
-WebSocketRealtimeTransport {ws}  JSON envelopes {type: 'telemetry' | 'mission', data}
+WebSocketRealtimeTransport {ws}  JSON envelopes {type: 'telemetry' | 'mission' | 'heartbeat', data}
 ```
 
 Wire DTOs are the same snake_case formats the simulator produces. The WebSocket transport does
 not reconnect itself: an unexpected close reaches the fleet sync, which reconnects with backoff
-and reconciles from a fresh REST snapshot — the same flow as in mock mode. Demo controls exist
+and reconciles from a fresh REST snapshot — the same flow as in mock mode. The backend sends a
+`heartbeat` every 5 s; with no message of any kind for 15 s the transport treats the link as dead
+(half-open sockets never fire `close`), drops it with code 4000 and reports `closed`, which starts
+the same reconnect. Duplicate and out-of-order telemetry is dropped by the latest-state buffer. Demo controls exist
 only in mock mode.
 
 Placement:
@@ -958,7 +961,7 @@ scan lines skip each zone plus a margin, and every leg — transit from the base
 scan lines, and the return home (also after low battery or a stop) — detours along the shortest
 path around the zones (visibility graph over inflated zone corners, `@horizon/simulator`
 `airspace-routing.ts`). A plan is rejected only when nothing is left to scan; the error carries
-the zone id and the map highlights it. A flying UAV inside a zone (e.g. the demo breach) raises a
+the ids of all conflicting zones and the map highlights them. A flying UAV inside a zone (e.g. the demo breach) raises a
 critical `GEOFENCE_BREACH`, resolved when it leaves; the zone is highlighted meanwhile.
 Containment uses planar tests on longitude/latitude (`@horizon/domain`), adequate at site scale.
 

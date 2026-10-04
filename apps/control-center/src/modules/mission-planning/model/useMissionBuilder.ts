@@ -58,10 +58,10 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     const failure = planMutation.error.value ?? launchMutation.error.value
     return failure ? failure.message : null
   })
-  /** No-fly zone that blocked the last plan; the map highlights it. */
-  const conflictGeofenceId = computed(() => {
+  /** No-fly zones that blocked the last plan; the map highlights them. */
+  const conflictGeofenceIds = computed(() => {
     const failure = planMutation.error.value
-    return failure instanceof MissionPlanningError ? failure.geofenceId : null
+    return failure instanceof MissionPlanningError ? failure.geofenceIds : []
   })
   const busy = computed(() => planMutation.isPending.value || launchMutation.isPending.value)
 
@@ -159,7 +159,7 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     detailErrors,
     areaReady,
     error,
-    conflictGeofenceId,
+    conflictGeofenceIds,
     busy,
     summary,
     overlay,
