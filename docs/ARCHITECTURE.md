@@ -296,8 +296,10 @@ modules/map/
 │   ├── declutter.ts           # Cesium-free screen-space clustering (unit tested)
 │   ├── basemap-credits.ts     # Esri attribution, shown by the UI
 │   └── cesium/
-│       ├── map-scene.ts       # viewer, basemaps, ion terrain/imagery, 3D content, picking;
-│       │                      # lazy-loaded chunk
+│       ├── map-scene.ts       # viewer, layers, picking/hover, public facade; lazy-loaded chunk
+│       ├── basemap-controller.ts  # Esri canvas / satellite (ion with Esri fallback), cross-fade
+│       ├── content-controller.ts  # ion terrain, 3D content, ground height, first view ready
+│       ├── scene-tiles.ts     # wait for visible tiles (bounded)
 │       ├── camera-controller.ts
 │       ├── uav-layer.ts       # markers, labels, selection ring, trails, interpolation
 │       ├── cluster-layer.ts   # cluster badges

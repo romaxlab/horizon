@@ -1,74 +1,29 @@
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import type { GeoPoint, UavState } from '@horizon/domain'
 import {
-  Cartographic,
-  ImageryLayer,
+  Cartesian2,
   Ion,
-  IonWorldImageryStyle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
-  UrlTemplateImageryProvider,
   Viewer,
-  createGooglePhotorealistic3DTileset,
-  createOsmBuildingsAsync,
-  createWorldImageryAsync,
-  createWorldTerrainAsync,
   defined,
-  sampleTerrainMostDetailed,
-  Cartesian2,
-  type Cesium3DTileset,
 } from 'cesium'
-import type { MapBasemap, MapPerspective } from '../../model/map.store'
-import type { ViewportInsets } from '../../model/map.store'
-import { createCameraController, OPERATING_SITE } from './camera-controller'
+import type { MapBasemap, MapPerspective, ViewportInsets } from '../../model/map.store'
+import { createBasemapController, type MapTheme } from './basemap-controller'
+import { createCameraController } from './camera-controller'
 import { createClusterLayer } from './cluster-layer'
+import { createContentController } from './content-controller'
 import { createGeofenceLayer, type GeofenceOverlay } from './geofence-layer'
 import { createMissionLayer, type MissionOverlay } from './mission-layer'
 import { readMapPalette } from './palette'
 import { createUavLayer } from './uav-layer'
 
-export type MapTheme = 'light' | 'dark'
-
-type ContentSource = 'google-photorealistic' | 'terrain-osm-buildings'
-
-/** Tile source; its attribution is shown by the UI (see `basemap-credits.ts`). */
-interface BasemapSource {
-  url: string
-  maximumLevel: number
-}
-
-/**
- * Keyless Esri basemaps. Free for development and demos with attribution; production use
- * requires an ArcGIS account or another provider. With an ion token, Satellite uses Cesium ion
- * imagery instead (see `createBasemap`); the dark/light canvas stays Esri, which ion lacks.
- */
-const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
-const BASEMAPS = {
-  // Muted gray canvas that keeps the map calm under glass panels; follows the theme.
-  light: {
-    url: `${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
-    maximumLevel: 16,
-  },
-  dark: {
-    url: `${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
-    maximumLevel: 16,
-  },
-  satellite: {
-    url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
-    maximumLevel: 19,
-  },
-} satisfies Record<MapTheme | 'satellite', BasemapSource>
+export type { MapTheme }
 
 /** Sharper tiles in tilted views than Cesium's default (2). */
 const MAXIMUM_SCREEN_SPACE_ERROR = 1.5
 /** Cap the render resolution to keep 4K/5K displays smooth. */
 const MAX_PIXEL_RATIO = 2
-/** Basemaps cross-fade once the incoming tiles are ready, so switching never flashes. */
-const BASEMAP_FADE_MS = 250
-/** Don't wait forever for tiles (slow network); fade in whatever has loaded by then. */
-const TILE_WAIT_MS = 3_000
-/** Don't hold the first view for terrain longer than this; it then swaps in later. */
-const TERRAIN_WAIT_MS = 3_000
 
 export interface MapSceneOptions {
   container: HTMLElement
@@ -123,15 +78,6 @@ export interface MapScene {
   destroy(): void
 }
 
-function createUrlBasemap(source: BasemapSource): ImageryLayer {
-  return new ImageryLayer(
-    new UrlTemplateImageryProvider({
-      url: source.url,
-      maximumLevel: source.maximumLevel,
-    }),
-  )
-}
-
 export function createMapScene({
   container,
   creditContainer,
@@ -148,32 +94,12 @@ export function createMapScene({
 }: MapSceneOptions): MapScene {
   if (ionToken) Ion.defaultAccessToken = ionToken
 
-  let theme = initialTheme
   let basemap = initialBasemap
   let perspective = initialPerspective
-  /** Satellite from Cesium ion (Bing Maps Aerial) while ion imagery works; Esri otherwise. */
-  let ionImagery = ionToken !== null
-
-  function createBasemap(): ImageryLayer {
-    if (basemap !== 'satellite' || !ionImagery) {
-      return createUrlBasemap(BASEMAPS[basemap === 'map' ? theme : 'satellite'])
-    }
-    const layer = ImageryLayer.fromProviderAsync(
-      createWorldImageryAsync({ style: IonWorldImageryStyle.AERIAL }),
-    )
-    layer.errorEvent.addEventListener((error: unknown) => {
-      if (!ionImagery) return
-      console.warn('[map] Cesium ion imagery unavailable; using Esri', error)
-      ionImagery = false
-      onIonImageryUnavailable?.()
-      // Swap in Esri satellite through the normal cross-fade; it drops the failed layer.
-      if (basemap === 'satellite') replaceBasemap()
-    })
-    return layer
-  }
 
   const viewer = new Viewer(container, {
-    baseLayer: createBasemap(),
+    // The basemap controller owns the imagery layers.
+    baseLayer: false,
     creditContainer,
     animation: false,
     timeline: false,
@@ -232,230 +158,18 @@ export function createMapScene({
     camera.home(false)
   }
 
-  const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-  /** Calls back once the globe's visible tiles have loaded (or after a timeout). */
-  function afterTilesLoaded(callback: () => void) {
-    const startedAt = performance.now()
-    let frames = 0
-    const remove = scene.postRender.addEventListener(() => {
-      scene.requestRender()
-      frames += 1
-      const loaded = frames > 2 && scene.globe.tilesLoaded
-      if (loaded || performance.now() - startedAt > TILE_WAIT_MS) {
-        remove()
-        callback()
-      }
-    })
-  }
-
-  /** Increments per basemap change; a newer change supersedes an in-flight cross-fade. */
-  let basemapTransition = 0
-
-  /** Adds the new basemap on top, waits for its tiles, fades it in, then drops older layers. */
-  function replaceBasemap() {
-    const transition = ++basemapTransition
-    const layers = scene.imageryLayers
-    const next = createBasemap()
-    next.alpha = 0
-    layers.add(next)
-
-    // An ion layer has no tiles to wait for until its provider is ready.
-    const whenReady = (callback: () => void) => {
-      if (next.ready) {
-        callback()
-        return
-      }
-      const remove = next.readyEvent.addEventListener(() => {
-        remove()
-        callback()
-      })
-    }
-    whenReady(() => {
-      afterTilesLoaded(() => {
-        if (transition !== basemapTransition) return
-        const fadeMs = reducedMotion() ? 0 : BASEMAP_FADE_MS
-        const fadeStart = performance.now()
-        const removeFade = scene.preRender.addEventListener(() => {
-          scene.requestRender()
-          const progress = fadeMs === 0 ? 1 : Math.min(1, (performance.now() - fadeStart) / fadeMs)
-          next.alpha = progress
-          if (progress < 1) return
-          removeFade()
-          if (transition !== basemapTransition) return
-          for (let i = layers.length - 1; i >= 0; i--) {
-            const layerAt = layers.get(i)
-            if (layerAt !== next) layers.remove(layerAt, true)
-          }
-        })
-      })
-    })
-  }
-
-  // --- 3D content ----------------------------------------------------------------------------
-
-  type ContentKind = 'photorealistic' | 'buildings'
-
-  /** 3D content shown in the 3D perspective (Google tiles or OSM buildings). */
-  let content3d: { tileset: Cesium3DTileset; source: ContentSource } | null = null
-  /** What the current basemap + perspective ask for; null means no 3D content. */
-  let wantedContent: ContentKind | null = null
-  /** Ground height of the loaded World Terrain at the operating site (0 on the ellipsoid). */
-  let terrainGroundHeight = 0
-  let terrainLoading: Promise<void> | null = null
-  /** Incremented on every content change so slow loads from a previous request are discarded. */
-  let contentRequest = 0
-
-  const site = () => Cartographic.fromDegrees(OPERATING_SITE.longitude, OPERATING_SITE.latitude)
-
-  async function sampleTilesetGround(): Promise<number | null> {
-    try {
-      const [sample] = await scene.sampleHeightMostDetailed([site()])
-      return sample?.height ?? null
-    } catch {
-      return null
-    }
-  }
-
-  /** Terrain loads once and stays, so later switches don't rebuild the globe. */
-  function ensureTerrain(): Promise<void> {
-    terrainLoading ??= (async () => {
-      const terrain = await createWorldTerrainAsync()
-      if (viewer.isDestroyed()) return
-      viewer.terrainProvider = terrain
-      try {
-        const [sample] = await sampleTerrainMostDetailed(terrain, [site()])
-        terrainGroundHeight = sample?.height ?? 0
-      } catch {
-        terrainGroundHeight = 0
-      }
-    })().catch((error: unknown) => {
-      terrainLoading = null
-      throw error
-    })
-    return terrainLoading
-  }
-
-  /** Removes 3D content: the globe comes back first; content goes once the globe is ready. */
-  function clearContent() {
-    const previous = content3d
-    content3d = null
-    scene.globe.show = true
-    setGroundHeight(terrainGroundHeight)
-    if (previous) {
-      afterTilesLoaded(() => {
-        if (content3d?.tileset !== previous.tileset) scene.primitives.remove(previous.tileset)
-      })
-    }
-  }
-
-  function showContent(tileset: Cesium3DTileset, source: ContentSource, request: number) {
-    const previous = content3d
-    content3d = { tileset, source }
-    scene.primitives.add(tileset)
-    if (previous) scene.primitives.remove(previous.tileset)
-    if (source !== 'google-photorealistic') {
-      // Buildings stand on the globe; it may still be hidden by photorealistic tiles they replace.
-      scene.globe.show = true
-      return
-    }
-    // Photorealistic tiles include the ground; hide the globe only once they are visible.
-    const remove = tileset.initialTilesLoaded.addEventListener(() => {
-      remove()
-      if (request === contentRequest && content3d?.tileset === tileset) scene.globe.show = false
-    })
-  }
-
-  /** Cesium World Terrain + Cesium OSM Buildings. */
-  async function loadBuildings(): Promise<Cesium3DTileset> {
-    const [buildings] = await Promise.all([createOsmBuildingsAsync(), ensureTerrain()])
-    return buildings
-  }
-
-  /**
-   * Photorealistic: Google Photorealistic 3D Tiles via Cesium ion (no Google key or billing),
-   * falling back to terrain + OSM buildings when the asset isn't available to the account.
-   */
-  async function loadContent(kind: ContentKind, request: number) {
-    const isStale = () => request !== contentRequest
-    let source: ContentSource = 'terrain-osm-buildings'
-    let tileset: Cesium3DTileset
-    try {
-      if (kind === 'photorealistic') {
-        try {
-          // No geocoder is used anywhere, which satisfies Google's "Google geocoder only" terms.
-          tileset = await createGooglePhotorealistic3DTileset({ onlyUsingWithGoogleGeocoder: true })
-          source = 'google-photorealistic'
-        } catch (error) {
-          console.warn('[map] Google Photorealistic 3D Tiles unavailable; using OSM', error)
-          tileset = await loadBuildings()
-        }
-      } else {
-        tileset = await loadBuildings()
-      }
-    } catch (error) {
-      console.warn('[map] 3D buildings unavailable', error)
-      return
-    }
-
-    if (isStale()) {
-      tileset.destroy()
-      return
-    }
-    showContent(tileset, source, request)
-
-    const ground = source === 'google-photorealistic' ? await sampleTilesetGround() : null
-    if (!isStale()) setGroundHeight(ground ?? terrainGroundHeight)
-  }
-
-  /**
-   * 3D content follows basemap + perspective: in 3D with an ion token, Satellite shows
-   * photorealistic tiles and Map shows calm OSM buildings on terrain. Otherwise none.
-   */
-  function updateContent() {
-    const wanted: ContentKind | null =
-      perspective === '3d' && ionToken
-        ? basemap === 'satellite'
-          ? 'photorealistic'
-          : 'buildings'
-        : null
-    if (wanted === wantedContent) return
-    wantedContent = wanted
-    const request = ++contentRequest
-    if (wanted) void loadContent(wanted, request)
-    else clearContent()
-  }
-
-  updateContent()
-
-  // Cesium World Terrain under every view when ion is available; the ellipsoid otherwise.
-  const terrainSettled: Promise<void> = ionToken
-    ? ensureTerrain().then(
-        () => {
-          // Photorealistic tiles carry their own ground height.
-          if (!viewer.isDestroyed() && wantedContent !== 'photorealistic') {
-            setGroundHeight(terrainGroundHeight)
-            scene.requestRender()
-          }
-        },
-        (error: unknown) => {
-          console.warn('[map] Cesium World Terrain unavailable; using the ellipsoid', error)
-        },
-      )
-    : Promise.resolve()
-
-  // Terrain swapped in after the first tiles would rebuild every tile on screen (a second,
-  // different-looking map); the first view waits for it, then for its tiles.
-  const firstViewReady = Promise.race([
-    terrainSettled,
-    new Promise<void>((resolve) => setTimeout(resolve, TERRAIN_WAIT_MS)),
-  ]).then(
-    () =>
-      new Promise<void>((resolve) => {
-        if (viewer.isDestroyed()) resolve()
-        else afterTilesLoaded(resolve)
-      }),
-  )
+  const basemaps = createBasemapController(scene, {
+    theme: initialTheme,
+    basemap,
+    ionToken,
+    onIonImageryUnavailable,
+  })
+  const content = createContentController(viewer, {
+    ionToken,
+    basemap,
+    perspective,
+    setGroundHeight,
+  })
 
   // --- Picking -------------------------------------------------------------------------------
 
@@ -557,32 +271,31 @@ export function createMapScene({
       layer.select(uavId)
     }),
     setTheme: withRender((next: MapTheme) => {
-      theme = next
       palette = readMapPalette()
       applySceneColors()
       layer.setPalette(palette)
       clusters.setPalette(palette)
       missionLayer.setPalette(palette)
       geofenceLayer.setPalette(palette)
-      if (basemap === 'map') replaceBasemap()
+      basemaps.setTheme(next)
     }),
     setBasemap: withRender((next: MapBasemap) => {
       if (next === basemap) return
       basemap = next
-      replaceBasemap()
-      updateContent()
+      basemaps.setBasemap(next)
+      content.update({ basemap, perspective })
     }),
     setPerspective: withRender((next: MapPerspective) => {
       if (next === perspective) return
       perspective = next
       camera.setTilted(perspective === '3d')
-      updateContent()
+      content.update({ basemap, perspective })
     }),
     // Camera flights render on their own (camera changes trigger frames).
     home: () => {
       camera.home(true)
     },
-    whenFirstViewReady: () => firstViewReady,
+    whenFirstViewReady: content.whenFirstViewReady,
     arrive: (durationMs: number) => {
       camera.arrive(durationMs / 1000)
     },
@@ -615,8 +328,8 @@ export function createMapScene({
       removeMoveEnd()
       camera.destroy()
       if (hoverFrame !== null) cancelAnimationFrame(hoverFrame)
-      contentRequest += 1
-      basemapTransition += 1
+      content.destroy()
+      basemaps.destroy()
       handler.destroy()
       clusters.destroy()
       missionLayer.destroy()
