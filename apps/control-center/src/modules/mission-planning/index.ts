@@ -9,6 +9,7 @@ export {
 export { useMissionStore } from './model/mission.store'
 export {
   MissionPlanningError,
+  missionPlannerSlot,
   type MissionPlanner,
   type MissionPlanRequest,
 } from './model/mission.types'

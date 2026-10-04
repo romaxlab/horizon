@@ -1,3 +1,4 @@
+import { defineServiceSlot } from '@/shared/lib/service-slot'
 import type { Uav, UavState, UavTelemetry } from '@horizon/domain'
 
 export interface FleetSnapshot {
@@ -30,3 +31,6 @@ export interface InspectorMission {
 
 /** Fleet change notification: a full reset (snapshot) or the UAVs updated in one batch. */
 export type FleetChange = { kind: 'reset' } | { kind: 'update'; changed: readonly UavState[] }
+
+/** The FleetRepository implementation chosen at bootstrap (mock or remote). */
+export const fleetRepositorySlot = defineServiceSlot<FleetRepository>('FleetRepository')

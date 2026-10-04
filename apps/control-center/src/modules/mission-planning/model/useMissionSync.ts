@@ -1,16 +1,18 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
-import { useAppServices } from '@/app/providers/services'
+import { realtimeTransportSlot } from '@/shared/realtime'
 import { missionQueryKeys } from '../api/mission.queries'
 import { parseMissionMessage } from '../api/mission.parsers'
 import { useMissionStore } from './mission.store'
+import { missionPlannerSlot } from './mission.types'
 
 /**
  * Keeps the mission store current while mounted: loads the current mission, then applies
  * mission messages from the shared realtime transport (whose connection the fleet sync owns).
  */
 export function useMissionSync() {
-  const { missionPlanner, realtimeTransport } = useAppServices()
+  const missionPlanner = missionPlannerSlot.use()
+  const realtimeTransport = realtimeTransportSlot.use()
   const queryClient = useQueryClient()
   const store = useMissionStore()
   let unsubscribe: (() => void) | null = null

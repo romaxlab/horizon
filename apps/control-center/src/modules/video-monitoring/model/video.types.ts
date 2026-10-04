@@ -1,3 +1,5 @@
+import { defineServiceSlot } from '@/shared/lib/service-slot'
+
 /**
  * A UAV video source. `synthetic-imagery` renders a simulated nadir camera from satellite tiles
  * under the UAV; real streams (HLS/WebRTC) would be added as further kinds behind the same contract.
@@ -35,3 +37,6 @@ export interface FeedPose {
 export type LinkState = 'live' | 'stale' | 'offline'
 
 export type FeedState = 'loading' | 'live' | 'frozen' | 'unavailable' | 'error'
+
+/** The VideoProvider implementation chosen at bootstrap (mock or remote). */
+export const videoProviderSlot = defineServiceSlot<VideoProvider>('VideoProvider')

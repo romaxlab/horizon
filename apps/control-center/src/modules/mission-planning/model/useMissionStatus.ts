@@ -1,11 +1,11 @@
 import type { MissionType, UavTelemetry } from '@horizon/domain'
 import { useMutation } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
-import { useAppServices } from '@/app/providers/services'
 import { formatDuration } from '@/shared/lib/format'
 import { stableComputed } from '@/shared/lib/stable-computed'
 import { computeMissionProgress, type UavMissionStatus } from './mission-progress'
 import { useMissionStore } from './mission.store'
+import { missionPlannerSlot } from './mission.types'
 
 /** What UAVs on a mission of this type are doing, for the status line. */
 const MISSION_ACTIVITY: Record<MissionType, string> = {
@@ -85,7 +85,7 @@ export function useMissionStatus({
   lowBatteryPct: number
 }) {
   const missions = useMissionStore()
-  const { missionPlanner } = useAppServices()
+  const missionPlanner = missionPlannerSlot.use()
 
   const active = computed(() => missions.current?.status === 'active')
 

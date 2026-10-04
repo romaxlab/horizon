@@ -1,3 +1,4 @@
+import { defineServiceSlot } from '@/shared/lib/service-slot'
 import type { Mission, MissionArea, MissionType } from '@horizon/domain'
 
 export interface MissionPlanRequest {
@@ -37,3 +38,6 @@ export interface MissionPlanner {
   /** Current mission (active or most recent), used on start and after reconnect. */
   getActiveMission(signal?: AbortSignal): Promise<Mission | null>
 }
+
+/** The MissionPlanner implementation chosen at bootstrap (mock or remote). */
+export const missionPlannerSlot = defineServiceSlot<MissionPlanner>('MissionPlanner')

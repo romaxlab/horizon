@@ -1,3 +1,4 @@
+export { demoControlSlot } from './model/demo.types'
 export type {
   DemoCommand,
   DemoCommandResult,

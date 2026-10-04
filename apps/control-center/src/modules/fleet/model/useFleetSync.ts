@@ -1,17 +1,19 @@
 import { useQueryClient } from '@tanstack/vue-query'
 import { onBeforeUnmount, onMounted } from 'vue'
-import { useAppServices } from '@/app/providers/services'
+import { realtimeTransportSlot } from '@/shared/realtime'
 import { appConfig } from '@/shared/config'
 import { fleetQueryKeys } from '../api/fleet.queries'
 import { createFleetSync } from './fleet-sync'
 import { useFleetStore } from './fleet.store'
+import { fleetRepositorySlot } from './fleet.types'
 
 /**
  * Keeps the fleet store in sync while the calling component is mounted:
  * snapshot query → hydrate Pinia ← realtime telemetry.
  */
 export function useFleetSync({ onReconnected }: { onReconnected?: () => void } = {}) {
-  const { fleetRepository, realtimeTransport } = useAppServices()
+  const fleetRepository = fleetRepositorySlot.use()
+  const realtimeTransport = realtimeTransportSlot.use()
   const queryClient = useQueryClient()
   const store = useFleetStore()
 

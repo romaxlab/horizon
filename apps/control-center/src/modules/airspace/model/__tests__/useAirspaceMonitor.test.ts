@@ -1,7 +1,7 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { describe, expect, it } from 'vitest'
 import { createApp, ref } from 'vue'
-import { provideAppServices, type AppServices } from '@/app/providers/services'
+import { airspaceRepositorySlot } from '../airspace.types'
 import type { AirspaceRepository } from '../airspace.types'
 import { useAirspaceMonitor, type FlyingUav } from '../useAirspaceMonitor'
 
@@ -21,7 +21,7 @@ describe('useAirspaceMonitor', () => {
     }
     const app = createApp({})
     app.use(VueQueryPlugin, { queryClient: new QueryClient() })
-    provideAppServices(app, { airspaceRepository } as unknown as AppServices)
+    airspaceRepositorySlot.provide(app, airspaceRepository)
     const flying = ref<FlyingUav[]>([
       { id: 'a', position: p(10.5, 54.5) },
       { id: 'b', position: p(5, 54.5) },

@@ -2,7 +2,7 @@ import type { Mission } from '@horizon/domain'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, ref } from 'vue'
-import { provideAppServices, type AppServices } from '@/app/providers/services'
+import { missionPlannerSlot } from '../mission.types'
 import { MissionPlanningError, type MissionPlanner } from '../mission.types'
 import { useMissionBuilder } from '../useMissionBuilder'
 
@@ -46,7 +46,7 @@ function setup(planner: Partial<MissionPlanner> = {}) {
   }
   const app = createApp({})
   app.use(VueQueryPlugin, { queryClient: new QueryClient() })
-  provideAppServices(app, { missionPlanner } as unknown as AppServices)
+  missionPlannerSlot.provide(app, missionPlanner)
   const builder = app.runWithContext(() => useMissionBuilder({ availableUavs: ref(10) }))
   return { builder, plan, launch }
 }

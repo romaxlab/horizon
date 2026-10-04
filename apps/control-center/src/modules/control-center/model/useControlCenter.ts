@@ -1,6 +1,5 @@
 import type { BadgeVariant } from '@horizon/ui'
 import { computed } from 'vue'
-import { useAppServices } from '@/app/providers/services'
 import { useAirspaceMonitor } from '@/modules/airspace'
 import {
   healthIssues,
@@ -11,7 +10,7 @@ import {
   type ConnectionStatus,
   type InspectorMission,
 } from '@/modules/fleet'
-import { useDemoControls } from '@/modules/demo-controls'
+import { demoControlSlot, useDemoControls } from '@/modules/demo-controls'
 import { useIncidentCenter, type Observation } from '@/modules/incidents'
 import { useMapStore, type GeofenceOverlay, type MissionOverlay } from '@/modules/map'
 import {
@@ -105,7 +104,7 @@ export function useControlCenter() {
   }
 
   /** Demo controls (mock backend + config only): commands go to the simulator, never to stores. */
-  const { demoControl } = useAppServices()
+  const demoControl = demoControlSlot.use()
   const demoTarget = stableComputed(
     () => {
       const state =

@@ -2,8 +2,7 @@ import type { GeoPoint, Mission, MissionType } from '@horizon/domain'
 import type { SegmentOption } from '@horizon/ui'
 import { useMutation } from '@tanstack/vue-query'
 import { computed, inject, provide, ref, type InjectionKey, type Ref } from 'vue'
-import { useAppServices } from '@/app/providers/services'
-import { MissionPlanningError, type MissionPlanRequest } from './mission.types'
+import { MissionPlanningError, missionPlannerSlot, type MissionPlanRequest } from './mission.types'
 
 export type BuilderStep = 'details' | 'area' | 'review'
 
@@ -47,7 +46,7 @@ const typeOptions: SegmentOption<MissionType>[] = (Object.keys(MISSION_TYPES) as
  * Draft state is transient UI state; planning and launch go through the MissionPlanner contract.
  */
 export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<Ref<number>> }) {
-  const { missionPlanner } = useAppServices()
+  const missionPlanner = missionPlannerSlot.use()
 
   const open = ref(false)
   const step = ref<BuilderStep>('details')

@@ -3,7 +3,7 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, ref } from 'vue'
-import { provideAppServices, type AppServices } from '@/app/providers/services'
+import { missionPlannerSlot } from '../mission.types'
 import { useMissionStore } from '../mission.store'
 import type { MissionPlanner } from '../mission.types'
 import { useMissionStatus } from '../useMissionStatus'
@@ -67,8 +67,14 @@ function setup(byUav: Record<string, UavTelemetry>) {
   const abort = vi.fn(() => Promise.resolve())
   const app = createApp({})
   app.use(VueQueryPlugin, { queryClient: new QueryClient() })
-  const missionPlanner: Partial<MissionPlanner> = { abort }
-  provideAppServices(app, { missionPlanner } as unknown as AppServices)
+  const unused = () => Promise.reject(new Error('not used in this test'))
+  const missionPlanner: MissionPlanner = {
+    plan: unused,
+    launch: unused,
+    abort,
+    getActiveMission: unused,
+  }
+  missionPlannerSlot.provide(app, missionPlanner)
   useMissionStore().apply(mission)
   const status = app.runWithContext(() =>
     useMissionStatus({

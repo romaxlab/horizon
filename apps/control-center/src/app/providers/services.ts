@@ -1,12 +1,17 @@
 import type { RealtimeTransport } from '@horizon/realtime'
-import { inject, type App, type InjectionKey } from 'vue'
-import type { AirspaceRepository } from '@/modules/airspace'
-import type { DemoControl } from '@/modules/demo-controls'
-import type { FleetRepository } from '@/modules/fleet'
-import type { MissionPlanner } from '@/modules/mission-planning'
-import type { VideoProvider } from '@/modules/video-monitoring'
+import type { App } from 'vue'
+import { airspaceRepositorySlot, type AirspaceRepository } from '@/modules/airspace'
+import { demoControlSlot, type DemoControl } from '@/modules/demo-controls'
+import { fleetRepositorySlot, type FleetRepository } from '@/modules/fleet'
+import { missionPlannerSlot, type MissionPlanner } from '@/modules/mission-planning'
+import { videoProviderSlot, type VideoProvider } from '@/modules/video-monitoring'
+import { realtimeTransportSlot } from '@/shared/realtime'
 
-/** Infrastructure contracts consumed by modules. Concrete implementations are chosen at bootstrap. */
+/**
+ * The infrastructure one composition (mock or remote) provides. Chosen once at bootstrap; each
+ * implementation goes into the slot its consuming module declares, so modules never depend on
+ * the app layer.
+ */
 export interface AppServices {
   fleetRepository: FleetRepository
   realtimeTransport: RealtimeTransport
@@ -17,14 +22,11 @@ export interface AppServices {
   demoControl: DemoControl | null
 }
 
-const appServicesKey: InjectionKey<AppServices> = Symbol('AppServices')
-
 export function provideAppServices(app: App, services: AppServices) {
-  app.provide(appServicesKey, services)
-}
-
-export function useAppServices(): AppServices {
-  const services = inject(appServicesKey)
-  if (!services) throw new Error('AppServices are not provided')
-  return services
+  fleetRepositorySlot.provide(app, services.fleetRepository)
+  realtimeTransportSlot.provide(app, services.realtimeTransport)
+  missionPlannerSlot.provide(app, services.missionPlanner)
+  airspaceRepositorySlot.provide(app, services.airspaceRepository)
+  videoProviderSlot.provide(app, services.videoProvider)
+  demoControlSlot.provide(app, services.demoControl)
 }

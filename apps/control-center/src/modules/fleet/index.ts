@@ -1,5 +1,6 @@
 export { FleetPayloadError, parseFleetSnapshot } from './api/fleet.parsers'
 export { useFleetStore } from './model/fleet.store'
+export { fleetRepositorySlot } from './model/fleet.types'
 export type {
   ConnectionStatus,
   FleetChange,

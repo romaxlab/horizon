@@ -91,7 +91,7 @@ Do not create additional packages until reuse or dependency isolation clearly ju
 apps/control-center/src/
 ├── app/
 │   ├── bootstrap/        # mock / remote composition, app creation
-│   ├── providers/        # AppServices injection, Query client
+│   ├── providers/        # AppServices → module slots, Query client
 │   ├── router/
 │   ├── startup/          # optional cinematic startup sequence (VITE_CINEMATIC_INTRO)
 │   ├── styles/
@@ -916,18 +916,23 @@ reconnect), and `disconnect()` while connecting rejects the pending connect inst
 it hanging. Duplicate and out-of-order telemetry is dropped by the latest-state buffer. Demo controls exist
 only in mock mode.
 
-Placement (each contract is owned by the module that consumes it):
+Placement (each contract and its injection slot are owned by the module that consumes it):
 
 ```text
-FleetRepository            modules/fleet
-MissionPlanner             modules/mission-planning
-AirspaceRepository         modules/airspace
-VideoProvider              modules/video-monitoring
-DemoControl                modules/demo-controls
-RealtimeTransport          @horizon/realtime
-AppServices + injection    app/providers/services.ts
+FleetRepository            modules/fleet              fleetRepositorySlot
+MissionPlanner             modules/mission-planning   missionPlannerSlot
+AirspaceRepository         modules/airspace           airspaceRepositorySlot
+VideoProvider              modules/video-monitoring   videoProviderSlot
+DemoControl                modules/demo-controls      demoControlSlot
+RealtimeTransport          @horizon/realtime          realtimeTransportSlot (shared/realtime; two consumers)
+AppServices → slots        app/providers/services.ts
 composition selection      app/bootstrap/create-horizon-app.ts (by VITE_DATA_SOURCE, lazy-loaded)
 ```
+
+Dependencies point one way: `app → modules → shared`. A module declares a typed slot for each
+dependency (`defineServiceSlot`, `shared/lib/service-slot.ts`) and reads it with `slot.use()`;
+bootstrap fills every slot from the chosen composition. Modules never import the app layer, and
+shared code never imports modules or the app; ESLint enforces both.
 
 Configuration is validated centrally:
 

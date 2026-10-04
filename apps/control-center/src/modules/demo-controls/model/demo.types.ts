@@ -1,3 +1,5 @@
+import { defineServiceSlot } from '@/shared/lib/service-slot'
+
 export type DemoPreset = 'normal' | 'incident' | 'stress'
 
 /** Reversible failures that can be injected on one UAV. */
@@ -36,3 +38,6 @@ export interface DemoControl {
   /** Nothing to reset: no mission, no injected failures, backend reachable. */
   readonly pristine: boolean
 }
+
+/** Simulator demo controls; null unless the mock backend runs with demo controls enabled. */
+export const demoControlSlot = defineServiceSlot<DemoControl | null>('DemoControl')
