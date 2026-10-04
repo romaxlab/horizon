@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { Bell, Moon, Plus, Sun } from '@lucide/vue'
-import { BaseBadge, BaseButton, BaseIconButton, BaseSurface, BaseText, useTheme } from '@horizon/ui'
+import {
+  BaseBadge,
+  BaseButton,
+  BaseIconButton,
+  BasePopover,
+  BaseSurface,
+  BaseText,
+  useTheme,
+} from '@horizon/ui'
 import type { BadgeVariant } from '@horizon/ui'
 import { computed } from 'vue'
 import { HorizonLogo } from '@/shared/brand'
@@ -16,10 +24,17 @@ defineProps<{
   unreadCount: number
   /** Whether any unread event is a warning/critical alert. */
   unreadAlerts: boolean
-  eventsOpen: boolean
 }>()
 
-const emit = defineEmits<{ newMission: []; toggleEvents: [] }>()
+const emit = defineEmits<{ newMission: [] }>()
+
+/** Event history popover, anchored to the bell. */
+const eventsOpen = defineModel<boolean>('eventsOpen', { required: true })
+
+defineSlots<{
+  /** Event history content, provided by the composing view. */
+  events: () => unknown
+}>()
 
 const { theme, toggleTheme } = useTheme()
 
@@ -71,26 +86,37 @@ const clock = computed(() => clockFormat.format(now.value))
       <BaseText variant="body-md" tone="secondary" numeric>
         <time>{{ clock }}</time>
       </BaseText>
-      <BaseIconButton
-        :label="unreadCount > 0 ? `Events, ${unreadCount} new` : 'Events'"
-        :pressed="eventsOpen"
-        class="relative"
-        @click="emit('toggleEvents')"
+      <BasePopover
+        id="event-history"
+        v-model:open="eventsOpen"
+        label="Event history"
+        align="end"
+        panel-class="flex max-h-96 w-80 flex-col overflow-hidden"
       >
-        <Bell />
-        <span
-          v-if="unreadCount > 0"
-          class="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-label-sm ring-2 ring-surface"
-          :class="
-            unreadAlerts
-              ? 'bg-status-danger text-text-inverse'
-              : 'bg-action-primary text-action-primary-text'
-          "
-          aria-hidden="true"
-        >
-          {{ unreadCount > 9 ? '9+' : unreadCount }}
-        </span>
-      </BaseIconButton>
+        <template #trigger="{ toggle, triggerAttrs }">
+          <BaseIconButton
+            :label="unreadCount > 0 ? `Events, ${unreadCount} new` : 'Events'"
+            v-bind="triggerAttrs"
+            class="relative"
+            @click="toggle"
+          >
+            <Bell />
+            <span
+              v-if="unreadCount > 0"
+              class="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-label-sm ring-2 ring-surface"
+              :class="
+                unreadAlerts
+                  ? 'bg-status-danger text-text-inverse'
+                  : 'bg-action-primary text-action-primary-text'
+              "
+              aria-hidden="true"
+            >
+              {{ unreadCount > 9 ? '9+' : unreadCount }}
+            </span>
+          </BaseIconButton>
+        </template>
+        <slot name="events" />
+      </BasePopover>
       <BaseIconButton
         :label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
         @click="toggleTheme"

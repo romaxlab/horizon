@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PanelLeftOpen } from '@lucide/vue'
-import { BaseButton, BaseIconButton, BaseSurface, BaseText } from '@horizon/ui'
+import { BaseButton, BaseIconButton, BasePopover, BaseSurface, BaseText } from '@horizon/ui'
 import { ref, watch } from 'vue'
 import { FleetPanel, UavInspector } from '@/modules/fleet'
 import { MapCanvas, MapControls } from '@/modules/map'
@@ -85,16 +85,24 @@ watch(selectedUavId, (id) => {
     <!-- Floating panels. The overlay ignores pointer events so the map stays interactive. -->
     <div class="pointer-events-none absolute inset-0 flex flex-col gap-3 p-3">
       <ControlCenterHeader
+        v-model:events-open="eventsOpen"
         :connection="connection"
         :mission-title="mission.title"
         :mission-context="mission.state"
         :can-create-mission="canCreateMission"
         :unread-count="unreadCount"
         :unread-alerts="unreadAlerts"
-        :events-open="eventsOpen"
         @new-mission="builder.start()"
-        @toggle-events="eventsOpen = !eventsOpen"
-      />
+      >
+        <template #events>
+          <EventFeed
+            :events="feed"
+            @inspect="inspectIncident(null, $event)"
+            @close="eventsOpen = false"
+            @clear="clearHistory"
+          />
+        </template>
+      </ControlCenterHeader>
 
       <div class="flex min-h-0 flex-1 items-start justify-between gap-3">
         <Transition
@@ -214,24 +222,32 @@ watch(selectedUavId, (id) => {
         <div v-if="demo" class="absolute bottom-0 left-0">
           <DemoControlsPanel :controls="demo" />
         </div>
-        <div
-          v-if="detailsOpen && missionUavs.length > 0"
-          class="absolute bottom-full mb-3 flex w-96 justify-center"
+        <BasePopover
+          id="mission-details"
+          :open="detailsOpen && missionUavs.length > 0"
+          label="Mission details"
+          placement="top"
+          align="center"
+          panel-class="flex max-h-80 w-96 flex-col overflow-hidden"
+          class="flex"
+          @update:open="detailsOpen = $event"
         >
+          <template #trigger>
+            <MissionStatusBar
+              :state="mission.state"
+              :detail="mission.detail"
+              :phases="mission.phases"
+              :progress="mission.progress"
+              :can-stop="missionActive"
+              :stopping="stoppingMission"
+              :stop-error="stopError"
+              :details-open="missionUavs.length > 0 ? detailsOpen : null"
+              @stop="stopMission"
+              @toggle-details="detailsOpen = !detailsOpen"
+            />
+          </template>
           <MissionDetailsPanel :uavs="missionUavs" @inspect="inspectMissionUav" />
-        </div>
-        <MissionStatusBar
-          :state="mission.state"
-          :detail="mission.detail"
-          :phases="mission.phases"
-          :progress="mission.progress"
-          :can-stop="missionActive"
-          :stopping="stoppingMission"
-          :stop-error="stopError"
-          :details-open="missionUavs.length > 0 ? detailsOpen : null"
-          @stop="stopMission"
-          @toggle-details="detailsOpen = !detailsOpen"
-        />
+        </BasePopover>
       </div>
     </div>
 
@@ -244,28 +260,5 @@ watch(selectedUavId, (id) => {
         @dismiss="acknowledge"
       />
     </div>
-
-    <!-- Event history, opened from the header bell. -->
-    <Transition
-      enter-active-class="transition duration-200 ease-out"
-      enter-from-class="-translate-y-1 opacity-0"
-      leave-active-class="transition duration-150 ease-in"
-      leave-to-class="-translate-y-1 opacity-0"
-    >
-      <BaseSurface
-        v-if="eventsOpen"
-        as="aside"
-        variant="floating"
-        class="absolute top-16 right-3 flex max-h-96 w-80 flex-col overflow-hidden"
-        aria-label="Event history"
-      >
-        <EventFeed
-          :events="feed"
-          @inspect="inspectIncident(null, $event)"
-          @close="eventsOpen = false"
-          @clear="clearHistory"
-        />
-      </BaseSurface>
-    </Transition>
   </div>
 </template>

@@ -4,6 +4,7 @@ import {
   BaseButton,
   BaseDivider,
   BaseIconButton,
+  BasePopover,
   BaseSegmentedControl,
   BaseSurface,
   BaseSwitch,
@@ -71,174 +72,163 @@ const failureHint = (failure: (typeof failures)[number]) =>
 </script>
 
 <template>
-  <div class="relative">
-    <Transition
-      enter-active-class="transition duration-200 ease-out"
-      enter-from-class="translate-y-1 opacity-0"
-      leave-active-class="transition duration-150 ease-in"
-      leave-to-class="translate-y-1 opacity-0"
-    >
-      <BaseSurface
-        v-if="open"
-        variant="floating"
-        class="pointer-events-auto absolute bottom-full left-0 mb-3 flex w-80 flex-col gap-3 p-4"
-        aria-label="Demo controls"
-      >
-        <div class="flex items-center justify-between">
-          <BaseText as="h2" variant="heading-md">Demo controls</BaseText>
-          <BaseIconButton size="sm" label="Close demo controls" @click="open = false">
-            <X />
-          </BaseIconButton>
-        </div>
-
-        <section class="flex flex-col gap-1.5">
-          <BaseText variant="caption" tone="muted">Scenario</BaseText>
-          <div class="grid grid-cols-3 gap-1.5">
-            <BaseTooltip
-              v-for="preset in presets"
-              :key="preset.id"
-              :text="preset.hint"
-              class="flex"
-            >
-              <BaseButton
-                size="sm"
-                class="flex-1"
-                :variant="controls.activePreset.value === preset.id ? 'primary' : 'secondary'"
-                :aria-pressed="controls.activePreset.value === preset.id"
-                @click="controls.applyPreset(preset.id)"
-              >
-                {{ preset.label }}
-              </BaseButton>
-            </BaseTooltip>
-          </div>
-          <BaseText variant="caption" tone="secondary" truncate>{{ activeHint }}</BaseText>
-        </section>
-
-        <section class="flex flex-col gap-2" aria-label="Failures">
-          <BaseTooltip
-            text="Failures apply to the selected UAV. Switch one off to restore the previous behavior."
-            placement="right"
-            class="flex"
-          >
-            <span class="flex items-center gap-1 text-text-muted [&_svg]:size-3.5" tabindex="0">
-              <BaseText variant="caption" tone="inherit" truncate>
-                Failures on {{ controls.target.value?.name ?? 'no UAV' }}
-              </BaseText>
-              <Info aria-hidden="true" />
-            </span>
-          </BaseTooltip>
-          <BaseTooltip
-            v-for="failure in failures"
-            :key="failure.id"
-            :text="failureHint(failure)"
-            placement="right"
-          >
-            <BaseSwitch
-              :label="failure.label"
-              :disabled="!controls.target.value || needsMission(failure.id)"
-              :model-value="controls.injections.value[failure.id]"
-              @update:model-value="controls.setInjection(failure.id, $event)"
-            />
-          </BaseTooltip>
-          <BaseTooltip
-            text="The app loses the backend and keeps the last known state. Off reconnects and resyncs."
-            placement="right"
-          >
-            <BaseSwitch
-              label="Network outage"
-              :model-value="!controls.networkUp.value"
-              @update:model-value="controls.setNetworkOutage($event)"
-            />
-          </BaseTooltip>
-          <BaseTooltip
-            :text="
-              controls.anyInjected.value
-                ? 'Switches every failure off and restores the network.'
-                : 'Nothing is injected.'
-            "
-            class="flex"
-          >
-            <BaseButton
-              size="sm"
-              class="flex-1"
-              :disabled="!controls.anyInjected.value"
-              @click="controls.restoreAll()"
-            >
-              Restore all
-            </BaseButton>
-          </BaseTooltip>
-        </section>
-
-        <section class="flex flex-col gap-1.5">
-          <BaseText variant="caption" tone="muted">Simulation</BaseText>
-          <BaseSegmentedControl
-            :model-value="controls.selectedTimeScale.value"
-            label="Time scale"
-            :options="controls.timeScaleOptions"
-            @update:model-value="controls.setTimeScale"
-          />
-          <div class="grid grid-cols-2 gap-1.5">
-            <BaseTooltip
-              :text="
-                controls.canCompleteMission.value
-                  ? 'Ends the scan now: UAVs return and land, then the mission completes.'
-                  : 'No mission is scanning.'
-              "
-              class="flex"
-            >
-              <BaseButton
-                size="sm"
-                class="flex-1"
-                :disabled="!controls.canCompleteMission.value"
-                @click="controls.completeMission()"
-              >
-                Complete mission
-              </BaseButton>
-            </BaseTooltip>
-            <BaseTooltip
-              :text="
-                controls.canReset.value
-                  ? 'Back to the start: fleet parked, no mission, no failures.'
-                  : 'Already at the start: fleet parked, no mission, no failures.'
-              "
-              class="flex"
-            >
-              <BaseButton
-                size="sm"
-                variant="ghost"
-                class="flex-1"
-                :disabled="!controls.canReset.value"
-                @click="controls.reset()"
-              >
-                Reset
-              </BaseButton>
-            </BaseTooltip>
-          </div>
-        </section>
-
-        <!-- Fixed one-line status: command outcomes appear here without resizing the panel. -->
-        <BaseTooltip :text="controls.feedback.value?.text ?? ''" class="flex h-4 items-center">
-          <BaseText
-            role="status"
-            aria-live="polite"
-            variant="caption"
-            :tone="controls.feedback.value?.tone ?? 'muted'"
-            truncate
-          >
-            {{ controls.feedback.value?.text ?? '' }}
-          </BaseText>
-        </BaseTooltip>
-
-        <BaseDivider />
-        <DemoDiagnostics :rows="controls.diagnosticsRows" />
+  <BasePopover
+    id="demo-controls"
+    v-model:open="open"
+    label="Demo controls"
+    placement="top"
+    panel-class="flex w-80 flex-col gap-3 p-4"
+  >
+    <template #trigger="{ toggle, triggerAttrs }">
+      <BaseSurface variant="floating" shape="pill" class="pointer-events-auto p-1">
+        <BaseButton size="sm" variant="ghost" v-bind="triggerAttrs" @click="toggle">
+          <FlaskConical />
+          Demo
+        </BaseButton>
       </BaseSurface>
-    </Transition>
+    </template>
 
-    <BaseSurface variant="floating" shape="pill" class="pointer-events-auto p-1">
-      <BaseButton size="sm" variant="ghost" :aria-expanded="open" @click="open = !open">
-        <FlaskConical />
-        Demo
-      </BaseButton>
-    </BaseSurface>
-  </div>
+    <div class="flex items-center justify-between">
+      <BaseText as="h2" variant="heading-md">Demo controls</BaseText>
+      <BaseIconButton size="sm" label="Close demo controls" @click="open = false">
+        <X />
+      </BaseIconButton>
+    </div>
+
+    <section class="flex flex-col gap-1.5">
+      <BaseText variant="caption" tone="muted">Scenario</BaseText>
+      <div class="grid grid-cols-3 gap-1.5">
+        <BaseTooltip v-for="preset in presets" :key="preset.id" :text="preset.hint" class="flex">
+          <BaseButton
+            size="sm"
+            class="flex-1"
+            :variant="controls.activePreset.value === preset.id ? 'primary' : 'secondary'"
+            :aria-pressed="controls.activePreset.value === preset.id"
+            @click="controls.applyPreset(preset.id)"
+          >
+            {{ preset.label }}
+          </BaseButton>
+        </BaseTooltip>
+      </div>
+      <BaseText variant="caption" tone="secondary" truncate>{{ activeHint }}</BaseText>
+    </section>
+
+    <section class="flex flex-col gap-2" aria-label="Failures">
+      <BaseTooltip
+        text="Failures apply to the selected UAV. Switch one off to restore the previous behavior."
+        placement="right"
+        class="flex"
+      >
+        <span class="flex items-center gap-1 text-text-muted [&_svg]:size-3.5" tabindex="0">
+          <BaseText variant="caption" tone="inherit" truncate>
+            Failures on {{ controls.target.value?.name ?? 'no UAV' }}
+          </BaseText>
+          <Info aria-hidden="true" />
+        </span>
+      </BaseTooltip>
+      <BaseTooltip
+        v-for="failure in failures"
+        :key="failure.id"
+        :text="failureHint(failure)"
+        placement="right"
+      >
+        <BaseSwitch
+          :label="failure.label"
+          :disabled="!controls.target.value || needsMission(failure.id)"
+          :model-value="controls.injections.value[failure.id]"
+          @update:model-value="controls.setInjection(failure.id, $event)"
+        />
+      </BaseTooltip>
+      <BaseTooltip
+        text="The app loses the backend and keeps the last known state. Off reconnects and resyncs."
+        placement="right"
+      >
+        <BaseSwitch
+          label="Network outage"
+          :model-value="!controls.networkUp.value"
+          @update:model-value="controls.setNetworkOutage($event)"
+        />
+      </BaseTooltip>
+      <BaseTooltip
+        :text="
+          controls.anyInjected.value
+            ? 'Switches every failure off and restores the network.'
+            : 'Nothing is injected.'
+        "
+        class="flex"
+      >
+        <BaseButton
+          size="sm"
+          class="flex-1"
+          :disabled="!controls.anyInjected.value"
+          @click="controls.restoreAll()"
+        >
+          Restore all
+        </BaseButton>
+      </BaseTooltip>
+    </section>
+
+    <section class="flex flex-col gap-1.5">
+      <BaseText variant="caption" tone="muted">Simulation</BaseText>
+      <BaseSegmentedControl
+        :model-value="controls.selectedTimeScale.value"
+        label="Time scale"
+        :options="controls.timeScaleOptions"
+        @update:model-value="controls.setTimeScale"
+      />
+      <div class="grid grid-cols-2 gap-1.5">
+        <BaseTooltip
+          :text="
+            controls.canCompleteMission.value
+              ? 'Ends the scan now: UAVs return and land, then the mission completes.'
+              : 'No mission is scanning.'
+          "
+          class="flex"
+        >
+          <BaseButton
+            size="sm"
+            class="flex-1"
+            :disabled="!controls.canCompleteMission.value"
+            @click="controls.completeMission()"
+          >
+            Complete mission
+          </BaseButton>
+        </BaseTooltip>
+        <BaseTooltip
+          :text="
+            controls.canReset.value
+              ? 'Back to the start: fleet parked, no mission, no failures.'
+              : 'Already at the start: fleet parked, no mission, no failures.'
+          "
+          class="flex"
+        >
+          <BaseButton
+            size="sm"
+            variant="ghost"
+            class="flex-1"
+            :disabled="!controls.canReset.value"
+            @click="controls.reset()"
+          >
+            Reset
+          </BaseButton>
+        </BaseTooltip>
+      </div>
+    </section>
+
+    <!-- Fixed one-line status: command outcomes appear here without resizing the panel. -->
+    <BaseTooltip :text="controls.feedback.value?.text ?? ''" class="flex h-4 items-center">
+      <BaseText
+        role="status"
+        aria-live="polite"
+        variant="caption"
+        :tone="controls.feedback.value?.tone ?? 'muted'"
+        truncate
+      >
+        {{ controls.feedback.value?.text ?? '' }}
+      </BaseText>
+    </BaseTooltip>
+
+    <BaseDivider />
+    <DemoDiagnostics :rows="controls.diagnosticsRows" />
+  </BasePopover>
 </template>

@@ -226,10 +226,17 @@ BaseProgress
 BaseSparkline
 BaseAlert
 BaseMenu
+BasePopover
 BaseTooltip
 ```
 
 Avoid creating several primitives with the same responsibility.
+
+Floating panels opened from a control (demo controls, event history, mission details) use
+`BasePopover`: it anchors the panel to its trigger, closes on Escape (focus back on the trigger)
+and on a press outside, wires `aria-expanded` / `aria-controls`, and renders the panel at the
+document root so its glass blur shows the map rather than the surface the trigger sits on.
+Hover hints use `BaseTooltip`; layout panels (fleet, mission builder, inspector) are not popovers.
 
 For example, prefer a flexible surface primitive with meaningful variants rather than separate nearly-identical container components.
 
