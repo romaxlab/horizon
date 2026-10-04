@@ -24,6 +24,8 @@ const TILTED_PITCH = CesiumMath.toRadians(-42)
 const HOME_RANGE_METERS = 6_000
 const FOCUS_RANGE_METERS = 900
 const FLIGHT_SECONDS = 1.2
+/** A surface pick beyond this is not ground (depth noise, sky); fall back to the ellipsoid. */
+const MAX_SURFACE_HEIGHT_METERS = 2_000
 /** Opening arrival: starts high above the region, slightly rotated, and settles into home. */
 const ORBIT_HEIGHT_METERS = 2_200_000
 const ORBIT_HEADING = CesiumMath.toRadians(-20)
@@ -43,7 +45,10 @@ export interface CameraController {
   focusArea(sphere: BoundingSphere): void
   /** Explicit Follow mode; null stops following and leaves the camera where it is. */
   follow(uavId: string | null): void
-  /** Geographic point under a screen position (on the ellipsoid), if any. */
+  /**
+   * Geographic point under a screen position on the rendered surface (terrain, 3D tiles), or on
+   * the ellipsoid where nothing is rendered; null off the globe.
+   */
   groundPointAt(position: Cartesian2): GeoPoint | null
   /** Panels covering the map: framing centers targets in the remaining free area. */
   setInsets(insets: ViewportInsets): void
@@ -241,9 +246,16 @@ export function createCameraController(
     },
 
     groundPointAt(position) {
-      const cartesian = camera.pickEllipsoid(position)
-      if (!cartesian) return null
-      const { latitude, longitude } = Cartographic.fromCartesian(cartesian)
+      // In a tilted view over terrain or 3D tiles the ellipsoid lies below the visible ground,
+      // so its intersection is offset from the clicked spot: prefer the rendered surface.
+      const surface = scene.pickPositionSupported ? scene.pickPosition(position) : undefined
+      const onSurface = surface ? Cartographic.fromCartesian(surface) : undefined
+      const plausible =
+        onSurface !== undefined && Math.abs(onSurface.height) < MAX_SURFACE_HEIGHT_METERS
+      const ellipsoid = plausible ? undefined : camera.pickEllipsoid(position)
+      const point = plausible ? onSurface : ellipsoid && Cartographic.fromCartesian(ellipsoid)
+      if (!point) return null
+      const { latitude, longitude } = point
       return {
         latitude: CesiumMath.toDegrees(latitude),
         longitude: CesiumMath.toDegrees(longitude),
