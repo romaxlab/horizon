@@ -846,7 +846,9 @@ not reconnect itself: an unexpected close reaches the fleet sync, which reconnec
 and reconciles from a fresh REST snapshot — the same flow as in mock mode. The backend sends a
 `heartbeat` every 5 s; with no message of any kind for 15 s the transport treats the link as dead
 (half-open sockets never fire `close`), drops it with code 4000 and reports `closed`, which starts
-the same reconnect. Duplicate and out-of-order telemetry is dropped by the latest-state buffer. Demo controls exist
+the same reconnect. A socket that never opens is abandoned after 10 s (connect rejects, same
+reconnect), and `disconnect()` while connecting rejects the pending connect instead of leaving
+it hanging. Duplicate and out-of-order telemetry is dropped by the latest-state buffer. Demo controls exist
 only in mock mode.
 
 Placement (each contract is owned by the module that consumes it):

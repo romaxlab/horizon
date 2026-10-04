@@ -11,6 +11,7 @@ export {
 export type { RealtimeEvent, RealtimeTransport, TransportStatus } from './transport'
 export {
   createWebSocketRealtimeTransport,
+  DEFAULT_CONNECT_TIMEOUT_MS,
   DEFAULT_IDLE_TIMEOUT_MS,
   IDLE_CLOSE_CODE,
   TransportConnectError,

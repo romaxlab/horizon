@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RealtimeEvent } from '../transport'
 import {
   createWebSocketRealtimeTransport,
+  DEFAULT_CONNECT_TIMEOUT_MS,
   IDLE_CLOSE_CODE,
   type WebSocketLike,
 } from '../websocket-transport'
@@ -120,5 +121,30 @@ describe('createWebSocketRealtimeTransport', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('abandons a socket that never opens and rejects connect', async () => {
+    vi.useFakeTimers()
+    try {
+      const { transport, sockets, events } = setup()
+      const connected = transport.connect()
+      const outcome = connected.then(
+        () => 'resolved',
+        (error: unknown) => (error instanceof Error ? error.name : 'unknown'),
+      )
+      vi.advanceTimersByTime(DEFAULT_CONNECT_TIMEOUT_MS)
+      expect(await outcome).toBe('TransportConnectError')
+      expect(sockets[0]?.close).toHaveBeenCalledWith(IDLE_CLOSE_CODE, 'connect timeout')
+      expect(events.at(-1)).toEqual({ type: 'status', status: 'closed' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects a pending connect when disconnected while connecting', async () => {
+    const { transport } = setup()
+    const connected = transport.connect()
+    transport.disconnect()
+    await expect(connected).rejects.toMatchObject({ name: 'TransportConnectError' })
   })
 })
