@@ -39,7 +39,7 @@ function confirmStop() {
   <BaseSurface
     variant="floating"
     shape="pill"
-    class="pointer-events-auto flex h-10 items-center gap-3 self-center pr-1 pl-4"
+    class="pointer-events-auto flex h-10 items-center gap-3 self-center pr-1 pl-4 max-sm:w-full"
     :class="{ 'pr-4': !canStop }"
     aria-label="Mission status"
   >
@@ -55,13 +55,20 @@ function confirmStop() {
     <template v-else>
       <BaseText variant="label-lg" numeric>{{ state }}</BaseText>
       <!-- Fixed track width from the wrapper; the progress bar fills it. -->
-      <div v-if="progress !== null" class="w-24 shrink-0">
+      <div v-if="progress !== null" class="w-24 shrink-0 max-sm:w-auto max-sm:flex-1">
         <BaseProgress label="Mission progress" :value="progress" />
       </div>
       <BaseText v-if="!phases" variant="body-md" tone="muted" numeric class="whitespace-nowrap">
         {{ detail }}
       </BaseText>
-      <BaseText v-else variant="body-md" tone="muted" numeric class="whitespace-nowrap">
+      <!-- Phones: phase counts live in the details popover (chevron). -->
+      <BaseText
+        v-else
+        variant="body-md"
+        tone="muted"
+        numeric
+        class="whitespace-nowrap max-sm:hidden"
+      >
         <template v-for="(phase, index) in phases" :key="phase.text">
           <template v-if="index > 0"> · </template>
           <span :class="phase.tone === 'warning' && 'text-status-warning'">{{ phase.text }}</span>

@@ -87,6 +87,8 @@ const style = computed(() => {
     ...vertical,
     ...horizontal,
     maxHeight: `min(${maxHeight}, ${String(Math.max(0, room))}px)`,
+    // Never wider than the screen minus the edge room (phones).
+    maxWidth: `calc(100vw - ${String(EDGE_PX * 2)}px)`,
   }
 })
 

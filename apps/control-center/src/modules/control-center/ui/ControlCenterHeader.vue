@@ -88,7 +88,8 @@ const clock = computed(() => clockFormat.format(now.value))
       <BaseBadge :variant="connection.variant" aria-live="polite">
         {{ connection.label }}
       </BaseBadge>
-      <BaseText variant="body-md" tone="secondary" numeric>
+      <!-- Phones: no room for the clock next to the logo. -->
+      <BaseText variant="body-md" tone="secondary" numeric class="max-sm:hidden">
         <time>{{ clock }}</time>
       </BaseText>
       <BasePopover

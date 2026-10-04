@@ -34,12 +34,13 @@ function togglePerspective() {
 </script>
 
 <template>
-  <div class="flex flex-col items-end gap-2">
-    <BaseSurface variant="floating" shape="pill" class="flex flex-col gap-0.5 p-1">
+  <!-- Bottom-row group: same 40px height as the other bottom pills. -->
+  <div class="flex items-end gap-2">
+    <BaseSurface variant="floating" shape="pill" class="flex gap-0.5 p-1">
       <!-- Shows the perspective it switches to, like Apple Maps. -->
       <BaseTooltip
         :text="perspective === '3d' ? 'Switch to 2D view' : 'Switch to 3D view'"
-        placement="left"
+        placement="top"
       >
         <BaseIconButton
           :label="perspective === '3d' ? 'Switch to 2D view' : 'Switch to 3D view'"
@@ -51,7 +52,7 @@ function togglePerspective() {
         </BaseIconButton>
       </BaseTooltip>
       <!-- Home: back to the whole operating area (the crosshair means "this UAV"). -->
-      <BaseTooltip text="Back to the whole operating area" placement="left">
+      <BaseTooltip text="Back to the whole operating area" placement="top">
         <BaseIconButton label="Reset view" @click="map.resetView()">
           <House />
         </BaseIconButton>

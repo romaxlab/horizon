@@ -100,7 +100,7 @@ export function createMockServices(config: AppConfig): AppServices {
             tileUrlTemplate:
               'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             maxZoom: 19,
-            attribution: 'Esri, Maxar, Earthstar Geographics',
+            attribution: 'Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',
           }
         : null
     },

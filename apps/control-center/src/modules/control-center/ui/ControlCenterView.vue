@@ -3,7 +3,7 @@ import { PanelLeftOpen } from '@lucide/vue'
 import { BaseButton, BaseIconButton, BasePopover, BaseSurface, BaseText } from '@horizon/ui'
 import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { FleetPanel, UavInspector } from '@/modules/fleet'
-import { MapCanvas, MapControls } from '@/modules/map'
+import { MAP_ATTRIBUTION_TARGET_ID, MapCanvas, MapControls } from '@/modules/map'
 import { DemoControlsPanel } from '@/modules/demo-controls'
 import { EventFeed, IncidentAlerts } from '@/modules/incidents'
 import { MissionBuilderPanel } from '@/modules/mission-planning'
@@ -45,10 +45,17 @@ const freeArea = useTemplateRef<HTMLElement>('freeArea')
 function reportFreeArea() {
   const rect = freeArea.value?.getBoundingClientRect()
   if (!rect) return
+  // Hidden on phones while a panel fills the screen: nothing to frame around.
+  if (rect.width === 0 && rect.height === 0) {
+    setMapViewportInsets({ top: 0, right: 0, bottom: 0, left: 0 })
+    return
+  }
+  // A panel covering (nearly) the whole width, as on phones, leaves nothing to frame in.
+  const covered = rect.width < 160
   setMapViewportInsets({
     top: Math.round(rect.top),
-    left: Math.round(rect.left),
-    right: Math.round(window.innerWidth - rect.right),
+    left: covered ? 0 : Math.round(rect.left),
+    right: covered ? 0 : Math.round(window.innerWidth - rect.right),
     bottom: Math.round(window.innerHeight - rect.bottom),
   })
 }
@@ -68,7 +75,8 @@ function inspectMissionUav(uavId: string) {
 }
 
 /** Local presentation state: fleet panel expansion and the large video focus view. */
-const fleetOpen = ref(true)
+// Phones open on the map; the fleet list would cover it (initial state only).
+const fleetOpen = ref(window.innerWidth >= 640)
 const videoFocus = ref(false)
 const eventsOpen = ref(false)
 const {
@@ -125,7 +133,8 @@ watch(selectedUavId, (id) => {
         </template>
       </ControlCenterHeader>
 
-      <div class="flex min-h-0 flex-1 items-start justify-between gap-3">
+      <!-- Above the bottom row's attribution, which panels may cover on small screens. -->
+      <div class="relative z-10 flex min-h-0 flex-1 items-start justify-between gap-3">
         <Transition
           mode="out-in"
           enter-active-class="transition duration-200 ease-out"
@@ -137,7 +146,8 @@ watch(selectedUavId, (id) => {
             v-if="builder.open.value"
             as="aside"
             variant="floating"
-            class="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden"
+            class="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden max-sm:w-full"
+            :class="(inspectorOpen || videoFocus) && 'max-sm:hidden'"
             aria-label="Mission planning"
           >
             <MissionBuilderPanel />
@@ -146,7 +156,8 @@ watch(selectedUavId, (id) => {
             v-else-if="fleetOpen"
             as="aside"
             variant="floating"
-            class="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden"
+            class="pointer-events-auto flex max-h-full w-80 flex-col overflow-hidden max-sm:w-full"
+            :class="(inspectorOpen || videoFocus) && 'max-sm:hidden'"
             aria-label="Fleet"
           >
             <FleetPanel
@@ -163,7 +174,15 @@ watch(selectedUavId, (id) => {
 
         <!-- Large floating video focus view; the map stays visible around it. This column is
              also the map area the panels leave free, measured for camera framing. -->
-        <div ref="freeArea" class="flex min-w-0 flex-1 items-center justify-center self-stretch">
+        <div
+          ref="freeArea"
+          class="flex min-w-0 flex-1 items-center justify-center self-stretch"
+          :class="
+            (inspectorOpen || builder.open.value || fleetOpen) &&
+            !(videoFocus && selectedFeed) &&
+            'max-sm:hidden'
+          "
+        >
           <Transition
             enter-active-class="transition duration-200 ease-out"
             enter-from-class="scale-95 opacity-0"
@@ -189,7 +208,11 @@ watch(selectedUavId, (id) => {
           </Transition>
         </div>
 
-        <div class="flex h-full min-h-0 flex-col items-end gap-3">
+        <!-- Phones: one panel at a time, full width (the inspector replaces the fleet list). -->
+        <div
+          class="flex h-full min-h-0 flex-col items-end gap-3"
+          :class="videoFocus && selectedFeed ? 'max-sm:hidden' : inspectorOpen && 'max-sm:flex-1'"
+        >
           <Transition
             enter-active-class="transition duration-200 ease-out"
             enter-from-class="translate-x-2 opacity-0"
@@ -200,7 +223,7 @@ watch(selectedUavId, (id) => {
               v-if="inspectorOpen"
               as="aside"
               variant="floating"
-              class="pointer-events-auto flex max-h-full min-h-0 w-80 flex-col overflow-hidden"
+              class="pointer-events-auto flex max-h-full min-h-0 w-80 flex-col overflow-hidden max-sm:w-full"
               aria-label="UAV inspector"
             >
               <UavInspector
@@ -234,15 +257,16 @@ watch(selectedUavId, (id) => {
               </UavInspector>
             </BaseSurface>
           </Transition>
-
-          <MapControls class="pointer-events-auto mt-auto" />
         </div>
       </div>
 
-      <!-- Bottom row in the overlay flow, so the panels above end at the regular gap. -->
-      <div class="relative flex justify-center">
-        <div v-if="demo" class="absolute bottom-0 left-0">
-          <DemoControlsPanel :controls="demo" />
+      <!-- Bottom row in the overlay flow, so the panels above end at the regular gap. Three
+           slots: equal flex-1 sides keep the status bar exactly centered, no absolute layout. -->
+      <div class="relative flex items-end gap-3 max-sm:flex-wrap">
+        <!-- Map attribution, right-aligned above the whole row (also when it wraps on phones). -->
+        <div :id="MAP_ATTRIBUTION_TARGET_ID" class="absolute right-0 bottom-full mb-2" />
+        <div class="flex min-w-0 flex-1 justify-start">
+          <DemoControlsPanel v-if="demo" :controls="demo" />
         </div>
         <BasePopover
           id="mission-details"
@@ -252,7 +276,7 @@ watch(selectedUavId, (id) => {
           align="center"
           panel-class="flex w-96 flex-col overflow-hidden"
           max-height="20rem"
-          class="flex"
+          class="flex shrink-0 max-sm:order-first max-sm:w-full"
           @update:open="detailsOpen = $event"
         >
           <template #trigger>
@@ -271,11 +295,14 @@ watch(selectedUavId, (id) => {
           </template>
           <MissionDetailsPanel :uavs="missionUavs" @inspect="inspectMissionUav" />
         </BasePopover>
+        <div class="flex min-w-0 flex-1 justify-end">
+          <MapControls class="pointer-events-auto" />
+        </div>
       </div>
     </div>
 
     <!-- Alerts: top center, below the header. -->
-    <div class="pointer-events-none absolute inset-x-0 top-16 flex justify-center">
+    <div class="pointer-events-none absolute inset-x-0 top-16 flex justify-center px-3">
       <IncidentAlerts
         :alerts="alerts"
         :hidden-count="hiddenAlertCount"

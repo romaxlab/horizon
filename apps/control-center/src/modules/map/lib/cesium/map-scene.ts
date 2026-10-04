@@ -2,7 +2,6 @@ import 'cesium/Build/Cesium/Widgets/widgets.css'
 import type { GeoPoint, UavState } from '@horizon/domain'
 import {
   Cartographic,
-  Credit,
   ImageryLayer,
   Ion,
   ScreenSpaceEventHandler,
@@ -30,10 +29,10 @@ export type MapTheme = 'light' | 'dark'
 
 type ContentSource = 'google-photorealistic' | 'terrain-osm-buildings'
 
+/** Tile source; its attribution is shown by the UI (see `basemap-credits.ts`). */
 interface BasemapSource {
   url: string
   maximumLevel: number
-  credit: string
 }
 
 /**
@@ -41,23 +40,19 @@ interface BasemapSource {
  * requires an ArcGIS account or another provider.
  */
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services'
-const CANVAS_CREDIT = 'Esri, HERE, Garmin, © OpenStreetMap contributors'
 const BASEMAPS = {
   // Muted gray canvas that keeps the map calm under glass panels; follows the theme.
   light: {
     url: `${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
     maximumLevel: 16,
-    credit: CANVAS_CREDIT,
   },
   dark: {
     url: `${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`,
     maximumLevel: 16,
-    credit: CANVAS_CREDIT,
   },
   satellite: {
     url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
     maximumLevel: 19,
-    credit: 'Esri, Maxar, Earthstar Geographics, and the GIS User Community',
   },
 } satisfies Record<MapTheme | 'satellite', BasemapSource>
 
@@ -112,7 +107,6 @@ function createBasemap(source: BasemapSource): ImageryLayer {
     new UrlTemplateImageryProvider({
       url: source.url,
       maximumLevel: source.maximumLevel,
-      credit: new Credit(source.credit, true),
     }),
   )
 }

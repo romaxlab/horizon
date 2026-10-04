@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { GeoPoint } from '@horizon/domain'
 import type { FleetFeed } from '../model/fleet-feed'
-import { BaseSurface, BaseText, useTheme } from '@horizon/ui'
+import { BaseText, useTheme } from '@horizon/ui'
 import { storeToRefs } from 'pinia'
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { appConfig } from '@/shared/config'
 import type { MapScene } from '../lib/cesium/map-scene'
 import type { GeofenceOverlay } from '../lib/cesium/geofence-layer'
 import type { MissionOverlay } from '../lib/cesium/mission-layer'
+import { basemapCredit, MAP_ATTRIBUTION_TARGET_ID } from '../lib/basemap-credits'
 import { useMapStore } from '../model/map.store'
 
 const props = defineProps<{
@@ -133,25 +134,38 @@ watch(homeRequest, () => {
     <div v-if="failed" class="absolute inset-0 grid place-items-center">
       <BaseText variant="body-md" tone="muted">3D map is unavailable</BaseText>
     </div>
-    <!-- Attribution sits on glass so it stays legible over satellite imagery. -->
-    <BaseSurface
-      variant="floating"
-      shape="pill"
-      class="absolute right-3 bottom-1.5 px-2 py-0.5 text-caption whitespace-nowrap text-text-muted"
-    >
-      <div ref="credits" class="map-credits" :class="{ 'without-ion': !ionToken }" />
-    </BaseSurface>
+    <!-- Attribution joins the map controls (bottom right), so it never collides with the bottom
+         bar; glass keeps it legible over satellite imagery. -->
+    <Teleport defer :to="`#${MAP_ATTRIBUTION_TARGET_ID}`">
+      <!-- Basemap credit for the selected basemap only (no doubling during the cross-fade);
+           Cesium's container adds 3D content credits (buildings, Google tiles) when present. -->
+      <div
+        class="map-attribution text-right text-micro whitespace-nowrap text-text-secondary max-sm:w-64 max-sm:whitespace-normal"
+        aria-label="Map data attribution"
+      >
+        Powered by Esri · {{ basemapCredit(basemap) }}
+        <div ref="credits" class="map-credits inline" :class="{ 'without-ion': !ionToken }" />
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
+/* Plain fine print over the map; a halo in the canvas color keeps it legible on imagery. */
+.map-attribution {
+  text-shadow:
+    0 0 1px var(--bg-canvas),
+    0 0 2px var(--bg-canvas),
+    0 0 4px var(--bg-canvas);
+}
 /* Cesium renders attribution markup itself; flatten its widget styles onto our tokens. */
 .map-credits :deep(.cesium-widget-credits) {
+  display: inline;
   position: static;
   padding: 0;
   color: inherit;
   font-size: inherit;
-  text-shadow: none;
+  text-shadow: inherit;
 }
 /* The Cesium ion logo is required whenever ion is used; hide it only when ion is off. */
 .map-credits.without-ion :deep(.cesium-credit-logoContainer) {

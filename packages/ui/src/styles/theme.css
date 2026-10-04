@@ -100,4 +100,7 @@
   --text-label-sm--letter-spacing: 0.01em;
   --text-caption: 0.6875rem;
   --text-caption--line-height: 0.875rem;
+  /* Fine print (map attribution): legible, deliberately below the UI's reading sizes. */
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 0.75rem;
 }

@@ -80,7 +80,7 @@ const failureHint = (failure: (typeof failures)[number]) =>
     panel-class="grid w-80 grid-cols-1 gap-3 overflow-y-auto p-4"
   >
     <template #trigger="{ toggle, triggerAttrs }">
-      <BaseSurface variant="floating" shape="pill" class="pointer-events-auto p-1">
+      <BaseSurface variant="floating" shape="pill" class="pointer-events-auto p-1.5">
         <BaseButton size="sm" variant="ghost" v-bind="triggerAttrs" @click="toggle">
           <FlaskConical />
           Demo

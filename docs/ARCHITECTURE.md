@@ -168,6 +168,11 @@ video module reacts
 
 ---
 
+Small screens (below `sm`, 640 px) keep the same composition: one panel at a time at full width
+(the inspector replaces the fleet list), the fleet list starts collapsed so the map shows first,
+the bottom row wraps (status bar on its own line, phase counts in its details popover), the
+clock is hidden, and popovers never exceed the screen width.
+
 ## 6. Feature modules
 
 Default shape:
@@ -336,6 +341,9 @@ selected UAV, moves with the selection, stops when nothing is selected or on Res
 survives 2D/3D switches (top-down offset in 2D, behind-and-above in 3D). When the camera drops
 tracking on its own (zooming into a cluster), it reports back so the state never claims a follow
 the camera isn't doing.
+
+Attribution shows "Powered by Esri" plus each basemap's text exactly as the Esri service
+publishes it (`copyrightText`), on a flat glass strip above the map controls in the bottom row.
 
 Camera framing respects the floating panels: the layout reports the map area they leave free
 (the column between the side panels, below the header and above the bottom bar) as viewport

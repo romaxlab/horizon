@@ -17,7 +17,7 @@ const emit = defineEmits<{ inspect: [id: string, uavId: string]; dismiss: [id: s
 </script>
 
 <template>
-  <div class="flex w-96 flex-col gap-2" aria-live="assertive" aria-label="Alerts">
+  <div class="flex w-96 flex-col gap-2 max-sm:w-full" aria-live="assertive" aria-label="Alerts">
     <TransitionGroup
       enter-active-class="transition duration-200 ease-out"
       enter-from-class="-translate-y-1 opacity-0"

@@ -195,7 +195,7 @@ text-text-primary / text-text-secondary / text-text-muted
 border-border-default / border-border-subtle / border-border-control / border-border-focus
 bg-action-primary / text-action-primary-text
 text-status-{success|warning|danger|info|neutral} / bg-status-{...}
-text-{display|heading-*|body-*|label-*|caption}
+text-{display|heading-*|body-*|label-*|caption|micro}
 h-control-{sm|md} / size-control-{sm|md}
 rounded-{sm|md|lg|xl|full} / shadow-floating / shadow-raised
 ```
