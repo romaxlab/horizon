@@ -284,13 +284,15 @@ Telemetry altitude is above ground level. On terrain or 3D tiles the map samples
 once at the operating site and lifts UAVs by it; the operating area is assumed flat.
 
 Rendering runs at device resolution (capped at 2×). UAV markers use the Horizon UAV artwork
-(`apps/control-center/public/assets/uav/uav-{standby,active,selected,warning,offline}.svg`, 28 px,
+(`apps/control-center/public/assets/uav/uav-{standby,active,warning,offline}.svg`, 28 px,
 nose-up, shared center, ≈1 px dark outline so they read on light buildings, sand and satellite),
 loaded by URL and rotated to the compass heading; the artwork carries its own colors (standby light
-gray, active cyan, selected near-white cyan, warning amber, offline muted gray-blue), so no tint is
-applied. Stale UAVs use the warning artwork. Selection keeps the marker size and adds a 1.5 px ring
-(`--map-marker-selection`); a selected warning/offline UAV keeps its artwork and only gains the
-ring. Trails and routes are drawn quieter than the markers. Name labels (compact pills) appear only
+gray, active cyan, warning amber, offline red), so no tint is
+applied. Stale UAVs use the warning artwork; offline UAVs (last known position) use
+the red offline artwork, matching their danger status in the fleet list. Selection only adds a 1.5 px ring
+(`--map-marker-selection`) and the name label: marker and trail keep their status colors, so
+selecting a UAV never looks like a state change. Trails and routes are drawn quieter than the
+markers. Name labels (compact pills) appear only
 for the selected and the hovered UAV.
 
 Decluttering (`lib/declutter.ts`, `lib/cesium/cluster-layer.ts`):

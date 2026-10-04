@@ -11,6 +11,7 @@ const {
   placement = 'bottom',
   align = 'start',
   panelClass = '',
+  maxHeight = '100vh',
 } = defineProps<{
   /** Panel id; the trigger points at it with `aria-controls` (see `triggerAttrs`). */
   id: string
@@ -18,8 +19,10 @@ const {
   label: string
   placement?: PopoverPlacement
   align?: PopoverAlign
-  /** Layout of the panel content (width, padding, max height). */
+  /** Layout of the panel content (width, padding); scroll behavior when the height is capped. */
   panelClass?: string
+  /** Preferred maximum height (CSS length); the panel is also capped to the room on screen. */
+  maxHeight?: string
 }>()
 
 const open = defineModel<boolean>('open', { required: true })
@@ -39,6 +42,8 @@ defineOptions({ inheritAttrs: false })
 
 /** Distance between anchor and panel (CSS px), the regular gap between floating surfaces. */
 const GAP_PX = 12
+/** Room kept between the panel and the viewport edge (CSS px). */
+const EDGE_PX = 12
 
 const anchor = useTemplateRef<HTMLElement>('anchor')
 const panel = ref<{ $el: HTMLElement } | null>(null)
@@ -73,7 +78,16 @@ const style = computed(() => {
       : align === 'end'
         ? { right: `${String(window.innerWidth - r.right)}px` }
         : { left: `${String(r.left + r.width / 2)}px`, transform: 'translateX(-50%)' }
-  return { ...vertical, ...horizontal }
+  // Never taller than the space on its side of the anchor: short screens scroll the panel.
+  const room =
+    placement === 'top'
+      ? r.top - GAP_PX - EDGE_PX
+      : window.innerHeight - r.bottom - GAP_PX - EDGE_PX
+  return {
+    ...vertical,
+    ...horizontal,
+    maxHeight: `min(${maxHeight}, ${String(Math.max(0, room))}px)`,
+  }
 })
 
 // Close on Escape (focus back on the trigger) and on a press outside anchor and panel.

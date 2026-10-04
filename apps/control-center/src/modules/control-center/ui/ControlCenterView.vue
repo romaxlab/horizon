@@ -228,7 +228,8 @@ watch(selectedUavId, (id) => {
           label="Mission details"
           placement="top"
           align="center"
-          panel-class="flex max-h-80 w-96 flex-col overflow-hidden"
+          panel-class="flex w-96 flex-col overflow-hidden"
+          max-height="20rem"
           class="flex"
           @update:open="detailsOpen = $event"
         >

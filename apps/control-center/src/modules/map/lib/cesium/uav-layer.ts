@@ -36,10 +36,7 @@ const TRAIL_MIN_SPACING_METERS = 15
 const ENTITY_PREFIX = 'uav:'
 /** Name labels belong to their UAV for picking purposes. */
 const LABEL_ID_PREFIX = 'uav-label:'
-/**
- * Stale UAVs share the warning artwork; the inspector tells the two apart. A selected nominal UAV
- * turns light cyan; warning and offline keep their artwork so the alert stays visible.
- */
+/** Stale UAVs share the warning artwork; the inspector tells the two apart. */
 const MARKER_STATE: Record<UavStatus, UavMarkerState> = {
   standby: 'standby',
   active: 'active',
@@ -220,20 +217,15 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
   const hoverLabel = createNameLabel('hovered', () => (hoveredId !== selectedId ? hoveredId : null))
 
   function applyStyle(entry: UavEntry) {
-    const selected = entry.id === selectedId
+    // Colors always follow the status; selection is shown by the ring and label only, so
+    // selecting a UAV never makes it look like it changed state.
     const color = statusColor(entry.status)
     const { billboard, polyline } = entry.entity
-    const state = MARKER_STATE[entry.status]
-    const marker = selected && (state === 'active' || state === 'standby') ? 'selected' : state
-    if (billboard) billboard.image = new ConstantProperty(uavMarkerUrl(marker))
+    if (billboard) billboard.image = new ConstantProperty(uavMarkerUrl(MARKER_STATE[entry.status]))
     if (polyline) polyline.material = new ColorMaterialProperty(color.withAlpha(0.35))
     const trailLine = entry.trailEntity.polyline
     // Trails stay quieter than the markers, so the aircraft keep the attention.
-    if (trailLine) {
-      trailLine.material = new ColorMaterialProperty(
-        (selected ? palette.selected : color).withAlpha(selected ? 0.5 : 0.3),
-      )
-    }
+    if (trailLine) trailLine.material = new ColorMaterialProperty(color.withAlpha(0.3))
   }
 
   function createEntry(state: UavState): UavEntry {

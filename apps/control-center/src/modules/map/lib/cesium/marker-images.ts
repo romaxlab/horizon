@@ -34,7 +34,7 @@ const css = (color: Color) => color.toCssColorString()
 export const MARKER_SIZE = 28
 
 /** States with their own marker artwork (`public/assets/uav/`, nose-up, shared center). */
-export type UavMarkerState = 'standby' | 'active' | 'selected' | 'warning' | 'offline'
+export type UavMarkerState = 'standby' | 'active' | 'warning' | 'offline'
 
 /**
  * Same-origin URL of a UAV marker. The artwork carries its own status colors and shading, so no

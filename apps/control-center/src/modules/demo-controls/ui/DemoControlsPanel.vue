@@ -77,7 +77,7 @@ const failureHint = (failure: (typeof failures)[number]) =>
     v-model:open="open"
     label="Demo controls"
     placement="top"
-    panel-class="flex w-80 flex-col gap-3 p-4"
+    panel-class="grid w-80 gap-3 overflow-y-auto p-4"
   >
     <template #trigger="{ toggle, triggerAttrs }">
       <BaseSurface variant="floating" shape="pill" class="pointer-events-auto p-1">

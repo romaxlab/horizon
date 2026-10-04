@@ -91,7 +91,8 @@ const clock = computed(() => clockFormat.format(now.value))
         v-model:open="eventsOpen"
         label="Event history"
         align="end"
-        panel-class="flex max-h-96 w-80 flex-col overflow-hidden"
+        panel-class="flex w-80 flex-col overflow-hidden"
+        max-height="24rem"
       >
         <template #trigger="{ toggle, triggerAttrs }">
           <BaseIconButton
