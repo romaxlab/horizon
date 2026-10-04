@@ -22,6 +22,11 @@ export interface FleetSyncOptions {
   reconnectDelaysMs?: readonly number[]
   now?: () => number
   logger?: Pick<Console, 'warn'>
+  /**
+   * Called after the link was re-established and the fleet reconciled. Other live state fed by
+   * the same stream (e.g. the current mission) missed events too and must reload as well.
+   */
+  onReconnected?: () => void
 }
 
 export interface FleetSyncStats {
@@ -59,6 +64,7 @@ export function createFleetSync({
   reconnectDelaysMs = [1_000, 2_000, 4_000, 8_000],
   now = Date.now,
   logger = console,
+  onReconnected = () => undefined,
 }: FleetSyncOptions): FleetSync {
   const buffer = createLatestStateBuffer<UavTelemetry>({
     keyOf: (t) => t.uavId,
@@ -124,11 +130,15 @@ export function createFleetSync({
     const current = session
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
-      sync(current).catch((error: unknown) => {
-        if (current !== session) return
-        logger.warn('[fleet-sync] reconnect failed', error)
-        scheduleReconnect()
-      })
+      sync(current)
+        .then((reconciled) => {
+          if (reconciled) onReconnected()
+        })
+        .catch((error: unknown) => {
+          if (current !== session) return
+          logger.warn('[fleet-sync] reconnect failed', error)
+          scheduleReconnect()
+        })
     }, delay)
   }
 

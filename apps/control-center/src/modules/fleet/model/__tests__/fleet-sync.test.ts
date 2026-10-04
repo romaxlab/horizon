@@ -142,6 +142,7 @@ describe('createFleetSync', () => {
   })
 
   it('recovers from a network outage: reconnecting, ages state, resyncs and goes live', async () => {
+    const onReconnected = vi.fn()
     const simulator = createSimulator({ startTime: START })
     const store = useFleetStore()
     const sync = createFleetSync({
@@ -154,8 +155,10 @@ describe('createFleetSync', () => {
       now: () => simulator.now,
       logger: { warn: vi.fn() },
       reconnectDelaysMs: [1_000],
+      onReconnected,
     })
     await sync.start()
+    expect(onReconnected).not.toHaveBeenCalled()
     simulator.dispatch({ type: 'startDemoMission' })
     simulator.step(2_000)
     vi.advanceTimersByTime(100)
@@ -179,6 +182,8 @@ describe('createFleetSync', () => {
     expect(store.connectionStatus).toBe('live')
     expect(store.uavsById['uav-01']?.telemetry?.timestamp).toBe(simulator.now)
     expect(store.statusCounts.offline).toBe(0)
+    // Other live state (the mission) is told to reload once the link is back.
+    expect(onReconnected).toHaveBeenCalledTimes(1)
     sync.stop()
   })
 

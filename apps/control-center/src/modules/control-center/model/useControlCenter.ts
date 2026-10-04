@@ -80,13 +80,19 @@ const zoneAt = (zones: readonly Geofence[], point: GeoPoint) =>
 
 /** Route-level composition for the Control Center: starts live sync and coordinates modules. */
 export function useControlCenter() {
-  const fleetSync = useFleetSync()
+  const missionSync = useMissionSync()
+  // Missions ride the same stream: after a reconnect they reload too, since mission events sent
+  // while disconnected were missed (e.g. a mission that completed during an outage).
+  const fleetSync = useFleetSync({
+    onReconnected: () => {
+      void missionSync.reload()
+    },
+  })
   const fleet = useFleetStore()
   const map = useMapStore()
 
   const connection = computed(() => connectionPresentation[fleet.connectionStatus])
 
-  const missionSync = useMissionSync()
   const missions = useMissionStore()
 
   const missionProgress = computed(() => {

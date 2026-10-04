@@ -784,6 +784,9 @@ Implementation (`modules/fleet/model/fleet-sync.ts`): an unexpected transport cl
 the stream and then loads a fresh snapshot to reconcile. Statuses keep ageing while disconnected,
 so UAVs go stale/offline but keep their last known positions. The simulator's fake network
 (`setNetwork`) drives outages through the same transport and repository contracts.
+After a successful reconnect the fleet sync calls `onReconnected`; the composition reloads the
+current mission from the backend, so a mission that completed or was stopped during the outage
+is not left showing as active.
 
 ---
 

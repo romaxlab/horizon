@@ -10,7 +10,7 @@ import { useFleetStore } from './fleet.store'
  * Keeps the fleet store in sync while the calling component is mounted:
  * snapshot query → hydrate Pinia ← realtime telemetry.
  */
-export function useFleetSync() {
+export function useFleetSync({ onReconnected }: { onReconnected?: () => void } = {}) {
   const { fleetRepository, realtimeTransport } = useAppServices()
   const queryClient = useQueryClient()
   const store = useFleetStore()
@@ -18,6 +18,7 @@ export function useFleetSync() {
   const sync = createFleetSync({
     transport: realtimeTransport,
     flushIntervalMs: appConfig.telemetryFlushMs,
+    onReconnected,
     target: store,
     loadSnapshot: () =>
       queryClient.query({

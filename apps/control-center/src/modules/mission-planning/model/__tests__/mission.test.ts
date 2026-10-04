@@ -181,4 +181,16 @@ describe('useMissionStore', () => {
     store.apply({ ...mission, id: 'm-2', status: 'active' })
     expect(store.current?.id).toBe('m-2')
   })
+
+  it('takes the backend view after a reconnect: a mission finished during an outage', () => {
+    const store = useMissionStore()
+    const mission = parseMission(missionDto)
+    store.apply(mission)
+    // The completion event was missed while disconnected; the reload carries it.
+    store.replace({ ...mission, status: 'completed' })
+    expect(store.current?.status).toBe('completed')
+    // A backend reset has no current mission any more.
+    store.replace(null)
+    expect(store.current).toBeNull()
+  })
 })
