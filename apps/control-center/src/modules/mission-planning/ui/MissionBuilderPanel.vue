@@ -7,26 +7,38 @@ import {
   BaseIconButton,
   BaseInput,
   BaseMetric,
+  BaseSegmentedControl,
   BaseText,
 } from '@horizon/ui'
 import { computed } from 'vue'
 import { formatDuration } from '@/shared/lib/format'
-import { ALTITUDE_RANGE, injectMissionBuilder, type BuilderStep } from '../model/useMissionBuilder'
+import {
+  ALTITUDE_RANGE,
+  injectMissionBuilder,
+  LAPS_RANGE,
+  type BuilderStep,
+} from '../model/useMissionBuilder'
 
 const builder = injectMissionBuilder()
 
-const steps: { id: BuilderStep; label: string }[] = [
+const steps = computed<{ id: BuilderStep; label: string }[]>(() => [
   { id: 'details', label: 'Details' },
-  { id: 'area', label: 'Area' },
+  { id: 'area', label: builder.shape.value === 'loop' ? 'Route' : 'Area' },
   { id: 'review', label: 'Review' },
-]
-const stepIndex = computed(() => steps.findIndex((s) => s.id === builder.step.value))
+])
+const stepIndex = computed(() => steps.value.findIndex((s) => s.id === builder.step.value))
 
 // Number inputs come back as strings when cleared; keep the model numeric.
 const altitude = computed({
   get: () => builder.altitude.value,
   set: (value: string | number | undefined) => {
     builder.altitude.value = Number(value)
+  },
+})
+const laps = computed({
+  get: () => builder.laps.value,
+  set: (value: string | number | undefined) => {
+    builder.laps.value = Number(value)
   },
 })
 const uavCount = computed({
@@ -41,7 +53,7 @@ const uavCount = computed({
   <section class="flex min-h-0 flex-col" aria-labelledby="mission-builder-title">
     <header class="flex flex-col gap-3 px-4 pt-4 pb-3">
       <div class="flex items-center justify-between">
-        <BaseText id="mission-builder-title" as="h2" variant="heading-md">New Area Scan</BaseText>
+        <BaseText id="mission-builder-title" as="h2" variant="heading-md">New mission</BaseText>
         <BaseIconButton size="sm" label="Cancel mission planning" @click="builder.close()">
           <X />
         </BaseIconButton>
@@ -67,6 +79,13 @@ const uavCount = computed({
     <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
       <!-- 1. Details -->
       <template v-if="builder.step.value === 'details'">
+        <BaseSegmentedControl
+          :model-value="builder.type.value"
+          label="Mission type"
+          :options="builder.typeOptions"
+          block
+          @update:model-value="builder.setType"
+        />
         <BaseInput v-model="builder.name.value" label="Mission name" />
         <div class="grid grid-cols-2 gap-3">
           <BaseInput
@@ -83,6 +102,15 @@ const uavCount = computed({
             :hint="`${builder.availableUavs.value} available`"
             :min="1"
             :max="builder.availableUavs.value"
+          />
+          <BaseInput
+            v-if="builder.type.value === 'patrol'"
+            v-model="laps"
+            type="number"
+            label="Laps"
+            hint="Each UAV flies the loop this many times"
+            :min="LAPS_RANGE.min"
+            :max="LAPS_RANGE.max"
           />
         </div>
         <BaseAlert
@@ -103,7 +131,11 @@ const uavCount = computed({
       <!-- 2. Area -->
       <template v-else-if="builder.step.value === 'area'">
         <BaseText as="p" variant="body-md" tone="secondary">
-          Click the map to place the corners of the scan area.
+          {{
+            builder.shape.value === 'loop'
+              ? 'Click the map to place the patrol route in flight order; it closes back to the first point.'
+              : 'Click the map to place the corners of the scan area.'
+          }}
         </BaseText>
         <div class="flex items-center justify-between">
           <BaseText variant="label-lg" numeric>{{ builder.area.value.length }} points</BaseText>

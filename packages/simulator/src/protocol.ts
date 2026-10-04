@@ -53,20 +53,26 @@ export interface WaypointDto {
 
 export interface RouteDto {
   uav_id: string
+  /** Departure and landing point. */
+  home: GeoPointDto
   waypoints: WaypointDto[]
   distance_m: number
   eta_s: number
 }
+
+export type MissionTypeDto = 'area_scan' | 'patrol'
 
 export type MissionStatusDto = 'planned' | 'active' | 'completed' | 'aborted'
 
 export interface MissionDto {
   id: string
   name: string
-  type: 'area_scan'
+  type: MissionTypeDto
   status: MissionStatusDto
   area: { polygon: GeoPointDto[] }
   altitude_m: number
+  /** Patrol circuits; null for other mission types. */
+  laps: number | null
   assigned_uav_ids: string[]
   routes: RouteDto[]
   created_at: number
@@ -74,18 +80,21 @@ export interface MissionDto {
   completed_at: number | null
 }
 
-/** Fake REST: POST /missions/plan body. */
 export interface GeofenceDto {
   id: string
   name: string
   polygon: GeoPointDto[]
 }
 
+/** Fake REST: POST /missions/plan body. `area` is the scan area or the patrol loop. */
 export interface MissionPlanRequestDto {
   name: string
+  type: MissionTypeDto
   area: { polygon: GeoPointDto[] }
   altitude_m: number
   uav_count: number
+  /** Patrol only: number of circuits. */
+  laps?: number
 }
 
 export type SimulatorMessage =

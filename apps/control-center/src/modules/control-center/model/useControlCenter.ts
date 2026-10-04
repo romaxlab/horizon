@@ -68,9 +68,10 @@ export function useControlCenter() {
     const scanning = progress.activeUavCount > 0
     return {
       title: current.name,
-      state: `${Math.round(progress.ratio * 100)}%`,
+      // Floor: 100% only once every UAV has landed (the mission then completes).
+      state: `${Math.floor(progress.ratio * 100)}%`,
       detail: scanning
-        ? `${progress.activeUavCount} UAVs scanning${eta}`
+        ? `${progress.activeUavCount} UAVs ${current.type === 'patrol' ? 'patrolling' : 'scanning'}${eta}`
         : `${progress.returningUavCount} UAVs returning`,
       progress: progress.ratio,
     }
@@ -229,7 +230,8 @@ export function useControlCenter() {
     const current = missions.current
     if (!current || current.status === 'draft' || current.status === 'planned') return null
     const phase = current.status === 'active' ? 'active' : 'completed'
-    return { phase, area: current.area.polygon, routes: current.routes }
+    const shape = current.type === 'patrol' ? 'loop' : 'area'
+    return { phase, shape, area: current.area.polygon, routes: current.routes }
   })
 
   /**
@@ -256,6 +258,12 @@ export function useControlCenter() {
     /** Live fleet stream for the map: deltas bypass component rendering. */
     fleetFeed: { current: () => fleet.uavs, subscribe: fleet.subscribe },
     selectedUavId: computed(() => fleet.selectedUavId),
+    /** Mission the selected UAV is flying, by name, for the inspector. */
+    selectedMissionName: computed(() => {
+      const current = missions.current
+      const missionId = fleet.selectedUav?.telemetry?.missionId
+      return current && missionId === current.id ? current.name : null
+    }),
     inspectorOpen: computed(() => fleet.selectedUav !== null),
     following: computed(() => map.followUavId !== null),
     builder,

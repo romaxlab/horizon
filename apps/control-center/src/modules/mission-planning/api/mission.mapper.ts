@@ -10,9 +10,11 @@ export function mapMission(dto: MissionDto): Mission {
     status: dto.status,
     area: { polygon: dto.area.polygon.map(({ lat, lon }) => ({ latitude: lat, longitude: lon })) },
     altitude: dto.altitude_m,
+    laps: dto.laps ?? null,
     assignedUavIds: dto.assigned_uav_ids,
     routes: dto.routes.map((route) => ({
       uavId: route.uav_id,
+      home: route.home ? { latitude: route.home.lat, longitude: route.home.lon } : null,
       waypoints: route.waypoints.map((w) => ({
         id: w.id,
         latitude: w.lat,
@@ -37,8 +39,10 @@ const toAreaDto = (area: MissionArea) => ({
 export function toPlanRequestDto(request: MissionPlanRequest) {
   return {
     name: request.name,
+    type: request.type,
     area: toAreaDto(request.area),
     altitude_m: request.altitude,
     uav_count: request.uavCount,
+    ...(request.type === 'patrol' ? { laps: request.laps } : {}),
   }
 }

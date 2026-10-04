@@ -173,6 +173,7 @@ describe('createSimulator', () => {
   it('plans a mission with the healthiest standby UAVs without launching it', () => {
     const { simulator, messages } = record()
     const plan = simulator.planMission({
+      type: 'area_scan',
       name: 'Scan',
       area: demoArea,
       altitude_m: 100,
@@ -194,17 +195,30 @@ describe('createSimulator', () => {
   it('rejects plans it cannot fulfil', () => {
     const simulator = createSimulator({ startTime: START })
     expect(
-      simulator.planMission({ name: 'x', area: demoArea, altitude_m: 120, uav_count: 99 }),
+      simulator.planMission({
+        type: 'area_scan',
+        name: 'x',
+        area: demoArea,
+        altitude_m: 120,
+        uav_count: 99,
+      }),
     ).toMatchObject({ ok: false })
     const tiny = { polygon: demoArea.polygon.map((p) => ({ lat: p.lat * 1, lon: 54.37 })) }
     expect(
-      simulator.planMission({ name: 'x', area: tiny, altitude_m: 120, uav_count: 2 }),
+      simulator.planMission({
+        type: 'area_scan',
+        name: 'x',
+        area: tiny,
+        altitude_m: 120,
+        uav_count: 2,
+      }),
     ).toMatchObject({ ok: false })
   })
 
   it('launches a planned mission, streams its state and completes it', () => {
     const { simulator, messages } = record()
     const plan = simulator.planMission({
+      type: 'area_scan',
       name: 'Scan',
       area: demoArea,
       altitude_m: 120,
@@ -427,7 +441,13 @@ describe('createSimulator', () => {
         { lat: 24.436, lon: 54.356 },
       ],
     }
-    const result = simulator.planMission({ name: 'West', area, altitude_m: 120, uav_count: 3 })
+    const result = simulator.planMission({
+      type: 'area_scan',
+      name: 'West',
+      area,
+      altitude_m: 120,
+      uav_count: 3,
+    })
     if (!result.ok) throw new Error(result.reason)
     const homes = new Map(
       simulator
@@ -460,6 +480,7 @@ describe('createSimulator', () => {
       ],
     }
     const plan = simulator.planMission({
+      type: 'area_scan',
       name: 'South',
       area: behindHelipad,
       altitude_m: 60,
@@ -495,7 +516,13 @@ describe('createSimulator', () => {
       ],
     }
     expect(
-      simulator.planMission({ name: 'x', area: inside, altitude_m: 40, uav_count: 1 }),
+      simulator.planMission({
+        type: 'area_scan',
+        name: 'x',
+        area: inside,
+        altitude_m: 40,
+        uav_count: 1,
+      }),
     ).toMatchObject({ ok: false, geofenceIds: [marina?.id] })
   })
 
@@ -534,6 +561,56 @@ describe('createSimulator', () => {
     simulator.step(20_000)
     const beats = messages.flatMap((m) => (m.type === 'heartbeat' ? [m.data.server_time] : []))
     expect(beats).toEqual([START + 5_000, START + 10_000, START + 15_000, START + 20_000])
+  })
+
+  it('plans and flies a patrol for its laps, then completes after landing', () => {
+    const { simulator } = record()
+    const loop = {
+      polygon: [
+        { lat: 24.455, lon: 54.385 },
+        { lat: 24.455, lon: 54.388 },
+        { lat: 24.458, lon: 54.388 },
+      ],
+    }
+    const plan = simulator.planMission({
+      type: 'patrol',
+      name: 'Perimeter',
+      area: loop,
+      altitude_m: 60,
+      uav_count: 2,
+      laps: 2,
+    })
+    if (!plan.ok) throw new Error(plan.reason)
+    expect(plan.mission).toMatchObject({ type: 'patrol', laps: 2 })
+    expect(plan.mission.routes).toHaveLength(2)
+
+    simulator.dispatch({ type: 'launchMission', missionId: plan.mission.id })
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      3600,
+    )
+  })
+
+  it('rejects a patrol with a corner inside a no-fly zone', () => {
+    const { simulator } = record()
+    const result = simulator.planMission({
+      type: 'patrol',
+      name: 'x',
+      area: {
+        polygon: [
+          { lat: 24.4655, lon: 54.352 },
+          { lat: 24.47, lon: 54.36 },
+          { lat: 24.46, lon: 54.362 },
+        ],
+      },
+      altitude_m: 60,
+      uav_count: 1,
+      laps: 1,
+    })
+    expect(result).toMatchObject({ ok: false, geofenceIds: ['nfz-marina'] })
   })
 
   it('reports whether there is anything to reset', () => {

@@ -34,6 +34,7 @@ const {
   stopMission,
   stoppingMission,
   stopError,
+  selectedMissionName,
 } = useControlCenter()
 
 /** Local presentation state: fleet panel expansion and the large video focus view. */
@@ -166,6 +167,7 @@ watch(selectedUavId, (id) => {
             >
               <UavInspector
                 :following="following"
+                :mission-name="selectedMissionName"
                 @close="selectUav(null)"
                 @focus="focusSelected"
                 @toggle-follow="toggleFollow"

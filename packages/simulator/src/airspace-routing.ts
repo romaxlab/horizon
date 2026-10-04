@@ -65,6 +65,10 @@ export interface AirspaceRouter {
   route(from: GeoPoint, to: GeoPoint): GeoPoint[] | null
   /** Length of the routed path, meters (straight distance when unroutable). */
   distance(from: GeoPoint, to: GeoPoint): number
+  /** `points` with detours inserted between consecutive points; null when a leg is unroutable. */
+  routePath(points: readonly GeoPoint[]): GeoPoint[] | null
+  /** No-fly zones whose keep-out area contains the point. */
+  zonesAt(point: GeoPoint): Geofence[]
 }
 
 /**
@@ -122,5 +126,26 @@ export function createAirspaceRouter(zones: readonly Geofence[]): AirspaceRouter
     return path.slice(1).reduce((sum, p, i) => sum + distanceMeters(path[i] ?? p, p), 0)
   }
 
-  return { exclusions, isClear, route, distance }
+  function routePath(points: readonly GeoPoint[]): GeoPoint[] | null {
+    const path: GeoPoint[] = []
+    for (const [i, point] of points.entries()) {
+      const previous = points[i - 1]
+      if (previous) {
+        const detour = route(previous, point)
+        if (!detour) return null
+        path.push(...detour)
+      }
+      path.push(point)
+    }
+    return path
+  }
+
+  function zonesAt(point: GeoPoint): Geofence[] {
+    return zones.filter((_, i) => {
+      const polygon = keepOut[i]
+      return polygon !== undefined && isPointInPolygon(point, polygon)
+    })
+  }
+
+  return { exclusions, isClear, route, distance, routePath, zonesAt }
 }

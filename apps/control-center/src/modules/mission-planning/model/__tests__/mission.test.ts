@@ -68,35 +68,66 @@ describe('mission parsing', () => {
 })
 
 describe('computeMissionProgress', () => {
-  const mission = parseMission(missionDto)
-
-  it('derives progress from waypoints reached on each route', () => {
-    const progress = computeMissionProgress(
-      mission,
-      new Map([
-        ['a', telemetry('a', { currentWaypoint: 2 })],
-        ['b', telemetry('b', { currentWaypoint: 1 })],
-      ]),
+  // One route: base → 4 waypoints 1 km north of each other → base. Path: 4 + 3 + 4 = 11 km.
+  const KM = 1 / 111.19
+  const home = { latitude: 24.46, longitude: 54.36 }
+  const north = (km: number) => ({ latitude: home.latitude + km * KM, longitude: home.longitude })
+  const route: Mission['routes'][number] = {
+    uavId: 'a',
+    home,
+    waypoints: [1, 2, 3, 4].map((km, order) => ({
+      id: `a-${String(order)}`,
+      ...north(km),
+      altitude: 120,
+      order,
+    })),
+    distanceMeters: 8_000,
+    estimatedDurationSec: 800,
+  }
+  const mission: Mission = { ...parseMission(missionDto), routes: [route], startedAt: 100 }
+  const progressAt = (overrides: Partial<UavTelemetry>, status: Mission['status'] = 'active') =>
+    computeMissionProgress(
+      { ...mission, status },
+      new Map([['a', telemetry('a', { timestamp: 200, ...overrides })]]),
     )
-    expect(progress).toMatchObject({ completedWaypoints: 3, totalWaypoints: 8, activeUavCount: 2 })
-    expect(progress.ratio).toBeCloseTo(3 / 8)
-    expect(progress.etaSec).toBeGreaterThan(0)
+
+  it('starts moving with take-off: transit to the first waypoint counts', () => {
+    const transit = progressAt({ currentWaypoint: 0, position: { ...north(0.5), altitude: 60 } })
+    expect(transit.ratio).toBeCloseTo(0.5 / 8, 2)
+    expect(transit.activeUavCount).toBe(1)
+    // ETA covers the rest of the flight including the way home: 7.5 km at 10 m/s.
+    expect(transit.etaSec).toBeCloseTo(750, -1)
   })
 
-  it('counts finished routes and stops the ETA when complete', () => {
-    const progress = computeMissionProgress(
-      { ...mission, status: 'completed' } satisfies Mission,
-      new Map(),
-    )
-    expect(progress).toMatchObject({ ratio: 1, activeUavCount: 0, etaSec: null })
+  it('follows the route between waypoints', () => {
+    const mid = progressAt({ currentWaypoint: 2, position: { ...north(2.5), altitude: 120 } })
+    expect(mid.ratio).toBeCloseTo(2.5 / 8, 2)
+    expect(mid.completedWaypoints).toBe(2)
   })
 
-  it('ignores telemetry from other missions', () => {
-    const progress = computeMissionProgress(
-      mission,
-      new Map([['a', telemetry('a', { missionId: 'other', currentWaypoint: 3 })]]),
-    )
-    expect(progress.completedWaypoints).toBe(0)
+  it('counts the way home and reaches 100% only after landing', () => {
+    const returning = progressAt({
+      currentWaypoint: 4,
+      flightPhase: 'returning',
+      position: { ...north(2), altitude: 140 },
+    })
+    expect(returning.ratio).toBeCloseTo(6 / 8, 2)
+    expect(returning.returningUavCount).toBe(1)
+
+    const landed = progressAt({ missionId: null, flightPhase: 'parked', currentWaypoint: null })
+    expect(landed.ratio).toBe(1)
+    expect(progressAt({}, 'completed')).toMatchObject({ ratio: 1, etaSec: null })
+  })
+
+  it('never jumps back when the UAV drifts off its leg', () => {
+    const drifted = progressAt({ currentWaypoint: 2, position: { ...north(0), altitude: 120 } })
+    // Still credited with the waypoints passed (base → 2nd waypoint = 2 km).
+    expect(drifted.ratio).toBeCloseTo(2 / 8, 2)
+  })
+
+  it('ignores telemetry from before the launch and from other missions', () => {
+    expect(progressAt({ missionId: null, flightPhase: 'parked', timestamp: 50 }).ratio).toBe(0)
+    expect(progressAt({ missionId: 'other', currentWaypoint: 3, timestamp: 50 }).ratio).toBe(0)
   })
 })
 

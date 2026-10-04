@@ -15,6 +15,8 @@ import type { MapPalette } from './palette'
 export interface MissionOverlay {
   /** `draft`: area being drawn · `planned`: reviewed, not launched · then `active` / `completed`. */
   phase: 'draft' | 'planned' | 'active' | 'completed'
+  /** `area`: filled scan area · `loop`: closed patrol route, drawn as a line only. */
+  shape: 'area' | 'loop'
   area: GeoPoint[]
   /** Scan routes per UAV; waypoint altitude is above ground. */
   routes: { uavId: string; waypoints: GeoPosition[] }[]
@@ -49,7 +51,7 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
   function render() {
     clear()
     if (!overlay) return
-    const { phase, area, routes } = overlay
+    const { phase, shape, area, routes } = overlay
     const accent = palette.selected
     const muted = palette.standby
     const draft = phase === 'draft'
@@ -58,7 +60,7 @@ export function createMissionLayer(viewer: Viewer, initialPalette: MapPalette): 
       new PolylineDashMaterialProperty({ color, dashLength: 12 })
 
     const ring = area.map((p) => Cartesian3.fromDegrees(p.longitude, p.latitude))
-    if (area.length >= 3) {
+    if (shape === 'area' && area.length >= 3) {
       add({
         polygon: {
           hierarchy: new PolygonHierarchy(ring),

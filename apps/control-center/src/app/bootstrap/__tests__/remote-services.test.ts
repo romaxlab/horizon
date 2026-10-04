@@ -27,6 +27,7 @@ function fakeFetch(routes: Record<string, Route>) {
 describe('createRemoteMissionPlanner', () => {
   const backend = createSimulator({ startTime: START })
   const planBody = backend.planMission({
+    type: 'area_scan',
     name: 'Scan',
     area: {
       polygon: [
@@ -56,16 +57,18 @@ describe('createRemoteMissionPlanner', () => {
 
     const mission = await planner.plan({
       name: 'Scan',
+      type: 'area_scan',
       area: { polygon: [{ latitude: 24.46, longitude: 54.36 }] },
       altitude: 120,
       uavCount: 2,
+      laps: 3,
     })
     expect(mission).toMatchObject({ id: planBody.mission.id, status: 'planned' })
     expect(mission.routes).toHaveLength(2)
-    expect(JSON.parse(requests[0]?.slice(5) ?? '{}')).toMatchObject({
-      altitude_m: 120,
-      uav_count: 2,
-    })
+    const body: unknown = JSON.parse(requests[0]?.slice(5) ?? '{}')
+    expect(body).toMatchObject({ type: 'area_scan', altitude_m: 120, uav_count: 2 })
+    // Laps are a patrol parameter only.
+    expect(body).not.toHaveProperty('laps')
 
     await planner.launch(mission.id)
     await planner.abort(mission.id)
@@ -82,7 +85,14 @@ describe('createRemoteMissionPlanner', () => {
         }),
       }),
     )
-    const request = { name: 'x', area: { polygon: [] }, altitude: 120, uavCount: 1 }
+    const request = {
+      name: 'x',
+      type: 'area_scan' as const,
+      area: { polygon: [] },
+      altitude: 120,
+      uavCount: 1,
+      laps: 1,
+    }
     await expect(planner.plan(request)).rejects.toEqual(
       new MissionPlanningError('Area is too small'),
     )
@@ -104,7 +114,14 @@ describe('createRemoteMissionPlanner', () => {
         }),
       }),
     )
-    const request = { name: 'x', area: { polygon: [] }, altitude: 120, uavCount: 1 }
+    const request = {
+      name: 'x',
+      type: 'area_scan' as const,
+      area: { polygon: [] },
+      altitude: 120,
+      uavCount: 1,
+      laps: 1,
+    }
     await expect(planner.plan(request)).rejects.toMatchObject({
       geofenceIds: ['nfz-marina', 'nfz-palace'],
     })

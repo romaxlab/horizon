@@ -1,4 +1,5 @@
 export { AreaScanError, planAreaScan, type AreaScanRequest } from './area-scan'
+export { PatrolError, planPatrol, type PatrolRequest } from './patrol'
 export {
   DEMO_BASE,
   DEMO_FLEET_SIZE,
@@ -14,6 +15,7 @@ export type {
   GeoPointDto,
   MissionDto,
   MissionPlanRequestDto,
+  MissionTypeDto,
   MissionStatusDto,
   RouteDto,
   SimulatorMessage,

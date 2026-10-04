@@ -51,7 +51,7 @@ Main capabilities:
 
 - fleet monitoring;
 - 3D situational awareness;
-- Area Scan mission planning;
+- mission planning: Area Scan and Patrol;
 - mission execution monitoring;
 - UAV inspection;
 - simulated video;
@@ -489,10 +489,13 @@ interface UavRoute {
 interface Mission {
   id: string
   name: string
-  type: 'area_scan'
+  type: 'area_scan' | 'patrol'
   status: MissionStatus
+  /** Scan area, or the closed patrol loop (corners in flight order). */
   area: MissionArea
   altitude: number
+  /** Patrol circuits; null for other types. */
+  laps: number | null
   assignedUavIds: string[]
   routes: UavRoute[]
   createdAt: number
@@ -502,6 +505,22 @@ interface Mission {
 ```
 
 Mission progress should derive from route/waypoint execution where practical rather than from arbitrary percentages.
+
+Progress is the share of the planned flight distance covered — transit from the base, the mission
+route and the flight home (routes report their `home`) — so it moves from the first take-off and
+shows 100 % only when every UAV has landed, the same moment the mission completes. A UAV that
+landed early (stop, low battery) counts as done; ETA is the time until the last UAV lands.
+
+Mission types (planned by the backend, `@horizon/simulator`):
+
+- **Area Scan** — boustrophedon coverage of a polygon, one strip per UAV.
+- **Patrol** — a closed loop drawn corner by corner. All UAVs fly it in the same direction, spaced
+  evenly along its length, for a set number of laps (1–10), each starting and ending at its own
+  point on the loop. Loop legs and transit detour around no-fly zones; a corner inside a zone
+  rejects the plan. Progress is the same distance-based measure, so laps count toward it.
+
+The plan request carries `type` and, for patrol, `laps`; the same `area.polygon` holds the scan
+area or the loop.
 
 ---
 

@@ -80,13 +80,9 @@ const pathDistance = (path: GeoPoint[]) =>
 /** Inserts detours between consecutive points so no leg crosses a no-fly zone. */
 function withDetours(path: GeoPoint[], airspace: AirspaceRouter | undefined): GeoPoint[] {
   if (!airspace) return path
-  return path.flatMap((point, i) => {
-    const previous = path[i - 1]
-    if (!previous) return [point]
-    const detour = airspace.route(previous, point)
-    if (!detour) throw new AreaScanError('No clear path around the no-fly zones')
-    return [...detour, point]
-  })
+  const routed = airspace.routePath(path)
+  if (!routed) throw new AreaScanError('No clear path around the no-fly zones')
+  return routed
 }
 
 /**
@@ -149,6 +145,7 @@ export function planAreaScan(request: AreaScanRequest): UavRoute[] {
     const distance = pathDistance([...flown, ...back.slice(1)])
     return {
       uavId: uav.id,
+      home: uav.home,
       waypoints,
       distanceMeters: Math.round(distance),
       estimatedDurationSec: Math.round(distance / cruiseSpeedMps),

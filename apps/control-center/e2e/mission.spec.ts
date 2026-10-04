@@ -53,7 +53,7 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
     .first()
     .click()
   const inspector = page.getByRole('complementary', { name: 'UAV inspector' })
-  await expect(inspector.getByText('Area Scan', { exact: true })).toBeVisible()
+  await expect(inspector.getByText('E2E Scan', { exact: true })).toBeVisible()
   await expect(inspector.getByText(/^ALT [1-9]\d* m$/)).toBeVisible({ timeout: 30_000 })
   await expect(inspector.getByText(/^SPD (?!0\.0)[\d.]+ m\/s$/)).toBeVisible({ timeout: 30_000 })
 })

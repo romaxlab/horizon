@@ -14,7 +14,11 @@ import {
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useUavInspector } from '../model/useUavInspector'
 
-defineProps<{ following: boolean }>()
+defineProps<{
+  following: boolean
+  /** Name of the mission the UAV flies, from the composing view (fleet does not own missions). */
+  missionName: string | null
+}>()
 const emit = defineEmits<{ close: []; focus: []; toggleFollow: [] }>()
 
 defineSlots<{
@@ -116,7 +120,7 @@ onBeforeUnmount(() => {
         <div class="flex min-w-0 flex-col">
           <BaseText variant="caption" tone="muted">Mission</BaseText>
           <BaseText variant="label-lg" truncate>
-            {{ inspector.mission ? 'Area Scan' : 'Not assigned' }}
+            {{ inspector.mission ? (missionName ?? 'Assigned') : 'Not assigned' }}
           </BaseText>
         </div>
         <BaseText

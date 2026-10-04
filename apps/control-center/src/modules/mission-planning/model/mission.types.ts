@@ -1,11 +1,15 @@
-import type { Mission, MissionArea } from '@horizon/domain'
+import type { Mission, MissionArea, MissionType } from '@horizon/domain'
 
 export interface MissionPlanRequest {
   name: string
+  type: MissionType
+  /** Scan area, or the patrol loop corners in flight order. */
   area: MissionArea
   /** Scan altitude above ground, meters. */
   altitude: number
   uavCount: number
+  /** Patrol circuits (patrol only). */
+  laps: number
 }
 
 /** Planning failures the operator can act on (e.g. area too small, not enough UAVs). */
@@ -23,7 +27,7 @@ export class MissionPlanningError extends Error {
 
 /** Mission backend boundary. Mock and remote implementations share this contract. */
 export interface MissionPlanner {
-  /** Generates UAV routes for an Area Scan; the plan is not executed until launched. */
+  /** Generates UAV routes for a mission; the plan is not executed until launched. */
   plan(request: MissionPlanRequest, signal?: AbortSignal): Promise<Mission>
   launch(missionId: string): Promise<void>
   /** Stops an active mission; its UAVs return home. */

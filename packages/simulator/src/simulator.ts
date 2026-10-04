@@ -11,6 +11,7 @@ import {
 } from '@horizon/domain'
 import { createAirspaceRouter } from './airspace-routing'
 import { planAreaScan } from './area-scan'
+import { planPatrol } from './patrol'
 import {
   DEMO_BASE,
   DEMO_FLEET_SIZE,
@@ -409,15 +410,38 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       .sort((a, b) => b.battery - a.battery || a.uav.id.localeCompare(b.uav.id))
       .slice(0, request.uav_count)
     const area = request.area.polygon.map(toGeoPoint)
+    const patrol = request.type === 'patrol'
+    const laps = patrol ? (request.laps ?? 1) : null
+    if (patrol) {
+      // Patrol corners are flown exactly, so none may lie inside a no-fly zone.
+      const zones = [...new Set(area.flatMap((point) => airspace.zonesAt(point)))]
+      if (zones.length > 0) {
+        return {
+          ok: false,
+          reason: `Patrol route has points inside no-fly ${zones.length === 1 ? 'zone' : 'zones'} ${zones.map((z) => `"${z.name}"`).join(', ')}`,
+          geofenceIds: zones.map((z) => z.id),
+        }
+      }
+    }
+    const fleet = assigned.map((u) => ({ id: u.uav.id, home: u.home }))
     let routes
     try {
-      routes = planAreaScan({
-        area: { polygon: area },
-        altitude: request.altitude_m,
-        uavs: assigned.map((u) => ({ id: u.uav.id, home: u.home })),
-        cruiseSpeedMps: CRUISE_SPEED_MPS,
-        airspace,
-      })
+      routes = patrol
+        ? planPatrol({
+            loop: area,
+            altitude: request.altitude_m,
+            laps: laps ?? 1,
+            uavs: fleet,
+            cruiseSpeedMps: CRUISE_SPEED_MPS,
+            airspace,
+          })
+        : planAreaScan({
+            area: { polygon: area },
+            altitude: request.altitude_m,
+            uavs: fleet,
+            cruiseSpeedMps: CRUISE_SPEED_MPS,
+            airspace,
+          })
     } catch (error) {
       return { ok: false, reason: error instanceof Error ? error.message : 'Planning failed' }
     }
@@ -439,13 +463,18 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     const planned: MissionDto = {
       id: id ?? `mission-${String(missionSeq).padStart(3, '0')}`,
       name: request.name,
-      type: 'area_scan',
+      type: request.type,
       status: 'planned',
       area: { polygon: request.area.polygon.map(({ lat, lon }) => ({ lat, lon })) },
       altitude_m: request.altitude_m,
+      laps,
       assigned_uav_ids: assigned.map((u) => u.uav.id),
       routes: routes.map((route) => ({
         uav_id: route.uavId,
+        home: {
+          lat: route.home?.latitude ?? DEMO_BASE.latitude,
+          lon: route.home?.longitude ?? DEMO_BASE.longitude,
+        },
         waypoints: route.waypoints.map((w) => ({
           id: w.id,
           lat: w.latitude,
@@ -623,6 +652,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     const plan = planMission(
       {
         name: DEMO_MISSION.name,
+        type: 'area_scan',
         area: {
           polygon: DEMO_MISSION.area.polygon.map((p) => ({ lat: p.latitude, lon: p.longitude })),
         },

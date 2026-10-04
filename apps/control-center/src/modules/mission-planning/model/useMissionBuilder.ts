@@ -1,4 +1,5 @@
-import type { GeoPoint, Mission } from '@horizon/domain'
+import type { GeoPoint, Mission, MissionType } from '@horizon/domain'
+import type { SegmentOption } from '@horizon/ui'
 import { useMutation } from '@tanstack/vue-query'
 import { computed, inject, provide, ref, type InjectionKey, type Ref } from 'vue'
 import { useAppServices } from '@/app/providers/services'
@@ -9,9 +10,24 @@ export type BuilderStep = 'details' | 'area' | 'review'
 export const ALTITUDE_RANGE = { min: 30, max: 400 } as const
 const DEFAULT_ALTITUDE = 120
 const DEFAULT_UAV_COUNT = 6
+export const LAPS_RANGE = { min: 1, max: 10 } as const
+const DEFAULT_LAPS = 3
+
+/** Per type: label, default mission name and what the operator draws on the map. */
+export const MISSION_TYPES: Record<
+  MissionType,
+  { label: string; defaultName: string; shape: 'area' | 'loop' }
+> = {
+  area_scan: { label: 'Area Scan', defaultName: 'Area Scan', shape: 'area' },
+  patrol: { label: 'Patrol', defaultName: 'Patrol', shape: 'loop' },
+}
+const typeOptions: SegmentOption<MissionType>[] = (Object.keys(MISSION_TYPES) as MissionType[]).map(
+  (value) => ({ value, label: MISSION_TYPES[value].label }),
+)
 
 /**
- * New Area Scan flow: details → draw area on the map → generate plan → review → launch.
+ * New mission flow: details (type, …) → draw the area or patrol loop on the map → generate plan →
+ * review → launch.
  * Draft state is transient UI state; planning and launch go through the MissionPlanner contract.
  */
 export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<Ref<number>> }) {
@@ -19,7 +35,9 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
 
   const open = ref(false)
   const step = ref<BuilderStep>('details')
-  const name = ref('Area Scan')
+  const type = ref<MissionType>('area_scan')
+  const name = ref(MISSION_TYPES.area_scan.defaultName)
+  const laps = ref(DEFAULT_LAPS)
   const altitude = ref(DEFAULT_ALTITUDE)
   const uavCount = ref(DEFAULT_UAV_COUNT)
   const area = ref<GeoPoint[]>([])
@@ -50,6 +68,16 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     else if (uavCount.value > availableUavs.value) {
       errors.push(`Only ${availableUavs.value} standby UAVs available`)
     }
+    if (
+      type.value === 'patrol' &&
+      !(
+        Number.isInteger(laps.value) &&
+        laps.value >= LAPS_RANGE.min &&
+        laps.value <= LAPS_RANGE.max
+      )
+    ) {
+      errors.push(`Laps must be ${LAPS_RANGE.min}–${LAPS_RANGE.max}`)
+    }
     return errors
   })
   const areaReady = computed(() => area.value.length >= 3)
@@ -67,13 +95,23 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
 
   function reset() {
     step.value = 'details'
-    name.value = 'Area Scan'
+    type.value = 'area_scan'
+    name.value = MISSION_TYPES.area_scan.defaultName
+    laps.value = DEFAULT_LAPS
     altitude.value = DEFAULT_ALTITUDE
     uavCount.value = Math.min(DEFAULT_UAV_COUNT, Math.max(availableUavs.value, 1))
     area.value = []
     plan.value = null
     planMutation.reset()
     launchMutation.reset()
+  }
+
+  /** Switches the type; an untouched default name follows it. */
+  function setType(next: MissionType) {
+    if (name.value.trim() === MISSION_TYPES[type.value].defaultName) {
+      name.value = MISSION_TYPES[next].defaultName
+    }
+    type.value = next
   }
 
   function start() {
@@ -114,9 +152,11 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
     if (!areaReady.value || detailErrors.value.length > 0) return
     planMutation.mutate({
       name: name.value.trim(),
+      type: type.value,
       area: { polygon: area.value },
       altitude: altitude.value,
       uavCount: uavCount.value,
+      laps: laps.value,
     })
   }
 
@@ -143,15 +183,21 @@ export function useMissionBuilder({ availableUavs }: { availableUavs: Readonly<R
   /** Map geometry for the draft / reviewed plan; null when the builder is closed. */
   const overlay = computed(() => {
     if (!open.value) return null
+    const shape = MISSION_TYPES[type.value].shape
     return plan.value
-      ? { phase: 'planned' as const, area: area.value, routes: plan.value.routes }
-      : { phase: 'draft' as const, area: area.value, routes: [] }
+      ? { phase: 'planned' as const, shape, area: area.value, routes: plan.value.routes }
+      : { phase: 'draft' as const, shape, area: area.value, routes: [] }
   })
 
   return {
     open,
     step,
+    type,
+    typeOptions,
+    setType,
+    shape: computed(() => MISSION_TYPES[type.value].shape),
     name,
+    laps,
     altitude,
     uavCount,
     area,

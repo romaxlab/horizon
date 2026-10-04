@@ -13,10 +13,12 @@ const plannedMission: Mission = {
   status: 'planned',
   area: { polygon: [] },
   altitude: 120,
+  laps: null,
   assignedUavIds: ['uav-01'],
   routes: [
     {
       uavId: 'uav-01',
+      home: null,
       waypoints: [{ id: 'w0', latitude: 24.46, longitude: 54.36, altitude: 120, order: 0 }],
       distanceMeters: 2_400,
       estimatedDurationSec: 171,
@@ -96,9 +98,11 @@ describe('useMissionBuilder', () => {
 
     expect(plan).toHaveBeenCalledWith({
       name: 'Area Scan',
+      type: 'area_scan',
       area: { polygon: square },
       altitude: 120,
       uavCount: 6,
+      laps: 3,
     })
     expect(builder.step.value).toBe('review')
     expect(builder.overlay.value?.phase).toBe('planned')
@@ -109,6 +113,30 @@ describe('useMissionBuilder', () => {
     expect(launch).toHaveBeenCalledWith('mission-001')
     expect(builder.open.value).toBe(false)
     expect(builder.overlay.value).toBeNull()
+  })
+
+  it('plans a patrol: the default name follows the type, laps are validated', async () => {
+    const { builder, plan } = setup()
+    builder.start()
+    builder.setType('patrol')
+    expect(builder.name.value).toBe('Patrol')
+    builder.laps.value = 0
+    expect(builder.detailErrors.value).toContain('Laps must be 1–10')
+    builder.laps.value = 2
+    builder.next()
+    square.forEach((p) => {
+      builder.addPoint(p)
+    })
+    expect(builder.overlay.value?.shape).toBe('loop')
+    builder.generate()
+    await flush()
+    expect(plan).toHaveBeenCalledWith(expect.objectContaining({ type: 'patrol', laps: 2 }))
+
+    // A name the operator typed is kept when switching type.
+    builder.start()
+    builder.name.value = 'North fence'
+    builder.setType('patrol')
+    expect(builder.name.value).toBe('North fence')
   })
 
   it('surfaces planning errors and stays on the area step', async () => {
