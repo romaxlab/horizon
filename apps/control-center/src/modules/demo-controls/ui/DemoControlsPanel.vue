@@ -77,7 +77,7 @@ const failureHint = (failure: (typeof failures)[number]) =>
     v-model:open="open"
     label="Demo controls"
     placement="top"
-    panel-class="grid w-80 gap-3 overflow-y-auto p-4"
+    panel-class="grid w-80 grid-cols-1 gap-3 overflow-y-auto p-4"
   >
     <template #trigger="{ toggle, triggerAttrs }">
       <BaseSurface variant="floating" shape="pill" class="pointer-events-auto p-1">
@@ -110,7 +110,11 @@ const failureHint = (failure: (typeof failures)[number]) =>
           </BaseButton>
         </BaseTooltip>
       </div>
-      <BaseText variant="caption" tone="secondary" truncate>{{ activeHint }}</BaseText>
+      <!-- Two caption lines, always reserved (h-7 = 2 × 14 px), so switching scenarios never
+           makes the panel jump; the full text is in the native tooltip. -->
+      <BaseText variant="caption" tone="secondary" class="line-clamp-2 h-7" :title="activeHint">
+        {{ activeHint }}
+      </BaseText>
     </section>
 
     <section class="flex flex-col gap-2" aria-label="Failures">

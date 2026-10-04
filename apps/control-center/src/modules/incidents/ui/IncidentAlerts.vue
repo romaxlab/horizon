@@ -33,10 +33,11 @@ const emit = defineEmits<{ inspect: [id: string, uavId: string]; dismiss: [id: s
       >
         {{ alert.subject }}
         <template #actions>
+          <!-- Same action on every alert; severity reads from the dot and the title color. -->
           <BaseButton
             v-if="alert.uavId"
             size="sm"
-            :variant="alert.variant === 'danger' ? 'primary' : 'secondary'"
+            variant="secondary"
             @click="emit('inspect', alert.id, alert.uavId)"
           >
             Inspect
