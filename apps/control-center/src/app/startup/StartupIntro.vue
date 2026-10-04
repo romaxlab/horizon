@@ -2,11 +2,11 @@
 import { useDismissLayer } from '@horizon/ui'
 import { computed } from 'vue'
 import logo from '@/shared/brand/horizon-logo-dark.svg'
-import { STARTUP_STATUS_LINES } from './startup-timeline'
-import { useStartupSequence } from './useStartupSequence'
+import type { StartupSequence } from './useStartupSequence'
 import './startup-reveal.css'
 
-const { timeline, phase, statusShown, statusConfirmed, skipped, skip } = useStartupSequence()
+const { sequence } = defineProps<{ sequence: StartupSequence }>()
+const { timeline, phase, lines, skipped, skip } = sequence
 
 // Escape skips; the intro is the top layer while it runs.
 useDismissLayer(
@@ -34,6 +34,8 @@ const timing = computed(() => ({
       v-if="phase === 'intro'"
       class="startup fixed inset-0 z-50 grid place-items-center bg-media text-on-media select-none"
       :style="timing"
+      role="dialog"
+      aria-modal="true"
       aria-label="Horizon is starting"
       aria-busy="true"
     >
@@ -47,20 +49,18 @@ const timing = computed(() => ({
 
         <ol class="mt-12 flex w-64 flex-col gap-2 font-mono text-caption" role="status">
           <li
-            v-for="(line, index) in STARTUP_STATUS_LINES"
-            :key="line"
+            v-for="line in lines"
+            :key="line.label"
             class="startup-status flex items-baseline gap-2"
-            :class="{ 'is-shown': index < statusShown }"
+            :class="{ 'is-shown': line.shown }"
           >
-            <span class="text-on-media-muted">{{ line }}</span>
+            <span class="text-on-media-muted">{{ line.label }}</span>
             <span class="flex-1 border-b border-dotted border-on-media/20" aria-hidden="true" />
             <span
               class="startup-check w-6 text-right"
-              :class="
-                index < statusConfirmed ? 'is-confirmed text-status-success' : 'text-on-media-muted'
-              "
+              :class="line.confirmed ? 'is-confirmed text-status-success' : 'text-on-media-muted'"
             >
-              {{ index < statusConfirmed ? 'OK' : '···' }}
+              {{ line.confirmed ? 'OK' : '···' }}
             </span>
           </li>
         </ol>

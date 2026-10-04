@@ -1,10 +1,11 @@
-import { nextTick, onBeforeUnmount, readonly, ref, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, readonly, ref, watch } from 'vue'
 import { useMapStore } from '@/modules/map'
+import { clearStartup, markRevealing, prefersReducedMotion, setRevealTiming } from './startup-stage'
 import {
-  CINEMATIC_TIMELINE,
-  REDUCED_MOTION_TIMELINE,
+  REVEAL_GROUPS,
   STARTUP_STATUS_LINES,
-  type StartupTimeline,
+  startupTimeline,
+  type StartupSignal,
 } from './startup-timeline'
 
 /**
@@ -15,13 +16,14 @@ import {
  */
 export type StartupPhase = 'intro' | 'dissolving' | 'revealing' | 'done'
 
-/** Reveal groups the Control Center marks with `data-reveal` (see startup-reveal.css). */
-const REVEAL_GROUPS = 4
-const REVEAL_TRAVEL_PX = 8
+export interface StartupSignals {
+  /** Real readiness behind each status line; a line is never confirmed before it is true. */
+  status: Record<StartupSignal, () => boolean>
+  /** The map shows its first complete view. */
+  mapReady: () => boolean
+}
 
-const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-/** Skipped or unmounted: the remaining timeline is dropped. */
+/** Skipped or disposed: the remaining timeline is dropped. */
 class SequenceAborted extends Error {
   override name = 'SequenceAborted'
 }
@@ -44,121 +46,128 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-/**
- * Orchestrates the cinematic startup: a timed overlay, then the hand-over to the map (camera
- * arrival, content reveal) and a staggered reveal of the Control Center panels. It only drives
- * presentation: the app, data loading and realtime start in parallel and are never waited for.
- * Must run before the map is created (it holds the camera in orbit).
- */
-export function useStartupSequence() {
-  const reducedMotion = prefersReducedMotion()
-  const timeline: StartupTimeline = reducedMotion ? REDUCED_MOTION_TIMELINE : CINEMATIC_TIMELINE
-  const map = useMapStore()
-  const root = document.documentElement
-
-  const phase = ref<StartupPhase>('intro')
-  /** Status lines shown so far, and how many of them are confirmed. */
-  const statusShown = ref(0)
-  const statusConfirmed = ref(0)
-  const skipped = ref(false)
-
-  function setRevealTiming(duration: number, stagger: number) {
-    root.style.setProperty('--startup-reveal-duration', `${String(duration)}ms`)
-    root.style.setProperty('--startup-reveal-stagger', `${String(stagger)}ms`)
-  }
-  root.style.setProperty('--startup-ease-enter', timeline.easing.enter)
-  root.style.setProperty(
-    '--startup-reveal-travel',
-    `${String(reducedMotion ? 0 : REVEAL_TRAVEL_PX)}px`,
-  )
-  setRevealTiming(timeline.reveal.duration, timeline.reveal.stagger)
-  root.dataset.startup = 'staged'
-  map.holdArrival()
-
-  const abort = new AbortController()
-  const { signal } = abort
-  const statusTimers: ReturnType<typeof setTimeout>[] = []
-
-  /** The overlay may hand over once the map shows its first complete view, or after a
-   *  bounded wait: a slow map never holds the app behind the intro. */
-  function mapReadyOrTimeout(maxWait: number): Promise<void> {
-    if (map.sceneReady) return Promise.resolve()
-    return new Promise((resolve, reject) => {
-      const stop = watch(
-        () => map.sceneReady,
-        (ready) => {
-          if (ready) done()
-        },
-      )
-      const timer = setTimeout(done, maxWait)
-      function done() {
+/** Resolves once `ready()` is true, or after `maxWait`. */
+function readyOrTimeout(ready: () => boolean, maxWait: number, signal: AbortSignal) {
+  if (ready()) return Promise.resolve()
+  return new Promise<void>((resolve, reject) => {
+    const stop = watch(ready, (now) => {
+      if (now) done()
+    })
+    const timer = setTimeout(done, maxWait)
+    function done() {
+      stop()
+      clearTimeout(timer)
+      resolve()
+    }
+    signal.addEventListener(
+      'abort',
+      () => {
         stop()
         clearTimeout(timer)
-        resolve()
-      }
-      signal.addEventListener(
-        'abort',
-        () => {
-          stop()
-          clearTimeout(timer)
-          reject(new SequenceAborted())
-        },
-        { once: true },
-      )
-    })
+        reject(new SequenceAborted())
+      },
+      { once: true },
+    )
+  })
+}
+
+/**
+ * Orchestrates the cinematic startup: a timed overlay whose status lines confirm only on real
+ * signals, then the hand-over to the map (camera arrival, content reveal) and a staggered reveal
+ * of the Control Center panels. Presentation only: data loading and realtime run in parallel and
+ * are never waited for beyond a bounded hand-over. Expects `stageStartup` to have run.
+ */
+export function useStartupSequence(signals: StartupSignals) {
+  const timeline = startupTimeline(prefersReducedMotion())
+  const map = useMapStore()
+
+  const phase = ref<StartupPhase>('intro')
+  const skipped = ref(false)
+  /** Per status line: shown, and old enough to be confirmed (if its signal is true). */
+  const shown = ref(STARTUP_STATUS_LINES.map(() => false))
+  const settled = ref(STARTUP_STATUS_LINES.map(() => false))
+
+  const lines = computed(() =>
+    STARTUP_STATUS_LINES.map((line, index) => ({
+      label: line.label,
+      shown: shown.value[index] ?? false,
+      confirmed: (settled.value[index] ?? false) && signals.status[line.signal](),
+    })),
+  )
+  const allConfirmed = () => lines.value.every((line) => line.confirmed)
+
+  const abort = new AbortController()
+  const timers = new Set<ReturnType<typeof setTimeout>>()
+  function later(ms: number, callback: () => void) {
+    const timer = setTimeout(() => {
+      timers.delete(timer)
+      callback()
+    }, ms)
+    timers.add(timer)
+  }
+  function clearTimers() {
+    timers.forEach(clearTimeout)
+    timers.clear()
   }
 
   function reveal() {
     phase.value = 'revealing'
-    root.dataset.startup = 'revealing'
+    markRevealing()
     map.revealContent()
   }
 
-  function cleanUp() {
+  function finish() {
     phase.value = 'done'
-    delete root.dataset.startup
-    for (const name of [
-      '--startup-reveal-duration',
-      '--startup-reveal-stagger',
-      '--startup-reveal-travel',
-      '--startup-ease-enter',
-    ]) {
-      root.style.removeProperty(name)
-    }
+    clearStartup()
+  }
+
+  /** Lands everything in its final state at once (dispose, or a failed step). */
+  function finishNow() {
+    abort.abort()
+    clearTimers()
+    map.settleArrival(true)
+    map.revealContent()
+    finish()
   }
 
   async function run() {
     const startedAt = performance.now()
-    const at = (ms: number) => wait(ms - (performance.now() - startedAt), signal)
+    const at = (ms: number) => wait(ms - (performance.now() - startedAt), abort.signal)
 
     STARTUP_STATUS_LINES.forEach((_, index) => {
       const shownAt = timeline.status.at + index * timeline.status.interval
-      statusTimers.push(
-        setTimeout(() => (statusShown.value = index + 1), shownAt),
-        setTimeout(
-          () => (statusConfirmed.value = index + 1),
-          shownAt + timeline.status.confirmAfter,
-        ),
-      )
+      later(shownAt, () => (shown.value[index] = true))
+      later(shownAt + timeline.status.confirmAfter, () => (settled.value[index] = true))
     })
 
     await at(timeline.dissolve.at)
-    await mapReadyOrTimeout(timeline.dissolve.maxMapWait)
-    statusShown.value = statusConfirmed.value = STARTUP_STATUS_LINES.length
+    // Hand over once the map and the status signals are ready, never later than the bound.
+    await readyOrTimeout(
+      () => signals.mapReady() && allConfirmed(),
+      timeline.dissolve.maxReadyWait,
+      abort.signal,
+    )
+    shown.value = shown.value.map(() => true)
     phase.value = 'dissolving'
 
-    await wait(timeline.flyIn.offset, signal)
+    await wait(timeline.flyIn.offset, abort.signal)
     map.flyIn(timeline.flyIn.duration)
-    await wait(timeline.reveal.offset - timeline.flyIn.offset, signal)
+    await wait(timeline.reveal.offset - timeline.flyIn.offset, abort.signal)
     reveal()
 
-    await wait(timeline.reveal.duration + (REVEAL_GROUPS - 1) * timeline.reveal.stagger, signal)
+    await wait(
+      timeline.reveal.duration + (REVEAL_GROUPS - 1) * timeline.reveal.stagger,
+      abort.signal,
+    )
     map.settleArrival()
-    cleanUp()
+    finish()
   }
 
   run().catch((error: unknown) => {
-    if (!(error instanceof SequenceAborted)) throw error
+    if (error instanceof SequenceAborted) return
+    // A presentation failure must never leave the app hidden behind the intro.
+    console.error('[startup] sequence failed', error)
+    finishNow()
   })
 
   /** Skip: the overlay fades out fast; the camera and the panels land in their final state. */
@@ -166,32 +175,32 @@ export function useStartupSequence() {
     if (phase.value === 'done' || skipped.value) return
     skipped.value = true
     abort.abort()
-    statusTimers.forEach(clearTimeout)
+    clearTimers()
     map.settleArrival(true)
     setRevealTiming(timeline.skip.duration, 0)
     // Render the short skip fade onto the overlay before it starts leaving (a leaving element
     // is no longer updated).
     void nextTick(() => {
+      if (phase.value === 'done') return // disposed meanwhile
       reveal()
-      setTimeout(cleanUp, timeline.skip.duration)
+      later(timeline.skip.duration, finish)
     })
   }
 
-  onBeforeUnmount(() => {
-    if (phase.value === 'done') return
-    abort.abort()
-    statusTimers.forEach(clearTimeout)
-    map.settleArrival(true)
-    map.revealContent()
-    cleanUp()
+  onScopeDispose(() => {
+    if (phase.value !== 'done') finishNow()
+    clearTimers()
   })
 
   return {
     timeline,
     phase: readonly(phase),
-    statusShown: readonly(statusShown),
-    statusConfirmed: readonly(statusConfirmed),
+    lines,
     skipped: readonly(skipped),
+    /** The app under the overlay takes no input until it is handed over. */
+    blocking: computed(() => phase.value === 'intro' || phase.value === 'dissolving'),
     skip,
   }
 }
+
+export type StartupSequence = ReturnType<typeof useStartupSequence>

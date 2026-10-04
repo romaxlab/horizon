@@ -6,6 +6,7 @@ import App from '@/app/App.vue'
 import { createQueryClient } from '@/app/providers/query-client'
 import { provideAppServices } from '@/app/providers/services'
 import { router } from '@/app/router'
+import { stageStartup } from '@/app/startup'
 import type { AppServices } from '@/app/providers/services'
 import type { AppConfig } from '@/shared/config'
 
@@ -27,7 +28,10 @@ export async function createHorizonApp(config: AppConfig): Promise<VueApp> {
   initTheme()
 
   const app = createApp(App)
-  app.use(createPinia())
+  const pinia = createPinia()
+  app.use(pinia)
+  // Before mounting: the panels start hidden and the map starts held for the intro.
+  if (config.cinematicIntro) stageStartup(pinia)
   app.use(router)
   app.use(VueQueryPlugin, { queryClient: createQueryClient() })
   provideAppServices(app, await createServices(config))

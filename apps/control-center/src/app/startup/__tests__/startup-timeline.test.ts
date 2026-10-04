@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   CINEMATIC_TIMELINE,
   REDUCED_MOTION_TIMELINE,
+  REVEAL_GROUPS,
   STARTUP_STATUS_LINES,
   type StartupTimeline,
 } from '../startup-timeline'
 
-/** Last reveal group (see `data-reveal` in the Control Center). */
-const LAST_REVEAL_GROUP = 3
+const LAST_REVEAL_GROUP = REVEAL_GROUPS - 1
 
 /** First frame → normal Control Center, when the map is ready in time. */
 function totalMs(t: StartupTimeline) {

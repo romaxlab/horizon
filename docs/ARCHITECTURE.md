@@ -135,17 +135,29 @@ it off). It is presentation only: bootstrap, data loading and realtime start in 
 never waited for.
 
 ```text
-startup-timeline.ts     every duration, offset and easing curve (plus a reduced-motion set)
+startup-timeline.ts     every duration, offset and easing curve (plus a reduced-motion set),
+                        the status lines and the signal each one reports
+startup-stage.ts        page state: <html data-startup> and reveal variables; stageStartup()
 useStartupSequence.ts   orchestrator: phases intro → dissolving → revealing → done, Skip/Escape
+useStartup.ts           the orchestrator wired to real signals (fleet link, fleet loaded, map)
 StartupIntro.vue        overlay: logo, status lines, Skip
 startup-reveal.css      staged reveal of groups marked data-reveal="0…3" in the Control Center
 ```
 
-The overlay hands over once the map shows its first complete view (bounded wait). The camera
-then flies in from orbit through the map's general **arrival** capability (see §7), and the
-panels reveal in staggered groups. Only opacity and transform animate, so the measured layout that
-frames the camera never moves. Removing the feature means deleting `app/startup/`, its use in
-`App.vue` and the `data-reveal` marks; the map's arrival API stays as an unused capability.
+Bootstrap calls `stageStartup()` before mounting: the panels start hidden and the map starts held
+in orbit, so nothing depends on which component sets up first. Status lines are honest: "Connecting
+telemetry" and "Fleet synchronized" confirm only once the fleet link is live and the fleet is
+loaded. The overlay hands over once those signals and the map's first complete view are ready,
+bounded by `maxReadyWait`; a line that is still not true then stays unconfirmed, and the app's own
+connection state takes over. The camera flies in from orbit through the map's general **arrival**
+capability (see §7), and the panels reveal in staggered groups. Only opacity and transform
+animate, so the measured layout that frames the camera never moves. Until the hand-over the app
+under the overlay is `inert`. Skip, unmount or a failing step land everything in its final state
+at once; the sequence never leaves the app hidden.
+
+Removing the feature means deleting `app/startup/`, its use in `App.vue` and
+`create-horizon-app.ts`, and the `data-reveal` marks; the map's arrival API stays as an unused
+capability.
 
 ---
 

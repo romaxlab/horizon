@@ -59,6 +59,8 @@ const ionImagery = ref(ionToken !== null)
 const esriCredit = computed(() => basemapCredit(basemap.value, ionImagery.value))
 
 let unsubscribeFleet: (() => void) | null = null
+/** Async scene callbacks may land after unmount; they must not touch shared state then. */
+let disposed = false
 
 onMounted(async () => {
   try {
@@ -89,6 +91,7 @@ onMounted(async () => {
     })
     const created = scene.value
     void created.whenFirstViewReady().then(() => {
+      if (disposed) return
       firstViewShown.value = true
       map.setSceneReady(true)
     })
@@ -111,6 +114,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
   clearTimeout(loaderTimer)
   map.setSceneReady(false)
   unsubscribeFleet?.()
