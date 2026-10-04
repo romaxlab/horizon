@@ -532,6 +532,34 @@ describe('createSimulator', () => {
     ).toMatchObject({ ok: false, geofenceIds: [marina?.id] })
   })
 
+  it('uses the configured no-fly zones instead of the demo ones', () => {
+    const over = {
+      type: 'area_scan' as const,
+      name: 'x',
+      area: demoArea,
+      altitude_m: 40,
+      uav_count: 1,
+    }
+    const covering = {
+      id: 'nfz-test',
+      name: 'Test zone',
+      // Covers the whole demo mission area.
+      polygon: [
+        { latitude: 24.3, longitude: 54.2 },
+        { latitude: 24.3, longitude: 54.6 },
+        { latitude: 24.7, longitude: 54.6 },
+        { latitude: 24.7, longitude: 54.2 },
+      ],
+    }
+    const open = createSimulator({ startTime: START, geofences: [] })
+    expect(open.getGeofences()).toEqual([])
+    expect(open.planMission(over)).toMatchObject({ ok: true })
+
+    const closed = createSimulator({ startTime: START, geofences: [covering] })
+    expect(closed.getGeofences().map((zone) => zone.id)).toEqual(['nfz-test'])
+    expect(closed.planMission(over)).toMatchObject({ ok: false, geofenceIds: ['nfz-test'] })
+  })
+
   it('holds a mission UAV in the nearest no-fly zone until the breach is switched off', () => {
     const { simulator } = record()
     const breach = (uavId: string, active: boolean) =>

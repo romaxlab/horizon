@@ -1,18 +1,5 @@
-import {
-  bearingDegrees,
-  destinationPoint,
-  distanceMeters,
-  polygonsOverlap,
-  type GeoPoint,
-  type GeoPosition,
-  type ReturnReason,
-  type Uav,
-  type Waypoint,
-} from '@horizon/domain'
+import { distanceMeters, type Geofence, type GeoPoint } from '@horizon/domain'
 import { createAirspaceRouter } from './airspace-routing'
-import { planAreaScan } from './area-scan'
-import { INSPECTION_RADIUS_RANGE, orbitLoop } from './inspection'
-import { planPatrol } from './patrol'
 import {
   DEMO_BASE,
   DEMO_FLEET_SIZE,
@@ -23,15 +10,15 @@ import {
   STRESS_PARKING,
   type DemoPreset,
 } from './demo'
+import { clamp, createFlightModel, type UavRuntime } from './flight'
 import { generateFleet, type ParkingLayout } from './fleet'
+import { planMission as buildMissionPlan, type PlanResult } from './mission-plan'
 import type {
   FleetSnapshotDto,
   GeofenceDto,
-  GeoPointDto,
   MissionDto,
   MissionPlanRequestDto,
   SimulatorMessage,
-  TelemetryDto,
   UavDto,
 } from './protocol'
 import { createRandom, type Random } from './random'
@@ -47,6 +34,8 @@ export interface SimulatorOptions {
   startTime?: number
   /** Physics/telemetry tick, ms. */
   tickMs?: number
+  /** No-fly zones that plans and returns detour around. Defaults to the demo zones. */
+  geofences?: readonly Geofence[]
 }
 
 export type SimulatorCommand =
@@ -78,10 +67,7 @@ export type SimulatorCommand =
   | { type: 'applyPreset'; preset: DemoPreset }
   | { type: 'reset' }
 
-export type PlanResult =
-  | { ok: true; mission: MissionDto }
-  /** `geofenceIds`: every no-fly zone the plan conflicts with, when that is the reason. */
-  | { ok: false; reason: string; geofenceIds?: string[] }
+export type { PlanResult }
 
 export type CommandResult = { ok: true } | { ok: false; reason: string }
 
@@ -115,53 +101,11 @@ export interface Simulator {
   stop(): void
 }
 
-const CRUISE_SPEED_MPS = 14
-const CLIMB_RATE_MPS = 4
-const BATTERY_DRAIN_PCT_PER_SEC = 0.07
 const PARKED_TELEMETRY_EVERY_TICKS = 4
 /** Heartbeat period (simulated time); clients treat ~3 missed beats as a dead link. */
 const HEARTBEAT_EVERY_MS = 5_000
-const ARRIVAL_TOLERANCE_METERS = 0.5
-/** Returning UAVs climb to their own layer above the scan altitude before heading home. */
-const RETURN_LAYER_OFFSET_METERS = 20
-/** Battery kept in reserve on top of the estimated cost of flying home. */
-const RETURN_RESERVE_PCT = 8
-/** Signal penalty applied to a UAV with a degraded link (pushes it below the warning threshold). */
-const DEGRADED_SIGNAL_PENALTY = 75
 /** Parked UAVs all face along the parking rows so the formation reads as an even grid. */
 const PARKED_HEADING = (DEMO_PARKING.axisBearing + 180) % 360
-/** Plans and returns detour around the fixed no-fly zones. */
-const airspace = createAirspaceRouter(DEMO_GEOFENCES)
-
-type Phase = 'parked' | 'mission' | 'returning'
-
-interface UavRuntime {
-  uav: Uav
-  home: GeoPosition
-  position: GeoPosition
-  heading: number
-  speed: number
-  battery: number
-  signal: number
-  gpsSatellites: number
-  phase: Phase
-  returnReason: ReturnReason | null
-  telemetryLost: boolean
-  /** Last telemetry that reached the backend; what snapshots report while telemetry is lost. */
-  lastReported: TelemetryDto | null
-  signalDegraded: boolean
-  missionId: string | null
-  route: Waypoint[]
-  waypointIndex: number
-  /** Turn points around no-fly zones on the way home, flown at the return layer. */
-  returnPath: GeoPoint[]
-  /** Route distance from each waypoint to the last one, meters (for the landing estimate). */
-  routeRemaining: number[]
-  /** Off-route point the UAV drifts to and holds (geofence breach demo); null on route. */
-  diversion: GeoPosition | null
-  /** Battery level before the low-battery injection; null when not injected. */
-  batteryBeforeLow: number | null
-}
 
 /** Demo failures currently injected on one UAV. */
 export interface UavInjections {
@@ -174,11 +118,6 @@ export interface UavInjections {
 /** Battery level set by the low-battery injection: below the warning level, triggers return. */
 const INJECTED_LOW_BATTERY_PCT = 18
 
-const toGeoPoint = ({ lat, lon }: GeoPointDto) => ({ latitude: lat, longitude: lon })
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
-const round = (value: number, digits: number) => Number(value.toFixed(digits))
-
 export function createSimulator(options: SimulatorOptions = {}): Simulator {
   const mode = options.mode ?? 'deterministic'
   const seed = options.seed ?? (mode === 'random' ? Math.floor(Math.random() * 2 ** 32) : 1)
@@ -188,6 +127,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   /** Deterministic scripted commands, by simulated time (INCIDENT preset). */
   let scheduled: { at: number; command: SimulatorCommand }[] = []
   const tickMs = options.tickMs ?? 250
+  const geofences = options.geofences ?? DEMO_GEOFENCES
+  const airspace = createAirspaceRouter(geofences)
 
   let now = options.startTime ?? Date.now()
   let tick = 0
@@ -233,26 +174,14 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     }))
   }
 
-  function toTelemetryDto(state: UavRuntime): TelemetryDto {
-    const landing = landingBattery(state)
-    return {
-      uav_id: state.uav.id,
-      ts: now,
-      lat: round(state.position.latitude, 7),
-      lon: round(state.position.longitude, 7),
-      alt_m: round(state.position.altitude, 1),
-      speed_mps: round(state.speed, 1),
-      heading_deg: round(state.heading, 1),
-      battery_pct: round(state.battery, 1),
-      signal_pct: Math.round(state.signal),
-      gps_sats: state.gpsSatellites,
-      mission_id: state.missionId,
-      waypoint_index: state.phase === 'parked' ? null : state.waypointIndex,
-      flight_phase: state.phase,
-      return_reason: state.returnReason,
-      landing_battery_pct: landing === null ? null : round(landing, 1),
-    }
-  }
+  const flight = createFlightModel({
+    airspace,
+    base: DEMO_BASE,
+    parkedHeading: PARKED_HEADING,
+    missionAltitude: () => mission?.altitude_m ?? 0,
+    random: () => random,
+  })
+  const toTelemetryDto = (state: UavRuntime) => flight.toTelemetryDto(state, now)
 
   function toUavDto({ uav }: UavRuntime): UavDto {
     return {
@@ -262,123 +191,6 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       callsign: uav.callsign,
       has_camera: uav.capabilities.camera,
       has_thermal_camera: uav.capabilities.thermalCamera,
-    }
-  }
-
-  /** Moves toward `target` at cruise speed while climbing/descending; returns true on arrival. */
-  function moveToward(state: UavRuntime, target: GeoPosition, dt: number): boolean {
-    const remaining = distanceMeters(state.position, target)
-    const travel = Math.min(remaining, CRUISE_SPEED_MPS * dt)
-    if (travel > ARRIVAL_TOLERANCE_METERS) {
-      state.heading = bearingDegrees(state.position, target)
-      const next = destinationPoint(state.position, state.heading, travel)
-      state.position.latitude = next.latitude
-      state.position.longitude = next.longitude
-    } else {
-      state.position.latitude = target.latitude
-      state.position.longitude = target.longitude
-    }
-    state.speed = travel / dt
-    const climb = clamp(
-      target.altitude - state.position.altitude,
-      -CLIMB_RATE_MPS * dt,
-      CLIMB_RATE_MPS * dt,
-    )
-    state.position.altitude += climb
-    return (
-      remaining - travel <= ARRIVAL_TOLERANCE_METERS &&
-      Math.abs(target.altitude - state.position.altitude) < 0.1
-    )
-  }
-
-  const returnLayer = () => (mission?.altitude_m ?? 0) + RETURN_LAYER_OFFSET_METERS
-
-  /** Battery (%) needed to climb to the return layer, fly home and land, plus a reserve. */
-  /** Flight time to climb to the return layer, fly home around no-fly zones and land. */
-  function returnSeconds(state: UavRuntime, from: GeoPoint, altitude: number): number {
-    const layer = returnLayer()
-    return (
-      Math.max(0, layer - altitude) / CLIMB_RATE_MPS +
-      airspace.distance(from, state.home) / CRUISE_SPEED_MPS +
-      layer / CLIMB_RATE_MPS
-    )
-  }
-
-  function batteryNeededToReturn(state: UavRuntime): number {
-    const seconds = returnSeconds(state, state.position, state.position.altitude)
-    return seconds * BATTERY_DRAIN_PCT_PER_SEC + RETURN_RESERVE_PCT
-  }
-
-  /** Battery expected on landing: rest of the route (if on mission), then the way home. */
-  function landingBattery(state: UavRuntime): number | null {
-    if (state.phase === 'parked') return null
-    let seconds: number
-    const next = state.route[state.waypointIndex]
-    const last = state.route.at(-1)
-    if (state.phase === 'mission' && next && last) {
-      const remaining =
-        distanceMeters(state.position, next) + (state.routeRemaining[state.waypointIndex] ?? 0)
-      seconds = remaining / CRUISE_SPEED_MPS + returnSeconds(state, last, last.altitude)
-    } else {
-      seconds = returnSeconds(state, state.position, state.position.altitude)
-    }
-    return Math.max(0, state.battery - seconds * BATTERY_DRAIN_PCT_PER_SEC)
-  }
-
-  function returnHome(state: UavRuntime, reason: ReturnReason) {
-    state.phase = 'returning'
-    state.returnReason = reason
-    // From inside a zone (breach) no clear path exists; the UAV then flies straight out and home.
-    state.returnPath = airspace.route(state.position, state.home) ?? []
-    state.diversion = null
-  }
-
-  function advanceUav(state: UavRuntime, dt: number) {
-    if (state.phase === 'mission') {
-      if (state.battery <= batteryNeededToReturn(state)) {
-        returnHome(state, 'low-battery')
-      } else if (state.diversion) {
-        // Holds inside the zone until the injection is switched off.
-        moveToward(state, state.diversion, dt)
-      } else {
-        const target = state.route[state.waypointIndex]
-        if (target && moveToward(state, target, dt)) state.waypointIndex += 1
-        if (state.waypointIndex >= state.route.length) returnHome(state, 'completed')
-      }
-    } else if (state.phase === 'returning') {
-      const layer = returnLayer()
-      const overHome = distanceMeters(state.position, state.home) <= ARRIVAL_TOLERANCE_METERS
-      // Climb vertically to the return layer first, so return paths never cross active scan
-      // lines at the scan altitude; then fly home and descend over the parking spot.
-      const climbing = !overHome && state.position.altitude < layer - 0.1
-      const turn = overHome || climbing ? undefined : state.returnPath[0]
-      const target = overHome
-        ? state.home
-        : climbing
-          ? { ...state.position, altitude: layer }
-          : { ...(turn ?? state.home), altitude: layer }
-      const arrived = moveToward(state, target, dt)
-      if (arrived && turn) state.returnPath.shift()
-      if (arrived && overHome) {
-        state.phase = 'parked'
-        state.returnReason = null
-        state.speed = 0
-        state.heading = PARKED_HEADING
-        state.missionId = null
-        state.route = []
-        state.waypointIndex = 0
-        state.diversion = null
-      }
-    }
-
-    if (state.phase !== 'parked') {
-      state.battery = Math.max(0, state.battery - BATTERY_DRAIN_PCT_PER_SEC * dt)
-    }
-    const distanceKm = distanceMeters(state.position, DEMO_BASE) / 1000
-    const penalty = state.signalDegraded ? DEGRADED_SIGNAL_PENALTY : 0
-    state.signal = clamp(98 - distanceKm * 4 - penalty + random.range(-1.5, 1.5), 0, 100)
-    if (random.next() < 0.01) {
-      state.gpsSatellites = clamp(state.gpsSatellites + (random.next() < 0.5 ? -1 : 1), 9, 19)
     }
   }
 
@@ -407,7 +219,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     now += tickMs
     tick += 1
     uavs.forEach((state, index) => {
-      advanceUav(state, dt)
+      flight.advance(state, dt)
       const flying = state.phase !== 'parked'
       if (state.telemetryLost) return
       if (flying || (tick + index) % PARKED_TELEMETRY_EVERY_TICKS === 0) {
@@ -428,119 +240,21 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   const missionActive = () => mission?.status === 'active'
 
   function planMission(request: MissionPlanRequestDto, id?: string): PlanResult {
-    if (request.uav_count < 1) return { ok: false, reason: 'At least one UAV is required' }
-    const available = uavs.filter((u) => u.phase === 'parked' && u.uav.capabilities.camera)
-    if (available.length < request.uav_count) {
-      return { ok: false, reason: `Only ${available.length} standby UAVs are available` }
-    }
-    // Deterministic assignment: the healthiest standby UAVs first, ties by id.
-    const assigned = [...available]
-      .sort((a, b) => b.battery - a.battery || a.uav.id.localeCompare(b.uav.id))
-      .slice(0, request.uav_count)
-    const drawn = request.area.polygon.map(toGeoPoint)
-    const inspection = request.type === 'point_inspection'
-    const looped = request.type === 'patrol' || inspection
-    const laps = looped ? (request.laps ?? 1) : null
-    const target = inspection ? (drawn[0] ?? null) : null
-    const radius = inspection ? (request.radius_m ?? 0) : null
-    if (inspection) {
-      if (!target || drawn.length !== 1) {
-        return { ok: false, reason: 'Point inspection needs exactly one target point' }
-      }
-      const { min, max } = INSPECTION_RADIUS_RANGE
-      if (radius === null || !(radius >= min && radius <= max)) {
-        return { ok: false, reason: `Orbit radius must be ${String(min)}–${String(max)} m` }
-      }
-    }
-    // Scan area, patrol loop, or the orbit around an inspection target.
-    const area = target && radius !== null ? orbitLoop(target, radius) : drawn
-    if (looped) {
-      // Loop corners are flown exactly, so none may lie inside a no-fly zone.
-      const zones = [...new Set(area.flatMap((point) => airspace.zonesAt(point)))]
-      if (zones.length > 0) {
-        const what = inspection
-          ? 'Inspection orbit passes through'
-          : 'Patrol route has points inside'
-        return {
-          ok: false,
-          reason: `${what} no-fly ${zones.length === 1 ? 'zone' : 'zones'} ${zones.map((z) => `"${z.name}"`).join(', ')}`,
-          geofenceIds: zones.map((z) => z.id),
-        }
-      }
-    }
-    const fleet = assigned.map((u) => ({ id: u.uav.id, home: u.home }))
-    let routes
-    try {
-      routes = looped
-        ? planPatrol({
-            loop: area,
-            altitude: request.altitude_m,
-            laps: laps ?? 1,
-            uavs: fleet,
-            cruiseSpeedMps: CRUISE_SPEED_MPS,
-            airspace,
-          })
-        : planAreaScan({
-            area: { polygon: area },
-            altitude: request.altitude_m,
-            uavs: fleet,
-            cruiseSpeedMps: CRUISE_SPEED_MPS,
-            airspace,
-          })
-    } catch (error) {
-      return { ok: false, reason: error instanceof Error ? error.message : 'Planning failed' }
-    }
-
-    if (routes.every((route) => route.waypoints.length === 0)) {
-      const zones = DEMO_GEOFENCES.filter((z) => polygonsOverlap(area, z.polygon))
-      const names = zones.map((z) => `"${z.name}"`).join(', ')
-      return {
-        ok: false,
-        reason:
-          zones.length === 0
-            ? 'Mission area has nothing to scan'
-            : `Mission area lies inside no-fly ${zones.length === 1 ? 'zone' : 'zones'} ${names}`,
-        geofenceIds: zones.map((z) => z.id),
-      }
-    }
-
+    const result = buildMissionPlan({
+      request,
+      id: id ?? `mission-${String(missionSeq + 1).padStart(3, '0')}`,
+      available: uavs
+        .filter((u) => u.phase === 'parked' && u.uav.capabilities.camera)
+        .map((u) => ({ id: u.uav.id, home: u.home, battery: u.battery })),
+      geofences,
+      airspace,
+      base: DEMO_BASE,
+      now,
+    })
+    if (!result.ok) return result
     missionSeq += 1
-    const planned: MissionDto = {
-      id: id ?? `mission-${String(missionSeq).padStart(3, '0')}`,
-      name: request.name,
-      type: request.type,
-      status: 'planned',
-      area: { polygon: area.map((p) => ({ lat: p.latitude, lon: p.longitude })) },
-      altitude_m: request.altitude_m,
-      laps,
-      target: target ? { lat: target.latitude, lon: target.longitude } : null,
-      radius_m: radius,
-      assigned_uav_ids: assigned.map((u) => u.uav.id),
-      routes: routes.map((route) => ({
-        uav_id: route.uavId,
-        home: {
-          lat: route.home?.latitude ?? DEMO_BASE.latitude,
-          lon: route.home?.longitude ?? DEMO_BASE.longitude,
-        },
-        waypoints: route.waypoints.map((w) => ({
-          id: w.id,
-          lat: w.latitude,
-          lon: w.longitude,
-          alt_m: w.altitude,
-          order: w.order,
-        })),
-        task_start: route.taskStart,
-        task_end: route.taskEnd,
-        lap_size: route.lapSize,
-        distance_m: route.distanceMeters,
-        eta_s: route.estimatedDurationSec,
-      })),
-      created_at: now,
-      started_at: null,
-      completed_at: null,
-    }
-    plannedMissions.set(planned.id, planned)
-    return { ok: true, mission: structuredClone(planned) }
+    plannedMissions.set(result.mission.id, result.mission)
+    return { ok: true, mission: structuredClone(result.mission) }
   }
 
   function launchMission(missionId: string): CommandResult {
@@ -555,24 +269,17 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     for (const route of planned.routes) {
       const state = uavs.find((u) => u.uav.id === route.uav_id)
       if (!state) continue
-      state.phase = 'mission'
-      state.missionId = planned.id
-      state.route = route.waypoints.map((w) => ({
-        id: w.id,
-        latitude: w.lat,
-        longitude: w.lon,
-        altitude: w.alt_m,
-        order: w.order,
-      }))
-      state.waypointIndex = 0
-      // Suffix sums: distance from each waypoint to the end of the route.
-      state.routeRemaining = state.route.map(() => 0)
-      for (let i = state.route.length - 2; i >= 0; i--) {
-        const a = state.route[i]
-        const b = state.route[i + 1]
-        state.routeRemaining[i] =
-          (state.routeRemaining[i + 1] ?? 0) + (a && b ? distanceMeters(a, b) : 0)
-      }
+      flight.assignRoute(
+        state,
+        planned.id,
+        route.waypoints.map((w) => ({
+          id: w.id,
+          latitude: w.lat,
+          longitude: w.lon,
+          altitude: w.alt_m,
+          order: w.order,
+        })),
+      )
     }
     plannedMissions.delete(missionId)
     mission = { ...planned, status: 'active', started_at: now }
@@ -585,7 +292,8 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       return { ok: false, reason: 'Mission is not active' }
     }
     for (const state of uavs) {
-      if (state.missionId === missionId && state.phase === 'mission') returnHome(state, 'aborted')
+      if (state.missionId === missionId && state.phase === 'mission')
+        flight.returnHome(state, 'aborted')
     }
     mission = { ...mission, status: 'aborted', completed_at: now }
     emit({ type: 'mission', data: mission })
@@ -636,7 +344,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
       return { ok: true }
     }
     if (state.phase !== 'mission') return { ok: false, reason: 'UAV is not on a mission' }
-    const centers = DEMO_GEOFENCES.map((zone) => ({
+    const centers = geofences.map((zone) => ({
       latitude: zone.polygon.reduce((sum, p) => sum + p.latitude, 0) / zone.polygon.length,
       longitude: zone.polygon.reduce((sum, p) => sum + p.longitude, 0) / zone.polygon.length,
     }))
@@ -657,7 +365,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     for (const state of uavs) {
       if (state.missionId === mission.id && state.phase === 'mission') {
         state.waypointIndex = state.route.length
-        returnHome(state, 'completed')
+        flight.returnHome(state, 'completed')
       }
     }
     return { ok: true }
@@ -796,7 +504,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
         : null
     },
     getGeofences: () =>
-      DEMO_GEOFENCES.map((zone) => ({
+      geofences.map((zone) => ({
         id: zone.id,
         name: zone.name,
         polygon: zone.polygon.map((p) => ({ lat: p.latitude, lon: p.longitude })),
