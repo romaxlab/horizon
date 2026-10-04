@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { useDismissLayer } from '../dismiss-layer'
 import BaseSurface from './BaseSurface.vue'
 
 export type PopoverPlacement = 'top' | 'bottom'
@@ -92,16 +93,20 @@ const style = computed(() => {
   }
 })
 
-// Close on Escape (focus back on the trigger) and on a press outside anchor and panel.
-function onKeydown(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return
-  // Escape closes the popover only, not surfaces behind it (e.g. the inspector).
-  event.stopPropagation()
+// Escape closes the popover only (it is the top dismiss layer while open) and returns focus to
+// the trigger; a press outside anchor and panel closes it too.
+useDismissLayer(open, () => {
   close()
   anchor.value
     ?.querySelector<HTMLElement>(`[aria-controls="${id}"]`)
     ?.focus({ preventScroll: true })
-}
+})
+// Opening moves focus into the panel (Tab continues inside it), as for any dialog.
+watch(open, async (isOpen) => {
+  if (!isOpen) return
+  await nextTick()
+  panel.value?.$el.focus({ preventScroll: true })
+})
 function onPointerDown(event: PointerEvent) {
   const target = event.target as Node
   if (anchor.value?.contains(target) || panel.value?.$el.contains(target)) return
@@ -113,12 +118,10 @@ let observer: ResizeObserver | null = null
 function listen(active: boolean) {
   observer?.disconnect()
   observer = null
-  document.removeEventListener('keydown', onKeydown)
   document.removeEventListener('pointerdown', onPointerDown, true)
   window.removeEventListener('resize', measure)
   if (!active) return
   measure()
-  document.addEventListener('keydown', onKeydown)
   document.addEventListener('pointerdown', onPointerDown, true)
   window.addEventListener('resize', measure)
   if (anchor.value) {
@@ -158,7 +161,8 @@ const triggerAttrs = computed(() => ({
         variant="floating"
         role="dialog"
         :aria-label="label"
-        class="fixed z-40"
+        tabindex="-1"
+        class="fixed z-40 outline-none"
         :class="panelClass"
         :style="style"
       >

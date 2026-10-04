@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Maximize2, X } from '@lucide/vue'
-import { BaseButton, BaseIconButton } from '@horizon/ui'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, toRef, watch } from 'vue'
+import { BaseButton, BaseIconButton, useDismissLayer } from '@horizon/ui'
+import { computed, onBeforeUnmount, ref, shallowRef, toRef, watch } from 'vue'
 import { createSyntheticFeed, type SyntheticFeed } from '../lib/synthetic-feed'
 import { useVideoFeed } from '../model/useVideoFeed'
 import type { FeedPose, LinkState } from '../model/video.types'
@@ -60,18 +60,13 @@ watch([state, feed], ([next, current]) => current?.setFrozen(next === 'frozen'),
 
 onBeforeUnmount(() => feed.value?.destroy())
 
-// In focus mode Escape closes the video first (before the inspector's own Escape handling).
-function onKeydown(event: KeyboardEvent) {
-  if (props.variant !== 'focus' || event.key !== 'Escape') return
-  event.stopImmediatePropagation()
-  emit('close')
-}
-onMounted(() => {
-  window.addEventListener('keydown', onKeydown, { capture: true })
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown, { capture: true })
-})
+// In focus mode Escape closes the video; it opens after the inspector, so it is the layer above.
+useDismissLayer(
+  computed(() => props.variant === 'focus'),
+  () => {
+    emit('close')
+  },
+)
 
 const showsImagery = computed(() => state.value === 'live' || state.value === 'frozen')
 const hud = computed(() => {

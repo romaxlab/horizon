@@ -238,6 +238,11 @@ and on a press outside, wires `aria-expanded` / `aria-controls`, and renders the
 document root so its glass blur shows the map rather than the surface the trigger sits on.
 Hover hints use `BaseTooltip`; layout panels (fleet, mission builder, inspector) are not popovers.
 
+Escape goes through one dismiss stack (`useDismissLayer` in `@horizon/ui`): each closable surface
+registers while open and Escape closes only the topmost (popover → video focus → inspector).
+Inside a text field Escape just leaves the field. Popovers move focus into their panel on open
+and return it to the trigger on Escape. Never add ad-hoc global Escape listeners.
+
 For example, prefer a flexible surface primitive with meaningful variants rather than separate nearly-identical container components.
 
 ---

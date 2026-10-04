@@ -24,4 +24,5 @@ export type { SurfaceShape, SurfaceVariant } from './components/BaseSurface.vue'
 export type { TextTone, TextVariant } from './components/BaseText.vue'
 export type { TooltipPlacement } from './components/BaseTooltip.vue'
 
+export { useDismissLayer } from './dismiss-layer'
 export { initTheme, useTheme, type Theme } from './theme'

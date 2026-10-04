@@ -10,8 +10,9 @@ import {
   BaseSparkline,
   BaseText,
   BaseTooltip,
+  useDismissLayer,
 } from '@horizon/ui'
-import { onBeforeUnmount, onMounted } from 'vue'
+import { computed } from 'vue'
 import type { InspectorMission } from '../model/fleet.types'
 import { useUavInspector } from '../model/useUavInspector'
 
@@ -29,15 +30,13 @@ defineSlots<{
 
 const { inspector } = useUavInspector()
 
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') emit('close')
-}
-onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeydown)
-})
+// Escape closes the inspector when it is the top layer (popovers and the video focus come first).
+useDismissLayer(
+  computed(() => inspector.value !== null),
+  () => {
+    emit('close')
+  },
+)
 </script>
 
 <template>
