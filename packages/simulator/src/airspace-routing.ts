@@ -63,7 +63,13 @@ export interface AirspaceRouter {
    * (empty when the straight leg is clear), or null when no clear path exists.
    */
   route(from: GeoPoint, to: GeoPoint): GeoPoint[] | null
-  /** Length of the routed path, meters (straight distance when unroutable). */
+  /**
+   * Like `route`, but also from inside a keep-out area (a UAV that strayed into a zone): it
+   * first leaves by the shortest way out — a leg that crosses only the zones it is already in —
+   * then detours around the rest. Null only when even that finds no path.
+   */
+  escapeRoute(from: GeoPoint, to: GeoPoint): GeoPoint[] | null
+  /** Length of the escape-routed path, meters (straight distance when unroutable). */
   distance(from: GeoPoint, to: GeoPoint): number
   /** `points` with detours inserted between consecutive points; null when a leg is unroutable. */
   routePath(points: readonly GeoPoint[]): GeoPoint[] | null
@@ -84,6 +90,44 @@ export function createAirspaceRouter(zones: readonly Geofence[]): AirspaceRouter
 
   function isClear(from: GeoPoint, to: GeoPoint): boolean {
     return !keepOut.some((polygon) => pathEntersPolygon([from, to], polygon))
+  }
+
+  /**
+   * The nearest point just outside the keep-out boundaries `from` is inside: straight out
+   * through the closest edge, `CORNER_METERS - KEEP_OUT_METERS` beyond it.
+   */
+  function nearestExit(from: GeoPoint, inside: ReadonlySet<number>): GeoPoint | null {
+    const cosLat = Math.cos((from.latitude * Math.PI) / 180)
+    const toLocal = (q: GeoPoint) => ({
+      x: (q.longitude - from.longitude) * cosLat * METERS_PER_DEGREE,
+      y: (q.latitude - from.latitude) * METERS_PER_DEGREE,
+    })
+    let best = { x: 0, y: 0, d: Infinity }
+    for (const i of inside) {
+      const polygon = (keepOut[i] ?? []).map(toLocal)
+      for (const [k, a] of polygon.entries()) {
+        const b = polygon[(k + 1) % polygon.length] ?? a
+        const ex = b.x - a.x
+        const ey = b.y - a.y
+        const t = Math.max(0, Math.min(1, -(a.x * ex + a.y * ey) / (ex * ex + ey * ey || 1)))
+        const x = a.x + ex * t
+        const y = a.y + ey * t
+        const d = Math.hypot(x, y)
+        if (d < best.d) best = { x, y, d }
+      }
+    }
+    if (best.d === Infinity) return null
+    const { x, y, d } = best
+    const scale = (d + CORNER_METERS - KEEP_OUT_METERS) / (d || 1)
+    return {
+      latitude: from.latitude + (y * scale) / METERS_PER_DEGREE,
+      longitude: from.longitude + (x * scale) / (cosLat * METERS_PER_DEGREE),
+    }
+  }
+
+  /** Clear of every keep-out area except those in `inside`. */
+  function isClearExcept(from: GeoPoint, to: GeoPoint, inside: ReadonlySet<number>): boolean {
+    return !keepOut.some((polygon, i) => !inside.has(i) && pathEntersPolygon([from, to], polygon))
   }
 
   function route(from: GeoPoint, to: GeoPoint): GeoPoint[] | null {
@@ -121,8 +165,29 @@ export function createAirspaceRouter(zones: readonly Geofence[]): AirspaceRouter
     return path
   }
 
+  function escapeRoute(from: GeoPoint, to: GeoPoint): GeoPoint[] | null {
+    const direct = route(from, to)
+    if (direct) return direct
+    const inside = new Set(
+      keepOut.flatMap((polygon, i) => (isPointInPolygon(from, polygon) ? [i] : [])),
+    )
+    if (inside.size === 0) return null
+    // Exits: straight out through the nearest edge, else detour corners; each must be outside
+    // every zone and reachable by a leg that crosses only the zones the UAV is already in.
+    // Nearest first (the least time inside), the first one that leads on to `to`.
+    const straightOut = nearestExit(from, inside)
+    const exits = [...(straightOut ? [straightOut] : []), ...corners]
+      .filter((exit) => !insideAny(exit) && isClearExcept(from, exit, inside))
+      .sort((a, b) => distanceMeters(from, a) - distanceMeters(from, b))
+    for (const exit of exits) {
+      const onward = route(exit, to)
+      if (onward) return [exit, ...onward]
+    }
+    return null
+  }
+
   function distance(from: GeoPoint, to: GeoPoint): number {
-    const path = [from, ...(route(from, to) ?? []), to]
+    const path = [from, ...(escapeRoute(from, to) ?? []), to]
     return path.slice(1).reduce((sum, p, i) => sum + distanceMeters(path[i] ?? p, p), 0)
   }
 
@@ -147,5 +212,5 @@ export function createAirspaceRouter(zones: readonly Geofence[]): AirspaceRouter
     })
   }
 
-  return { exclusions, isClear, route, distance, routePath, zonesAt }
+  return { exclusions, isClear, route, escapeRoute, distance, routePath, zonesAt }
 }

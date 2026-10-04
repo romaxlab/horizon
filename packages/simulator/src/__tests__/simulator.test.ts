@@ -590,6 +590,46 @@ describe('createSimulator', () => {
     expect(phase?.flight_phase).toBe('mission')
   })
 
+  it('a UAV ordered home from inside a no-fly zone leaves by the shortest way out and never re-enters', () => {
+    const { simulator, messages } = record()
+    simulator.dispatch({ type: 'startDemoMission' })
+    const uavId = simulator.getActiveMission()?.assigned_uav_ids[0] ?? ''
+    simulator.step(60_000)
+    simulator.dispatch({ type: 'setGeofenceBreach', uavId, active: true })
+    const flown = () => telemetryOf(messages, uavId)
+    const zoneOf = (t: TelemetryDto) =>
+      DEMO_GEOFENCES.find((z) => isPointInPolygon({ latitude: t.lat, longitude: t.lon }, z.polygon))
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => {
+        const last = flown().at(-1)
+        return last !== undefined && zoneOf(last) !== undefined
+      },
+      600,
+    )
+    simulator.step(10_000)
+
+    // Mission ends while the UAV holds inside the zone: it is ordered home from there.
+    const orderedAt = flown().length
+    simulator.dispatch({ type: 'completeMission' })
+    runUntil(
+      (ms) => {
+        simulator.step(ms)
+      },
+      () => simulator.getActiveMission()?.status === 'completed',
+      3_600,
+    )
+    const home = flown().slice(orderedAt)
+    const firstOutside = home.findIndex((t) => zoneOf(t) === undefined)
+    expect(firstOutside).toBeGreaterThan(-1)
+    // Out within the time the zone's half-width takes at cruise speed (no crossing of the zone).
+    expect(home[firstOutside]?.ts ?? Infinity).toBeLessThan((home[0]?.ts ?? 0) + 60_000)
+    expect(home.slice(firstOutside).every((t) => zoneOf(t) === undefined)).toBe(true)
+    expect(home.at(-1)?.flight_phase).toBe('parked')
+  })
+
   it('sends a heartbeat every 5 s of simulated time', () => {
     const { simulator, messages } = record()
     simulator.step(20_000)

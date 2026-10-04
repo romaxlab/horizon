@@ -143,8 +143,9 @@ export function createFlightModel({
   function returnHome(state: UavRuntime, reason: ReturnReason) {
     state.phase = 'returning'
     state.returnReason = reason
-    // From inside a zone (breach) no clear path exists; the UAV then flies straight out and home.
-    state.returnPath = airspace.route(state.position, state.home) ?? []
+    // From inside a zone (breach) the UAV first leaves by the shortest way out, then detours
+    // home. Straight home only if no path exists at all (e.g. home itself is enclosed).
+    state.returnPath = airspace.escapeRoute(state.position, state.home) ?? []
     state.diversion = null
   }
 

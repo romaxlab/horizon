@@ -1105,6 +1105,9 @@ path around the zones (visibility graph over inflated zone corners, `@horizon/si
 `airspace-routing.ts`). A plan is rejected only when nothing is left to scan; the error carries
 the ids of all conflicting zones and the map highlights them. A flying UAV inside a zone (e.g. the demo breach) raises a
 critical `GEOFENCE_BREACH`, resolved when it leaves; the zone is highlighted meanwhile.
+A UAV ordered home from inside a zone leaves by the shortest way out (straight through the nearest
+edge, or via the nearest clear corner), crossing only the zone it is already in, then detours home
+like any other return.
 Containment uses planar tests on longitude/latitude (`@horizon/domain`), adequate at site scale.
 
 ---
