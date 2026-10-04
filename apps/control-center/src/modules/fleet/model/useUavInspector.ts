@@ -107,6 +107,14 @@ export function useUavInspector(now: Readonly<Ref<number>> = useNow()) {
             },
           ]
         : [],
+      /** Key readings for the collapsed inspector, e.g. ["64%", "120 m", "14.0 m/s"]. */
+      glance: telemetry
+        ? [
+            `${fixed(telemetry.battery)}%`,
+            `${fixed(telemetry.position.altitude)} m`,
+            `${fixed(telemetry.speed, 1)} m/s`,
+          ]
+        : [],
       trends:
         history.length < 2
           ? null

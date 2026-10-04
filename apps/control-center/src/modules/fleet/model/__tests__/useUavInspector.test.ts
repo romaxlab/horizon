@@ -48,6 +48,7 @@ describe('useUavInspector', () => {
       unit: 'NW',
     })
     expect(view?.metrics.find((m) => m.label === 'Altitude')?.value).toBe('120')
+    expect(view?.glance).toEqual(['15%', '120 m', expect.stringMatching(/ m\/s$/)])
   })
 
   it('hides health issues while the link is degraded', () => {

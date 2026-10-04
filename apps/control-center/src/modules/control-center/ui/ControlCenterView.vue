@@ -51,12 +51,17 @@ const SIDE_PANEL_CLASS =
  */
 const phoneSurface = computed<'video' | 'inspector' | 'side-panel' | 'map'>(() => {
   if (videoFocus.value && selectedFeed.value) return 'video'
-  if (inspectorOpen.value) return 'inspector'
+  // A collapsed inspector gives the screen back to the map (it shows as a bar below it).
+  if (inspectorOpen.value) return inspectorCollapsed.value ? 'map' : 'inspector'
   if (builder.open.value || fleetOpen.value) return 'side-panel'
   return 'map'
 })
 const hiddenOnPhoneUnless = (...surfaces: (typeof phoneSurface.value)[]) =>
   surfaces.includes(phoneSurface.value) ? '' : 'max-sm:hidden'
+/** A collapsed inspector rides along with the map on phones, as a bar below it. */
+const inspectorBar = computed(
+  () => inspectorOpen.value && inspectorCollapsed.value && phoneSurface.value === 'map',
+)
 
 /** Below this free width a panel covers the map (phones): there is nothing to frame around. */
 const MIN_FRAMED_WIDTH_PX = 160
@@ -97,6 +102,8 @@ function inspectMissionUav(uavId: string) {
 // Phones open on the map; the fleet list would cover it (initial state only).
 const fleetOpen = ref(window.innerWidth >= 640)
 const videoFocus = ref(false)
+/** Kept across selections: once collapsed, the inspector stays compact until expanded. */
+const inspectorCollapsed = ref(false)
 const eventsOpen = ref(false)
 const {
   alerts,
@@ -153,7 +160,10 @@ watch(selectedUavId, (id) => {
       </ControlCenterHeader>
 
       <!-- Above the bottom row's attribution, which panels may cover on small screens. -->
-      <div class="relative z-10 flex min-h-0 flex-1 items-start justify-between gap-3">
+      <div
+        class="relative z-10 flex min-h-0 flex-1 items-start justify-between gap-3"
+        :class="{ 'max-sm:flex-col': inspectorBar }"
+      >
         <Transition
           mode="out-in"
           enter-active-class="transition duration-200 ease-out"
@@ -228,8 +238,12 @@ watch(selectedUavId, (id) => {
         </div>
 
         <div
-          class="flex h-full min-h-0 flex-col items-end gap-3 max-sm:flex-1"
-          :class="hiddenOnPhoneUnless('inspector')"
+          class="flex min-h-0 flex-col items-end gap-3"
+          :class="
+            inspectorBar
+              ? 'h-full max-sm:h-auto max-sm:w-full'
+              : ['h-full max-sm:flex-1', hiddenOnPhoneUnless('inspector')]
+          "
         >
           <Transition
             enter-active-class="transition duration-200 ease-out"
@@ -247,7 +261,9 @@ watch(selectedUavId, (id) => {
               <UavInspector
                 :following="following"
                 :mission="selectedMission"
+                :collapsed="inspectorCollapsed"
                 @close="selectUav(null)"
+                @toggle-collapsed="inspectorCollapsed = !inspectorCollapsed"
                 @focus="focusSelected"
                 @toggle-follow="toggleFollow"
               >

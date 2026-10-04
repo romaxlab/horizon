@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Crosshair, Navigation, X } from '@lucide/vue'
+import { ChevronsDownUp, ChevronsUpDown, Crosshair, Navigation, X } from '@lucide/vue'
 import {
   BaseAlert,
   BaseBadge,
@@ -16,12 +16,19 @@ import { computed } from 'vue'
 import type { InspectorMission } from '../model/fleet.types'
 import { useUavInspector } from '../model/useUavInspector'
 
-defineProps<{
+const props = defineProps<{
   following: boolean
   /** The UAV's part in the current mission, from the composing view (fleet doesn't own missions). */
   mission: InspectorMission | null
+  /** Only the header and a line of key readings, so the map stays visible (e.g. while following). */
+  collapsed?: boolean
 }>()
-const emit = defineEmits<{ close: []; focus: []; toggleFollow: [] }>()
+const emit = defineEmits<{
+  close: []
+  focus: []
+  toggleFollow: []
+  toggleCollapsed: []
+}>()
 
 defineSlots<{
   /** Media area (simulated video) provided by the composing view. */
@@ -29,6 +36,15 @@ defineSlots<{
 }>()
 
 const { inspector } = useUavInspector()
+
+/** The collapsed line: health issues first, otherwise mission phase and key readings. */
+const glance = computed(() => {
+  const view = inspector.value
+  if (!view) return null
+  if (view.issues.length > 0) return { text: view.issues.join(' · '), tone: 'warning' as const }
+  const parts = [props.mission?.phase, ...view.glance].filter((part) => part != null)
+  return { text: parts.join(' · ') || view.subtitle, tone: 'secondary' as const }
+})
 
 // Escape closes the inspector when it is the top layer (popovers and the video focus come first).
 useDismissLayer(
@@ -41,7 +57,7 @@ useDismissLayer(
 
 <template>
   <section v-if="inspector" class="flex min-h-0 flex-col" aria-labelledby="uav-inspector-title">
-    <header class="flex items-start gap-2 px-4 pt-4 pb-3">
+    <header class="flex items-start gap-2 px-4 pt-4" :class="collapsed ? 'pb-4' : 'pb-3'">
       <div class="flex min-w-0 flex-1 flex-col gap-1">
         <div class="flex items-center gap-2">
           <BaseText id="uav-inspector-title" as="h2" variant="heading-md" truncate>
@@ -49,7 +65,19 @@ useDismissLayer(
           </BaseText>
           <BaseBadge :variant="inspector.status.variant">{{ inspector.status.label }}</BaseBadge>
         </div>
-        <BaseText variant="caption" tone="muted" truncate>{{ inspector.subtitle }}</BaseText>
+        <!-- Collapsed: the readings line expands the inspector, like the toggle button. -->
+        <button
+          v-if="collapsed && glance"
+          type="button"
+          class="min-w-0 cursor-pointer text-left"
+          title="Expand inspector"
+          @click="emit('toggleCollapsed')"
+        >
+          <BaseText variant="caption" :tone="glance.tone" numeric truncate>
+            {{ glance.text }}
+          </BaseText>
+        </button>
+        <BaseText v-else variant="caption" tone="muted" truncate>{{ inspector.subtitle }}</BaseText>
       </div>
       <!-- Primary UAV actions stay in reach: the body scrolls, the header doesn't. -->
       <div class="flex shrink-0 items-center gap-0.5">
@@ -71,13 +99,29 @@ useDismissLayer(
             <Navigation />
           </BaseIconButton>
         </BaseTooltip>
+        <BaseTooltip :text="collapsed ? 'Expand' : 'Collapse'" placement="bottom">
+          <BaseIconButton
+            size="sm"
+            :label="collapsed ? 'Expand inspector' : 'Collapse inspector'"
+            :aria-expanded="!collapsed"
+            aria-controls="uav-inspector-body"
+            @click="emit('toggleCollapsed')"
+          >
+            <ChevronsUpDown v-if="collapsed" />
+            <ChevronsDownUp v-else />
+          </BaseIconButton>
+        </BaseTooltip>
         <BaseIconButton size="sm" label="Close inspector" @click="emit('close')">
           <X />
         </BaseIconButton>
       </div>
     </header>
 
-    <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+    <div
+      v-if="!collapsed"
+      id="uav-inspector-body"
+      class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4"
+    >
       <slot name="media" />
 
       <BaseAlert

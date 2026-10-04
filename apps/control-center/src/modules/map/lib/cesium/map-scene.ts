@@ -335,7 +335,11 @@ export function createMapScene({
     content3d = { tileset, source }
     scene.primitives.add(tileset)
     if (previous) scene.primitives.remove(previous.tileset)
-    if (source !== 'google-photorealistic') return
+    if (source !== 'google-photorealistic') {
+      // Buildings stand on the globe; it may still be hidden by photorealistic tiles they replace.
+      scene.globe.show = true
+      return
+    }
     // Photorealistic tiles include the ground; hide the globe only once they are visible.
     const remove = tileset.initialTilesLoaded.addEventListener(() => {
       remove()
