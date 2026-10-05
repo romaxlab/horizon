@@ -24,6 +24,8 @@ const TILTED_PITCH = CesiumMath.toRadians(-42)
 const HOME_RANGE_METERS = 6_000
 const FOCUS_RANGE_METERS = 900
 const FLIGHT_SECONDS = 1.2
+/** Time constant of the follow framing easing when panels change the free area. */
+const FRAMING_EASE_MS = 120
 /** A surface pick beyond this is not ground (depth noise, sky); fall back to the ellipsoid. */
 const MAX_SURFACE_HEIGHT_METERS = 2_000
 /** Opening arrival: starts high above the region, slightly rotated, and settles into home. */
@@ -79,9 +81,15 @@ export function createCameraController(
    * part not covered by panels) rather than the middle of the canvas. Only the look-at point
    * moves; the projection stays centered, so picking (clicks, drawing) stays exact.
    */
-  function framed(target: Cartesian3, range: number, heading: number, viewPitch: number) {
-    const dx = (insets.left - insets.right) / 2
-    const dy = (insets.top - insets.bottom) / 2
+  function framed(
+    target: Cartesian3,
+    range: number,
+    heading: number,
+    viewPitch: number,
+    area: ViewportInsets = insets,
+  ) {
+    const dx = (area.left - area.right) / 2
+    const dy = (area.top - area.bottom) / 2
     if (dx === 0 && dy === 0) return target
     const height = scene.canvas.clientHeight || 1
     const fovy =
@@ -139,26 +147,54 @@ export function createCameraController(
   /** Waiting for the fly-in to finish before the per-frame follow takes over. */
   let followArmed = false
   const followView = { heading: 0, pitch: TOP_DOWN_PITCH, range: FOLLOW_RANGE_METERS }
+  /** Framing used while following: eases toward `insets` when the panels change. */
+  const followInsets: ViewportInsets = { ...NO_INSETS }
+  let lastFollowFrame: number | null = null
+  /**
+   * Hand-over into a follow (new target, or re-centering): eases from the current view to the
+   * follow view while aiming at the UAV's live position every frame, so nothing jumps when the
+   * camera arrives at a target that kept moving.
+   */
+  let transition: {
+    start: number
+    from: Cartesian3
+    range: number
+    heading: number
+    pitch: number
+  } | null = null
+  const scratchLookAt = new Cartesian3()
 
   function release() {
     followArmed = false
+    transition = null
     camera.lookAtTransform(Matrix4.IDENTITY)
   }
 
   function startFollow(uavId: string) {
     release()
     followedId = uavId
-    const position = layer.positionOf(uavId)
+    // The fly-in frames with the current insets; easing starts from there.
+    Object.assign(followInsets, insets)
+    lastFollowFrame = null
     followView.heading = tilted ? camera.heading : 0
     followView.pitch = pitch()
     followView.range = FOLLOW_RANGE_METERS
-    if (!position) {
-      followArmed = true
-      return
-    }
-    flyAround(position, FOLLOW_RANGE_METERS, true, () => {
-      if (followedId === uavId) followArmed = true
-    })
+    // The look-at point sits at the canvas center; start the hand-over from today's one.
+    const { clientWidth, clientHeight } = scene.canvas
+    const from = prefersReducedMotion()
+      ? undefined
+      : camera.pickEllipsoid(new Cartesian2(clientWidth / 2, clientHeight / 2))
+    transition = from
+      ? {
+          start: performance.now(),
+          from,
+          range: Cartesian3.distance(camera.positionWC, from),
+          heading: camera.heading,
+          pitch: camera.pitch,
+        }
+      : null
+    followArmed = true
+    scene.requestRender()
   }
 
   const removeFollowListener = scene.preRender.addEventListener(() => {
@@ -166,16 +202,41 @@ export function createCameraController(
     const position = layer.positionOf(followedId)
     if (!position) return
     // Read back what the user did since the last frame (zoom, orbit) while locked on.
-    if (!Matrix4.equals(camera.transform, Matrix4.IDENTITY)) {
+    if (!transition && !Matrix4.equals(camera.transform, Matrix4.IDENTITY)) {
       followView.heading = camera.heading
       followView.pitch = camera.pitch
       followView.range = Cartesian3.magnitude(camera.position)
     }
     const { heading, pitch: viewPitch, range } = followView
-    camera.lookAt(
-      framed(position, range, heading, viewPitch),
-      new HeadingPitchRange(heading, viewPitch, range),
-    )
+    // Panels opening or closing move the free area; ease the framing over instead of jumping.
+    const now = performance.now()
+    const blend = 1 - Math.exp(-(now - (lastFollowFrame ?? now)) / FRAMING_EASE_MS)
+    lastFollowFrame = now
+    let settling = false
+    for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+      const delta = insets[side] - followInsets[side]
+      followInsets[side] = Math.abs(delta) < 0.5 ? insets[side] : followInsets[side] + delta * blend
+      settling ||= followInsets[side] !== insets[side]
+    }
+    if (settling) scene.requestRender()
+    const target = framed(position, range, heading, viewPitch, followInsets)
+    if (transition) {
+      const t = Math.min(1, (now - transition.start) / (FLIGHT_SECONDS * 1000))
+      const e = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2
+      const turn = CesiumMath.negativePiToPi(heading - transition.heading)
+      camera.lookAt(
+        Cartesian3.lerp(transition.from, target, e, scratchLookAt),
+        new HeadingPitchRange(
+          transition.heading + turn * e,
+          CesiumMath.lerp(transition.pitch, viewPitch, e),
+          CesiumMath.lerp(transition.range, range, e),
+        ),
+      )
+      if (t === 1) transition = null
+      scene.requestRender()
+      return
+    }
+    camera.lookAt(target, new HeadingPitchRange(heading, viewPitch, range))
   })
 
   const site = Cartesian3.fromDegrees(OPERATING_SITE.longitude, OPERATING_SITE.latitude)

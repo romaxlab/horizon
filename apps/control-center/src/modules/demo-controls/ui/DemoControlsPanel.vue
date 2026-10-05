@@ -146,6 +146,10 @@ const failureHint = (failure: (typeof failures)[number]) =>
           @update:model-value="controls.setInjection(failure.id, $event)"
         />
       </BaseTooltip>
+    </section>
+    <!-- Not tied to a UAV: the link between the app and the backend. -->
+    <section class="flex flex-col gap-2" aria-label="Backend link">
+      <BaseText variant="caption" tone="muted">Backend link</BaseText>
       <BaseTooltip
         text="The app loses the backend and keeps the last known state. Off reconnects and resyncs."
         placement="right"
@@ -156,30 +160,32 @@ const failureHint = (failure: (typeof failures)[number]) =>
           @update:model-value="controls.setNetworkOutage($event)"
         />
       </BaseTooltip>
-      <BaseTooltip
-        :text="
-          controls.anyInjected.value
-            ? 'Switches every failure off and restores the network.'
-            : 'Nothing is injected.'
-        "
-        class="flex"
-      >
-        <BaseButton
-          size="sm"
-          class="flex-1"
-          :disabled="!controls.anyInjected.value"
-          @click="controls.restoreAll()"
-        >
-          Restore all
-        </BaseButton>
-      </BaseTooltip>
     </section>
+    <!-- Clears both: every UAV failure and the outage. -->
+    <BaseTooltip
+      :text="
+        controls.anyInjected.value
+          ? 'Switches every failure off and restores the network.'
+          : 'Nothing is injected.'
+      "
+      class="flex"
+    >
+      <BaseButton
+        size="sm"
+        class="flex-1"
+        :disabled="!controls.anyInjected.value"
+        @click="controls.restoreAll()"
+      >
+        Restore all
+      </BaseButton>
+    </BaseTooltip>
 
     <section class="flex flex-col gap-1.5">
       <BaseText variant="caption" tone="muted">Simulation</BaseText>
       <BaseSegmentedControl
         :model-value="controls.selectedTimeScale.value"
         label="Time scale"
+        block
         :options="controls.timeScaleOptions"
         @update:model-value="controls.setTimeScale"
       />
