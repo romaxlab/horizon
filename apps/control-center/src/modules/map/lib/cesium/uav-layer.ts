@@ -5,13 +5,18 @@ import {
   Cartesian2,
   Cartesian3,
   Math as CesiumMath,
+  ColorBlendMode,
   ColorMaterialProperty,
   ConstantPositionProperty,
   ConstantProperty,
+  DistanceDisplayCondition,
+  HeadingPitchRoll,
   HorizontalOrigin,
   NearFarScalar,
+  Transforms,
   VerticalOrigin,
   type Color,
+  type Quaternion,
   type Entity,
   type Viewer,
 } from 'cesium'
@@ -49,6 +54,15 @@ const MARKER_STATE: Record<UavStatus, UavMarkerState> = {
 }
 /** Slightly smaller markers at medium distance; clustering takes over further out. */
 const MARKER_SCALE_BY_DISTANCE = new NearFarScalar(1_500, 1, 10_000, 0.8)
+/**
+ * 3D perspective, close in: the aircraft model instead of the icon (same silhouette, built from
+ * the icon). Further out, and in 2D, the icon reads better and costs less.
+ */
+const UAV_MODEL_URL = `${import.meta.env.BASE_URL}assets/uav/uav.glb`
+const MODEL_MAX_DISTANCE_METERS = 3_000
+const MODEL_MIN_PIXEL_SIZE = 56
+const NEAR_ONLY = new DistanceDisplayCondition(0, MODEL_MAX_DISTANCE_METERS)
+const FAR_ONLY = new DistanceDisplayCondition(MODEL_MAX_DISTANCE_METERS, Number.POSITIVE_INFINITY)
 /** Gap between the selected marker's dot and its name label (CSS px). */
 const LABEL_GAP_PX = 4
 
@@ -82,7 +96,11 @@ interface UavEntry {
   /** Position of a stationary UAV (no per-frame interpolation needed). */
   stationaryPosition: Cartesian3 | null
   /** Per-frame properties used while moving. */
-  dynamic: { position: CallbackPositionProperty; rotation: CallbackProperty }
+  dynamic: {
+    position: CallbackPositionProperty
+    rotation: CallbackProperty
+    orientation: CallbackProperty
+  }
 }
 
 export interface UavLayer {
@@ -97,6 +115,8 @@ export interface UavLayer {
    */
   setGroundHeight(meters: number): void
   setPalette(palette: MapPalette): void
+  /** 3D perspective: aircraft models within a few km, icons beyond; off: icons only. */
+  setModelsEnabled(enabled: boolean): void
   getEntity(uavId: string): Entity | undefined
   /** Current rendered position of a UAV. */
   positionOf(uavId: string): Cartesian3 | undefined
@@ -126,6 +146,24 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
   const entries = new Map<string, UavEntry>()
   let palette = initialPalette
   let selectedId: string | null = null
+  /** Aircraft models near the camera (3D perspective); icons only otherwise. */
+  let models = false
+  const scratchPosition = new Cartesian3()
+  const scratchHpr = new HeadingPitchRoll()
+
+  /** Model attitude for a pose: the compass heading, level flight. */
+  function orientationOf(pose: Pose, result?: Quaternion): Quaternion {
+    // The model's nose is glTF +X; Cesium's axis correction (glTF Y-up, Z-forward) turns it
+    // north at heading 0, so the compass heading applies as is.
+    scratchHpr.heading = CesiumMath.toRadians(pose.heading)
+    return Transforms.headingPitchRollQuaternion(
+      toCartesian(pose, scratchPosition),
+      scratchHpr,
+      undefined,
+      undefined,
+      result,
+    )
+  }
   let groundHeight = 0
   let clustered: ReadonlySet<string> = new Set()
   let hoveredId: string | null = null
@@ -233,6 +271,14 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const color = statusColor(entry.status)
     const { billboard, polyline } = entry.entity
     if (billboard) billboard.image = new ConstantProperty(uavMarkerUrl(MARKER_STATE[entry.status]))
+    const { model } = entry.entity
+    if (model) {
+      model.color = new ConstantProperty(color)
+      // The selection ring is flat; the model also gets an outline that follows its shape.
+      const selected = entry.id === selectedId
+      model.silhouetteColor = new ConstantProperty(palette.markerSelection)
+      model.silhouetteSize = new ConstantProperty(selected ? 2 : 0)
+    }
     if (polyline) polyline.material = new ColorMaterialProperty(color.withAlpha(0.35))
     // Trails stay quieter than the markers, so the aircraft keep the attention.
     const trailMaterial = new ColorMaterialProperty(color.withAlpha(0.3))
@@ -266,11 +312,25 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
         return current ? toCartesian(current, result) : undefined
       }, false),
       rotation: new CallbackProperty(() => -CesiumMath.toRadians(pose()?.heading ?? 0), false),
+      orientation: new CallbackProperty((_time, result?: Quaternion) => {
+        const current = pose()
+        return current ? orientationOf(current, result) : undefined
+      }, false),
     }
 
     const entity = viewer.entities.add({
       id: `${ENTITY_PREFIX}${id}`,
       position: dynamic.position,
+      orientation: dynamic.orientation,
+      model: {
+        uri: UAV_MODEL_URL,
+        show: false,
+        minimumPixelSize: MODEL_MIN_PIXEL_SIZE,
+        distanceDisplayCondition: NEAR_ONLY,
+        // The model is neutral light gray; the status color tints it like the icon.
+        colorBlendMode: ColorBlendMode.MIX,
+        colorBlendAmount: 0.55,
+      },
       billboard: {
         // Aligned to the globe's north so rotation is a true compass heading in any camera view.
         alignedAxis: Cartesian3.UNIT_Z,
@@ -337,7 +397,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
   }
 
   /** Pushes marker/line visibility to Cesium only when it actually changes. */
-  function refreshVisibility(entry: UavEntry) {
+  function refreshVisibility(entry: UavEntry, force = false) {
     const marker = !clustered.has(entry.id)
     const next: VisibilityState = {
       marker,
@@ -346,6 +406,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     }
     const shown = entry.flags.shown
     if (
+      !force &&
       shown?.marker === next.marker &&
       shown.dropLine === next.dropLine &&
       shown.trail === next.trail
@@ -354,6 +415,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     }
     entry.flags.shown = next
     if (entry.entity.billboard) entry.entity.billboard.show = new ConstantProperty(next.marker)
+    if (entry.entity.model) entry.entity.model.show = new ConstantProperty(next.marker && models)
     if (entry.entity.polyline) entry.entity.polyline.show = new ConstantProperty(next.dropLine)
     if (entry.trailEntity.polyline) {
       entry.trailEntity.polyline.show = new ConstantProperty(next.trail)
@@ -381,12 +443,14 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     if (moving) {
       entry.stationaryPosition = null
       entry.entity.position = entry.dynamic.position
+      entry.entity.orientation = entry.dynamic.orientation
       if (billboard) billboard.rotation = entry.dynamic.rotation
       return
     }
     const pose: Pose = { ...telemetry.position, heading: telemetry.heading }
     entry.stationaryPosition = toCartesian(pose)
     entry.entity.position = new ConstantPositionProperty(entry.stationaryPosition)
+    entry.entity.orientation = new ConstantProperty(orientationOf(pose))
     if (billboard) billboard.rotation = new ConstantProperty(-CesiumMath.toRadians(pose.heading))
   }
 
@@ -501,6 +565,19 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       }
     },
 
+    setModelsEnabled(enabled) {
+      if (enabled === models) return
+      models = enabled
+      entries.forEach((entry) => {
+        if (entry.entity.billboard) {
+          entry.entity.billboard.distanceDisplayCondition = new ConstantProperty(
+            enabled ? FAR_ONLY : undefined,
+          )
+        }
+        refreshVisibility(entry, true)
+      })
+    },
+
     setPalette(next) {
       palette = next
       entries.forEach(applyStyle)
@@ -531,7 +608,9 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
 
     setClustered(uavIds) {
       clustered = uavIds
-      entries.forEach(refreshVisibility)
+      entries.forEach((entry) => {
+        refreshVisibility(entry)
+      })
     },
 
     isAnimating: () => movingCount > 0,

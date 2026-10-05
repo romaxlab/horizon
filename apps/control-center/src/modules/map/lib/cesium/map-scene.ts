@@ -160,6 +160,7 @@ export function createMapScene({
   applySceneColors()
 
   const layer = createUavLayer(viewer, palette)
+  layer.setModelsEnabled(perspective === '3d')
   const clusters = createClusterLayer(viewer, layer, palette)
   const missionLayer = createMissionLayer(viewer, palette)
   const geofenceLayer = createGeofenceLayer(viewer, palette)
@@ -311,6 +312,7 @@ export function createMapScene({
       if (next === perspective) return
       perspective = next
       camera.setTilted(perspective === '3d')
+      layer.setModelsEnabled(perspective === '3d')
       content.update({ basemap, perspective })
     }),
     // Camera flights render on their own (camera changes trigger frames).
