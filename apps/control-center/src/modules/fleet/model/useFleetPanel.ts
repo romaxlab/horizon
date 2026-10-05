@@ -55,10 +55,13 @@ function matchesQuery({ uav }: UavState, query: string): boolean {
 }
 
 /** View model for the Fleet Panel: search, status filters and scan-friendly rows. */
-export function useFleetPanel(now: Readonly<Ref<number>> = useNow()) {
+export function useFleetPanel(
+  now: Readonly<Ref<number>> = useNow(),
+  /** Owned by the caller when the composition steers it (e.g. Active on mission launch). */
+  filter: Ref<FleetFilter> = ref('all'),
+) {
   const store = useFleetStore()
   const query = ref('')
-  const filter = ref<FleetFilter>('all')
 
   const filterOptions = stableComputed<SegmentOption<FleetFilter>[]>(() => {
     const counts = store.statusCounts

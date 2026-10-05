@@ -2,12 +2,14 @@
 import { PanelLeftClose } from '@lucide/vue'
 import { BaseIconButton, BaseInput, BaseSegmentedControl, BaseText } from '@horizon/ui'
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
-import { useFleetPanel } from '../model/useFleetPanel'
+import { useFleetPanel, type FleetFilter } from '../model/useFleetPanel'
 import FleetPanelRow from './FleetPanelRow.vue'
 
 const emit = defineEmits<{ select: [uavId: string]; collapse: [] }>()
 
-const { query, filter, filterOptions, rows, isLoading } = useFleetPanel()
+/** Status filter; the composing view may steer it (two-way bound), otherwise local. */
+const filterModel = defineModel<FleetFilter>('filter', { default: 'all' })
+const { query, filter, filterOptions, rows, isLoading } = useFleetPanel(undefined, filterModel)
 
 // Roving tabindex (local presentation state): the last focused row, else the selected/first one.
 const list = useTemplateRef<HTMLUListElement>('list')

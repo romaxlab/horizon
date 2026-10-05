@@ -34,6 +34,10 @@ test('create an Area Scan mission, generate the plan, launch and observe executi
 
   await planning.getByRole('button', { name: 'Launch mission' }).click()
   await expect(planning).toBeHidden()
+  // The fleet list switches to the flying UAVs on launch.
+  await expect(
+    page.getByRole('complementary', { name: 'Fleet' }).getByRole('radio', { name: /^Active/ }),
+  ).toHaveAttribute('aria-checked', 'true')
 
   // Execution is visible: header names the mission, status shows scanning UAVs and progress.
   await expect(page.locator('header').first()).toContainText('E2E Scan')

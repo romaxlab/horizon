@@ -2,7 +2,7 @@
 import { PanelLeftOpen } from '@lucide/vue'
 import { BaseButton, BaseIconButton, BasePopover, BaseSurface, BaseText } from '@horizon/ui'
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
-import { FleetPanel, UavInspector } from '@/modules/fleet'
+import { FleetPanel, UavInspector, type FleetFilter } from '@/modules/fleet'
 import { MAP_ATTRIBUTION_TARGET_ID, MapCanvas, MapControls } from '@/modules/map'
 import { DemoControlsPanel } from '@/modules/demo-controls'
 import { EventFeed, IncidentAlerts } from '@/modules/incidents'
@@ -102,6 +102,19 @@ function inspectMissionUav(uavId: string) {
 // Phones open on the map; the fleet list would cover it (initial state only).
 const fleetOpen = ref(window.innerWidth >= 640)
 const videoFocus = ref(false)
+/**
+ * Fleet list filter, steered only at mission transitions: a launch shows the flying UAVs
+ * (unless the operator is looking at alerts), the end returns to All if the list would empty.
+ * Choices made in between are left alone.
+ */
+const fleetFilter = ref<FleetFilter>('all')
+watch(missionActive, (active, wasActive) => {
+  if (active && !wasActive && (fleetFilter.value === 'all' || fleetFilter.value === 'standby')) {
+    fleetFilter.value = 'active'
+  } else if (!active && wasActive && fleetFilter.value === 'active') {
+    fleetFilter.value = 'all'
+  }
+})
 /** Kept across selections: once collapsed, the inspector stays compact until expanded. */
 const inspectorCollapsed = ref(false)
 const eventsOpen = ref(false)
@@ -192,6 +205,7 @@ watch(selectedUavId, (id) => {
             aria-label="Fleet"
           >
             <FleetPanel
+              v-model:filter="fleetFilter"
               @select="selectUav($event, { focus: true })"
               @collapse="fleetOpen = false"
             />

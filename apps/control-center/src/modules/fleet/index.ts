@@ -19,3 +19,4 @@ export {
   type UavLink,
 } from './model/fleet.status'
 export { createRestFleetRepository } from './api/fleet.repository'
+export type { FleetFilter } from './model/useFleetPanel'
