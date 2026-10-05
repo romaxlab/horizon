@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { realtimeTransportSlot } from '@/shared/realtime'
 import { appConfig } from '@/shared/config'
+import { documentVisibility } from '@/shared/lib/page-visibility'
 import { fleetQueryKeys } from '../api/fleet.queries'
 import { createFleetSync } from './fleet-sync'
 import { useFleetStore } from './fleet.store'
@@ -21,6 +22,7 @@ export function useFleetSync({ onReconnected }: { onReconnected?: () => void } =
     transport: realtimeTransport,
     flushIntervalMs: appConfig.telemetryFlushMs,
     onReconnected,
+    visibility: documentVisibility,
     target: store,
     loadSnapshot: () =>
       queryClient.query({

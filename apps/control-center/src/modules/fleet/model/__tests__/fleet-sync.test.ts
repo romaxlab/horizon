@@ -137,6 +137,46 @@ describe('createFleetSync', () => {
     sync.stop()
   })
 
+  it('a background tab raises no false link alerts; on return the fleet resyncs first', async () => {
+    const simulator = createSimulator({ startTime: START })
+    const store = useFleetStore()
+    let hidden = false
+    let notify: (hidden: boolean) => void = () => undefined
+    const loadSnapshot = vi.fn(() =>
+      Promise.resolve(parseFleetSnapshot(simulator.getFleetSnapshot())),
+    )
+    const sync = createFleetSync({
+      transport: createMockRealtimeTransport(simulator),
+      target: store,
+      loadSnapshot,
+      now: () => Date.now(),
+      visibility: {
+        hidden: () => hidden,
+        subscribe: (listener) => {
+          notify = listener
+          return () => undefined
+        },
+      },
+    })
+    await sync.start()
+    expect(store.statusCounts.offline).toBe(0)
+
+    // Hidden for a minute: the throttled tab delivers nothing, statuses are left as they were.
+    hidden = true
+    notify(true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(store.statusCounts.offline + store.statusCounts.stale).toBe(0)
+
+    // Back: a fresh snapshot is loaded before statuses are judged again.
+    hidden = false
+    notify(false)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(loadSnapshot).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(store.statusCounts.offline + store.statusCounts.stale).toBe(0)
+    sync.stop()
+  })
+
   it('discards a snapshot that arrives after stop()', async () => {
     const store = useFleetStore()
     const simulator = createSimulator({ startTime: START })

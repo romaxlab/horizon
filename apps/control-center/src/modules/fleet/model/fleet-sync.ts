@@ -1,5 +1,6 @@
 import type { UavTelemetry } from '@horizon/domain'
 import { createLatestStateBuffer, type RealtimeTransport } from '@horizon/realtime'
+import type { PageVisibility } from '@/shared/lib/page-visibility'
 import { parseTelemetryMessage } from '../api/fleet.parsers'
 import type { ConnectionStatus, FleetSnapshot } from './fleet.types'
 
@@ -27,6 +28,13 @@ export interface FleetSyncOptions {
    * the same stream (e.g. the current mission) missed events too and must reload as well.
    */
   onReconnected?: () => void
+  /**
+   * Background tabs throttle timers, so telemetry handling falls behind the clock; aging UAVs
+   * then would raise false link alerts. While hidden, statuses are not re-evaluated; on return
+   * the fleet resyncs and gets `resumeGraceMs` before statuses are judged again.
+   */
+  visibility?: PageVisibility
+  resumeGraceMs?: number
 }
 
 export interface FleetSyncStats {
@@ -65,6 +73,8 @@ export function createFleetSync({
   now = Date.now,
   logger = console,
   onReconnected = () => undefined,
+  visibility,
+  resumeGraceMs = 3_000,
 }: FleetSyncOptions): FleetSync {
   const buffer = createLatestStateBuffer<UavTelemetry>({
     keyOf: (t) => t.uavId,
@@ -75,6 +85,9 @@ export function createFleetSync({
   let statusTimer: ReturnType<typeof setInterval> | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
+  let unsubscribeVisibility: (() => void) | null = null
+  /** Statuses are not judged until then (just back from a background tab). */
+  let graceUntil = 0
   /** Incremented on every start/stop so async work from a stopped session is discarded. */
   let session = 0
   const counters: FleetSyncStats = { messages: 0, dropped: 0, coalesced: 0, applied: 0, flushes: 0 }
@@ -155,8 +168,15 @@ export function createFleetSync({
     flushTimer = setInterval(flush, flushIntervalMs)
     // Keeps aging UAVs to stale/offline while disconnected; last known state stays visible.
     statusTimer = setInterval(() => {
+      if (visibility?.hidden() || now() < graceUntil) return
       target.refreshStatuses(now())
     }, statusIntervalMs)
+    unsubscribeVisibility =
+      visibility?.subscribe((hidden) => {
+        if (hidden) return
+        graceUntil = now() + resumeGraceMs
+        void resync()
+      }) ?? null
 
     try {
       await sync(current)
@@ -171,6 +191,8 @@ export function createFleetSync({
     session += 1
     unsubscribe?.()
     unsubscribe = null
+    unsubscribeVisibility?.()
+    unsubscribeVisibility = null
     if (flushTimer !== null) clearInterval(flushTimer)
     if (statusTimer !== null) clearInterval(statusTimer)
     if (reconnectTimer !== null) clearTimeout(reconnectTimer)
