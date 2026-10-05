@@ -1,4 +1,4 @@
-import { distanceMeters, type UavState, type UavStatus } from '@horizon/domain'
+import { distanceMeters, type UavState, type UavStatus, type UavTelemetry } from '@horizon/domain'
 import {
   CallbackPositionProperty,
   CallbackProperty,
@@ -149,6 +149,7 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
   /** Aircraft models near the camera (3D perspective); icons only otherwise. */
   let models = false
   const scratchPosition = new Cartesian3()
+  const scratchSpot = new Cartesian3()
   const scratchHpr = new HeadingPitchRoll()
 
   /** Model attitude for a pose: the compass heading, level flight. */
@@ -436,7 +437,15 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
     const parked = telemetry.flightPhase === 'parked' && telemetry.speed === 0
     entry.flags.parkedSamples = parked ? entry.flags.parkedSamples + 1 : 0
     const moving = entry.flags.parkedSamples < STATIONARY_AFTER_SAMPLES
-    if (moving === entry.flags.moving) return
+    if (moving === entry.flags.moving) {
+      // A parked UAV can be moved without flying (the fleet re-based by a demo reset): pin it
+      // to its new spot instead of keeping the old one.
+      if (!moving && entry.stationaryPosition) {
+        const spot = toCartesian({ ...telemetry.position, heading: 0 }, scratchSpot)
+        if (Cartesian3.distance(spot, entry.stationaryPosition) > 1) pinStationary(entry, telemetry)
+      }
+      return
+    }
     entry.flags.moving = moving
     movingCount += moving ? 1 : -1
     const { billboard } = entry.entity
@@ -447,10 +456,16 @@ export function createUavLayer(viewer: Viewer, initialPalette: MapPalette): UavL
       if (billboard) billboard.rotation = entry.dynamic.rotation
       return
     }
+    pinStationary(entry, telemetry)
+  }
+
+  /** Constant position and attitude for a UAV standing still (no per-frame work). */
+  function pinStationary(entry: UavEntry, telemetry: UavTelemetry) {
     const pose: Pose = { ...telemetry.position, heading: telemetry.heading }
     entry.stationaryPosition = toCartesian(pose)
     entry.entity.position = new ConstantPositionProperty(entry.stationaryPosition)
     entry.entity.orientation = new ConstantProperty(orientationOf(pose))
+    const { billboard } = entry.entity
     if (billboard) billboard.rotation = new ConstantProperty(-CesiumMath.toRadians(pose.heading))
   }
 

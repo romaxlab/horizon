@@ -11,9 +11,33 @@ export const DEMO_PARKING = { axisBearing: 140.7, spacingMeters: 15, columns: 6 
 
 export const DEMO_FLEET_SIZE = 24
 
-/** Large fleet for performance profiling; parked in a wider grid next to the pitch. */
+/** Large fleet for performance profiling. */
 export const STRESS_FLEET_SIZE = 480
-export const STRESS_PARKING = { axisBearing: 140.7, spacingMeters: 8, columns: 24 } as const
+/**
+ * The stress fleet is too large for the stadium: it parks at Al Bateen airfield, on the sand
+ * infield between the runway and the parallel taxiway, in a grid along the runway (≈ 232 × 120 m).
+ * Measured from Esri World Imagery.
+ */
+export const STRESS_BASE: GeoPosition = { latitude: 24.428111, longitude: 54.457222, altitude: 0 }
+export const STRESS_PARKING = { axisBearing: 127.1, spacingMeters: 8, columns: 30 } as const
+
+/**
+ * Stress scenario mission: half the fleet patrols one loop around the city center, evenly
+ * spaced, clear of the no-fly zones — continuous motion for realtime, clustering and rendering.
+ */
+export const STRESS_MISSION = {
+  id: 'mission-stress-patrol',
+  name: 'City Perimeter Patrol',
+  altitude: 120,
+  uavCount: STRESS_FLEET_SIZE / 2,
+  laps: 1,
+  loop: [
+    { latitude: 24.45, longitude: 54.37 },
+    { latitude: 24.452, longitude: 54.4 },
+    { latitude: 24.472, longitude: 54.405 },
+    { latitude: 24.474, longitude: 54.378 },
+  ],
+} as const
 
 export type DemoPreset = 'normal' | 'incident' | 'stress'
 

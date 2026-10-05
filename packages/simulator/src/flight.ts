@@ -67,7 +67,7 @@ export interface FlightModelOptions {
   /** Ground station: link quality falls off with distance from it. */
   base: GeoPoint
   /** Heading of a UAV parked on its spot. */
-  parkedHeading: number
+  parkedHeading: () => number
   /** Altitude of the current mission, meters (0 without one); returns fly above it. */
   missionAltitude: () => number
   random: () => Random
@@ -195,7 +195,7 @@ export function createFlightModel({
         state.phase = 'parked'
         state.returnReason = null
         state.speed = 0
-        state.heading = parkedHeading
+        state.heading = parkedHeading()
         state.missionId = null
         state.route = []
         state.waypointIndex = 0

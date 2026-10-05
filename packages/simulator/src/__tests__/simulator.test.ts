@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { distanceMeters, isPointInPolygon, pathEntersPolygon } from '@horizon/domain'
-import { DEMO_BASE, DEMO_GEOFENCES, DEMO_MISSION, DEMO_PARKING, STRESS_FLEET_SIZE } from '../demo'
+import {
+  DEMO_BASE,
+  DEMO_GEOFENCES,
+  DEMO_MISSION,
+  DEMO_PARKING,
+  STRESS_BASE,
+  STRESS_FLEET_SIZE,
+} from '../demo'
 import type { MissionDto, SimulatorMessage, TelemetryDto } from '../protocol'
 import { createSimulator, type SimulatorOptions } from '../simulator'
 
@@ -628,6 +635,25 @@ describe('createSimulator', () => {
     expect(home[firstOutside]?.ts ?? Infinity).toBeLessThan((home[0]?.ts ?? 0) + 60_000)
     expect(home.slice(firstOutside).every((t) => zoneOf(t) === undefined)).toBe(true)
     expect(home.at(-1)?.flight_phase).toBe('parked')
+  })
+
+  it('stress preset: half the fleet patrols the city, the rest parks at the airfield', () => {
+    const { simulator } = record()
+    const started = performance.now()
+    expect(simulator.dispatch({ type: 'applyPreset', preset: 'stress' })).toEqual({ ok: true })
+    expect(performance.now() - started).toBeLessThan(5_000)
+
+    const mission = simulator.getActiveMission()
+    expect(mission).toMatchObject({ type: 'patrol', status: 'active' })
+    expect(mission?.assigned_uav_ids).toHaveLength(STRESS_FLEET_SIZE / 2)
+    const telemetry = simulator.getFleetSnapshot().telemetry
+    expect(telemetry).toHaveLength(STRESS_FLEET_SIZE)
+    // Parked on the airfield infield, not at the stadium.
+    const parked = telemetry.filter((t) => t.flight_phase === 'parked')
+    expect(parked).toHaveLength(STRESS_FLEET_SIZE / 2)
+    for (const t of parked) {
+      expect(distanceMeters({ latitude: t.lat, longitude: t.lon }, STRESS_BASE)).toBeLessThan(200)
+    }
   })
 
   it('sends a heartbeat every 5 s of simulated time', () => {

@@ -1,7 +1,9 @@
-import { distanceMeters, type Geofence, type GeoPoint } from '@horizon/domain'
+import { distanceMeters, type Geofence, type GeoPoint, type GeoPosition } from '@horizon/domain'
 import { createAirspaceRouter } from './airspace-routing'
 import {
   DEMO_BASE,
+  STRESS_BASE,
+  STRESS_MISSION,
   DEMO_FLEET_SIZE,
   DEMO_GEOFENCES,
   DEMO_MISSION,
@@ -105,7 +107,7 @@ const PARKED_TELEMETRY_EVERY_TICKS = 4
 /** Heartbeat period (simulated time); clients treat ~3 missed beats as a dead link. */
 const HEARTBEAT_EVERY_MS = 5_000
 /** Parked UAVs all face along the parking rows so the formation reads as an even grid. */
-const PARKED_HEADING = (DEMO_PARKING.axisBearing + 180) % 360
+const parkedHeadingFor = (layout: ParkingLayout) => (layout.axisBearing + 180) % 360
 
 /** Demo failures currently injected on one UAV. */
 export interface UavInjections {
@@ -123,6 +125,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   const seed = options.seed ?? (mode === 'random' ? Math.floor(Math.random() * 2 ** 32) : 1)
   let fleetSize = options.fleetSize ?? DEMO_FLEET_SIZE
   let parking: ParkingLayout = DEMO_PARKING
+  let fleetBase: GeoPosition = DEMO_BASE
   let timeScale = 1
   /** Deterministic scripted commands, by simulated time (INCIDENT preset). */
   let scheduled: { at: number; command: SimulatorCommand }[] = []
@@ -150,11 +153,11 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     plannedMissions.clear()
     missionSeq = 0
     scheduled = []
-    uavs = generateFleet(fleetSize, DEMO_BASE, parking, random).map(({ uav, home, battery }) => ({
+    uavs = generateFleet(fleetSize, fleetBase, parking, random).map(({ uav, home, battery }) => ({
       uav,
       home,
       position: { ...home },
-      heading: PARKED_HEADING,
+      heading: parkedHeadingFor(parking),
       speed: 0,
       battery,
       signal: 98,
@@ -177,7 +180,7 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
   const flight = createFlightModel({
     airspace,
     base: DEMO_BASE,
-    parkedHeading: PARKED_HEADING,
+    parkedHeading: () => parkedHeadingFor(parking),
     missionAltitude: () => mission?.altitude_m ?? 0,
     random: () => random,
   })
@@ -406,11 +409,27 @@ export function createSimulator(options: SimulatorOptions = {}): Simulator {
     const stress = preset === 'stress'
     fleetSize = stress ? STRESS_FLEET_SIZE : DEMO_FLEET_SIZE
     parking = stress ? STRESS_PARKING : DEMO_PARKING
+    fleetBase = stress ? STRESS_BASE : DEMO_BASE
     init()
     setNetwork(true)
-    const started = startDemoMission()
+    const started = stress ? startStressMission() : startDemoMission()
     if (started.ok && preset === 'incident') scheduleIncidentSequence()
     return started
+  }
+
+  function startStressMission(): CommandResult {
+    const plan = planMission(
+      {
+        name: STRESS_MISSION.name,
+        type: 'patrol',
+        area: { polygon: STRESS_MISSION.loop.map((p) => ({ lat: p.latitude, lon: p.longitude })) },
+        altitude_m: STRESS_MISSION.altitude,
+        uav_count: STRESS_MISSION.uavCount,
+        laps: STRESS_MISSION.laps,
+      },
+      STRESS_MISSION.id,
+    )
+    return plan.ok ? launchMission(plan.mission.id) : plan
   }
 
   function startDemoMission(): CommandResult {
