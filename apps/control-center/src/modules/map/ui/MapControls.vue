@@ -10,7 +10,7 @@ import {
 } from '@horizon/ui'
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
-import { useMapStore, type MapBasemap } from '../model/map.store'
+import { useMapStore, type MapBasemap } from '../store/map.store'
 
 // Camera-wide controls only; following a UAV is a UAV action in its inspector.
 const map = useMapStore()

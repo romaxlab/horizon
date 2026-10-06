@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
 import { videoQueryKeys } from '../api/video.queries'
-import { deriveFeedState } from './feed-state'
-import { videoProviderSlot, type LinkState } from './video.types'
+import { deriveFeedState } from '../model/feed-state'
+import { videoProviderSlot, type LinkState } from '../model/video.types'
 
 /** Resolves the selected UAV's video source and derives the feed state. */
 export function useVideoFeed(uavId: Readonly<Ref<string>>, link: Readonly<Ref<LinkState>>) {

@@ -3,9 +3,9 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, ref } from 'vue'
-import { missionPlannerSlot } from '../mission.types'
-import { useMissionStore } from '../mission.store'
-import type { MissionPlanner } from '../mission.types'
+import { missionPlannerSlot } from '../../model/mission.types'
+import { useMissionStore } from '../../store/mission.store'
+import type { MissionPlanner } from '../../model/mission.types'
 import { useMissionStatus } from '../useMissionStatus'
 
 const home = { latitude: 24.46, longitude: 54.36 }

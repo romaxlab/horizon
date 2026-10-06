@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { Incident, NewIncident, Resolution } from './incident.types'
+import type { Incident, NewIncident, Resolution } from '../model/incident.types'
 
 const MAX_HISTORY = 100
 

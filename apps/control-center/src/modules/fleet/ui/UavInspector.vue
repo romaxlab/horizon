@@ -14,7 +14,7 @@ import {
 } from '@horizon/ui'
 import { computed } from 'vue'
 import type { InspectorMission } from '../model/fleet.types'
-import { useUavInspector } from '../model/useUavInspector'
+import { useUavInspector } from '../composables/useUavInspector'
 
 const props = defineProps<{
   following: boolean

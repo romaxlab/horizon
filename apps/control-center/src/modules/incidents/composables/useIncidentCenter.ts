@@ -1,9 +1,9 @@
 import type { OperationalEventType } from '@horizon/domain'
 import type { AlertVariant, BadgeVariant } from '@horizon/ui'
 import { computed, onBeforeUnmount } from 'vue'
-import { detectIncidents } from './detect-incidents'
-import type { Incident, Observation } from './incident.types'
-import { useIncidentsStore } from './incidents.store'
+import { detectIncidents } from '../model/detect-incidents'
+import type { Incident, Observation } from '../model/incident.types'
+import { useIncidentsStore } from '../store/incidents.store'
 
 const titles: Record<OperationalEventType, string> = {
   MISSION_STARTED: 'Mission started',

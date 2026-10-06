@@ -2,7 +2,11 @@ import type { GeoPoint, Mission, MissionType } from '@horizon/domain'
 import type { SegmentOption } from '@horizon/ui'
 import { useMutation } from '@tanstack/vue-query'
 import { computed, inject, provide, ref, type InjectionKey, type Ref } from 'vue'
-import { MissionPlanningError, missionPlannerSlot, type MissionPlanRequest } from './mission.types'
+import {
+  MissionPlanningError,
+  missionPlannerSlot,
+  type MissionPlanRequest,
+} from '../model/mission.types'
 
 export type BuilderStep = 'details' | 'area' | 'review'
 

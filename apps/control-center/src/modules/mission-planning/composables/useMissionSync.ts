@@ -3,8 +3,8 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { realtimeTransportSlot } from '@/shared/realtime'
 import { missionQueryKeys } from '../api/mission.queries'
 import { parseMissionMessage } from '../api/mission.parsers'
-import { useMissionStore } from './mission.store'
-import { missionPlannerSlot } from './mission.types'
+import { useMissionStore } from '../store/mission.store'
+import { missionPlannerSlot } from '../model/mission.types'
 
 /**
  * Keeps the mission store current while mounted: loads the current mission, then applies

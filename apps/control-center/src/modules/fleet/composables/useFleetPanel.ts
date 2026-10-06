@@ -4,9 +4,9 @@ import { computed, ref, type Ref } from 'vue'
 import { formatAge } from '@/shared/lib/format'
 import { stableComputed } from '@/shared/lib/stable-computed'
 import { useNow } from '@/shared/lib/useNow'
-import { uavStatusPresentation } from './fleet.presentation'
-import { LOW_BATTERY_PCT } from './fleet.status'
-import { useFleetStore } from './fleet.store'
+import { uavStatusPresentation } from '../model/fleet.presentation'
+import { LOW_BATTERY_PCT } from '../model/fleet.status'
+import { useFleetStore } from '../store/fleet.store'
 
 export interface FleetRow {
   id: string

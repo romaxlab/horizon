@@ -1,8 +1,8 @@
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { describe, expect, it } from 'vitest'
 import { createApp, ref } from 'vue'
-import { airspaceRepositorySlot } from '../airspace.types'
-import type { AirspaceRepository } from '../airspace.types'
+import { airspaceRepositorySlot } from '../../model/airspace.types'
+import type { AirspaceRepository } from '../../model/airspace.types'
 import { useAirspaceMonitor, type FlyingUav } from '../useAirspaceMonitor'
 
 const p = (latitude: number, longitude: number) => ({ latitude, longitude })

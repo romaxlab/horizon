@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHttpClient } from '@/shared/http'
 import { createRestFleetRepository } from '../../api/fleet.repository'
 import { createFleetSync } from '../fleet-sync'
-import { useFleetStore } from '../fleet.store'
+import { useFleetStore } from '../../store/fleet.store'
 
 const API = 'https://api.horizon.test/v1'
 const START = Date.UTC(2026, 0, 1)

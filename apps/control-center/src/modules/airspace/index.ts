@@ -1,5 +1,5 @@
 export { AirspacePayloadError, parseGeofences } from './api/airspace.parsers'
 export { createRestAirspaceRepository } from './api/airspace.repository'
 export { airspaceRepositorySlot, type AirspaceRepository } from './model/airspace.types'
-export { useAirspaceMonitor, type FlyingUav } from './model/useAirspaceMonitor'
-export { useGeofences } from './model/useGeofences'
+export { useAirspaceMonitor, type FlyingUav } from './composables/useAirspaceMonitor'
+export { useGeofences } from './composables/useGeofences'

@@ -2,16 +2,16 @@ import type { ProgressTone, TextTone } from '@horizon/ui'
 import { computed, type Ref } from 'vue'
 import { formatAge, formatCardinal } from '@/shared/lib/format'
 import { useNow } from '@/shared/lib/useNow'
-import { uavStatusPresentation } from './fleet.presentation'
+import { uavStatusPresentation } from '../model/fleet.presentation'
 import {
   healthIssues,
   LOW_BATTERY_PCT,
   MIN_GPS_SATELLITES,
   WEAK_SIGNAL_PCT,
   type HealthIssue,
-} from './fleet.status'
-import { useFleetStore } from './fleet.store'
-import { HISTORY_WINDOW_MS, type TelemetrySample } from './telemetry-history'
+} from '../model/fleet.status'
+import { useFleetStore } from '../store/fleet.store'
+import { HISTORY_WINDOW_MS, type TelemetrySample } from '../model/telemetry-history'
 
 const issueLabels: Record<HealthIssue, string> = {
   'low-battery': 'Low battery',

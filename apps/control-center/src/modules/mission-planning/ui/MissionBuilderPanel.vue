@@ -18,7 +18,7 @@ import {
   LAPS_RANGE,
   RADIUS_RANGE,
   type BuilderStep,
-} from '../model/useMissionBuilder'
+} from '../composables/useMissionBuilder'
 
 const builder = injectMissionBuilder()
 

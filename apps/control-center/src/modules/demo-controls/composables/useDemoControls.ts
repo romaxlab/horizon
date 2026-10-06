@@ -6,7 +6,7 @@ import type {
   DemoInjection,
   DemoInjections,
   DemoPreset,
-} from './demo.types'
+} from '../model/demo.types'
 
 export interface DemoDiagnosticsSource {
   /** Cumulative realtime counters from the ingestion pipeline. */

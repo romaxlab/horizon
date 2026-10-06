@@ -14,7 +14,7 @@ import {
 import { computed, ref, watch } from 'vue'
 import type { DemoInjection, DemoPreset } from '../model/demo.types'
 import DemoDiagnostics from './DemoDiagnostics.vue'
-import type { DemoControls } from '../model/useDemoControls'
+import type { DemoControls } from '../composables/useDemoControls'
 
 const { controls } = defineProps<{ controls: DemoControls }>()
 

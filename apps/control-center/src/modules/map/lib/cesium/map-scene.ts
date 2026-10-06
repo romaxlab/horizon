@@ -12,7 +12,7 @@ import {
   Viewer,
   defined,
 } from 'cesium'
-import type { MapBasemap, MapPerspective, ViewportInsets } from '../../model/map.store'
+import type { MapBasemap, MapPerspective, ViewportInsets } from '../../store/map.store'
 import { createBasemapController, type MapTheme } from './basemap-controller'
 import { createCameraController, OPERATING_SITE } from './camera-controller'
 import { createClusterLayer } from './cluster-layer'

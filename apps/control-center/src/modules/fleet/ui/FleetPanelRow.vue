@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { BaseBadge, BaseText } from '@horizon/ui'
-import type { FleetRow } from '../model/useFleetPanel'
+import type { FleetRow } from '../composables/useFleetPanel'
 
 // A separate component so unchanged rows (same object) skip re-rendering on telemetry flushes.
 defineProps<{

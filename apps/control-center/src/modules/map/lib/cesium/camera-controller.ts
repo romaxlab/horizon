@@ -12,7 +12,7 @@ import {
   type Viewer,
 } from 'cesium'
 import type { GeoPoint } from '@horizon/domain'
-import type { ViewportInsets } from '../../model/map.store'
+import type { ViewportInsets } from '../../store/map.store'
 import type { UavLayer } from './uav-layer'
 
 /** Center of the operating area: between the stadium base and the demo mission area. */

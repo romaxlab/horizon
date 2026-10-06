@@ -9,7 +9,7 @@ import type { MapScene } from '../lib/cesium/map-scene'
 import type { GeofenceOverlay } from '../lib/cesium/geofence-layer'
 import type { MissionOverlay } from '../lib/cesium/mission-layer'
 import { basemapCredit, MAP_ATTRIBUTION_TARGET_ID } from '../lib/basemap-credits'
-import { useMapStore } from '../model/map.store'
+import { useMapStore } from '../store/map.store'
 
 const props = defineProps<{
   /** Live fleet stream; the map applies deltas without component re-renders. */

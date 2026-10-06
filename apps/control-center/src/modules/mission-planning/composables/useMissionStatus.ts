@@ -3,9 +3,9 @@ import { useMutation } from '@tanstack/vue-query'
 import { computed, type Ref } from 'vue'
 import { formatDuration } from '@/shared/lib/format'
 import { stableComputed } from '@/shared/lib/stable-computed'
-import { computeMissionProgress, type UavMissionStatus } from './mission-progress'
-import { useMissionStore } from './mission.store'
-import { missionPlannerSlot } from './mission.types'
+import { computeMissionProgress, type UavMissionStatus } from '../model/mission-progress'
+import { useMissionStore } from '../store/mission.store'
+import { missionPlannerSlot } from '../model/mission.types'
 
 /** What UAVs on a mission of this type are doing, for the status line. */
 const MISSION_ACTIVITY: Record<MissionType, string> = {

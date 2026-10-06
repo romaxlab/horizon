@@ -4,9 +4,9 @@ import { realtimeTransportSlot } from '@/shared/realtime'
 import { appConfig } from '@/shared/config'
 import { documentVisibility } from '@/shared/lib/page-visibility'
 import { fleetQueryKeys } from '../api/fleet.queries'
-import { createFleetSync } from './fleet-sync'
-import { useFleetStore } from './fleet.store'
-import { fleetRepositorySlot } from './fleet.types'
+import { createFleetSync } from '../services/fleet-sync'
+import { useFleetStore } from '../store/fleet.store'
+import { fleetRepositorySlot } from '../model/fleet.types'
 
 /**
  * Keeps the fleet store in sync while the calling component is mounted:

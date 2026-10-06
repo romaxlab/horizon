@@ -2,7 +2,7 @@ import type { Geofence } from '@horizon/domain'
 import { useQuery } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import { airspaceQueryKeys } from '../api/airspace.queries'
-import { airspaceRepositorySlot } from './airspace.types'
+import { airspaceRepositorySlot } from '../model/airspace.types'
 
 const NONE: Geofence[] = []
 

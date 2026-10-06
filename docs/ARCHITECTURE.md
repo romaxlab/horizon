@@ -169,7 +169,7 @@ capability.
 modules/control-center/
 ├── ui/
 │   └── ControlCenterView.vue
-├── model/
+├── composables/
 │   └── useControlCenter.ts
 ├── routes.ts
 └── index.ts
@@ -219,11 +219,17 @@ Default shape:
 
 ```text
 modules/fleet/
-├── ui/
-├── model/
-├── api/        # only when needed
+├── ui/            FleetPanel.vue, UavInspector.vue
+├── composables/   useFleetSync, useFleetPanel, useUavInspector
+├── store/         fleet.store.ts
+├── services/      fleet-sync.ts (realtime pipeline)
+├── model/         fleet.types, fleet.status, telemetry-history
+├── api/           schema, parsers, mapper, repository, queries
 └── index.ts
 ```
+
+One role per folder; a module has only the folders it needs (e.g. `video-monitoring` has no
+store or services).
 
 ### `ui/`
 
@@ -231,16 +237,24 @@ Vue components.
 
 They consume dedicated composables/view-model APIs.
 
+### `composables/`
+
+`use*.ts` view models: what a component or the composition needs, built from stores, services
+and Query wrappers.
+
+### `store/`
+
+Pinia stores, only when state is shared (fleet, missions, incidents, map intents).
+
+### `services/`
+
+Long-lived processes without Vue that a composable starts and stops, e.g. the fleet realtime
+sync pipeline.
+
 ### `model/`
 
-Owns module application logic:
-
-- composables;
-- Pinia store when shared state is required;
-- derived selectors;
-- state transitions;
-- small business rules;
-- Query wrappers when the module owns server data.
+Types and pure domain logic without Vue: status rules, progress, incident detection, mappings
+to presentation. Unit tested in isolation.
 
 Prefer focused composables:
 
@@ -288,9 +302,10 @@ modules/map/
 ├── ui/
 │   ├── MapCanvas.vue          # mounts the scene, first-view placeholder; props in, `select` out
 │   └── MapControls.vue        # 2D/3D, Reset view, Map/Satellite
+├── store/
+│   └── map.store.ts           # camera and view intents: follow, focus, reset, basemap,
+│                              # perspective, viewport insets, opening arrival
 ├── model/
-│   ├── map.store.ts           # camera and view intents: follow, focus, reset, basemap,
-│   │                          # perspective, viewport insets, opening arrival
 │   └── fleet-feed.ts          # the live fleet stream type the map consumes
 ├── lib/
 │   ├── declutter.ts           # Cesium-free screen-space clustering (unit tested)
@@ -852,7 +867,7 @@ LIVE
 
 The application does not assume every event was received while disconnected.
 
-Implementation (`modules/fleet/model/fleet-sync.ts`): an unexpected transport close switches to
+Implementation (`modules/fleet/services/fleet-sync.ts`): an unexpected transport close switches to
 `reconnecting` and retries with backoff (1 s, 2 s, 4 s, then every 8 s). Each attempt reconnects
 the stream and then loads a fresh snapshot to reconcile. Statuses keep ageing while disconnected,
 so UAVs go stale/offline but keep their last known positions. The simulator's fake network

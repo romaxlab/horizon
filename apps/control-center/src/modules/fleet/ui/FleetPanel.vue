@@ -2,7 +2,7 @@
 import { PanelLeftClose } from '@lucide/vue'
 import { BaseIconButton, BaseInput, BaseSegmentedControl, BaseText } from '@horizon/ui'
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
-import { useFleetPanel, type FleetFilter } from '../model/useFleetPanel'
+import { useFleetPanel, type FleetFilter } from '../composables/useFleetPanel'
 import FleetPanelRow from './FleetPanelRow.vue'
 
 const emit = defineEmits<{ select: [uavId: string]; collapse: [] }>()

@@ -1,5 +1,5 @@
 export { FleetPayloadError, parseFleetSnapshot, parseTelemetryMessage } from './api/fleet.parsers'
-export { useFleetStore } from './model/fleet.store'
+export { useFleetStore } from './store/fleet.store'
 export { fleetRepositorySlot } from './model/fleet.types'
 export type {
   ConnectionStatus,
@@ -8,7 +8,7 @@ export type {
   FleetSnapshot,
   InspectorMission,
 } from './model/fleet.types'
-export { useFleetSync } from './model/useFleetSync'
+export { useFleetSync } from './composables/useFleetSync'
 export { default as FleetPanel } from './ui/FleetPanel.vue'
 export { default as UavInspector } from './ui/UavInspector.vue'
 export {
@@ -19,4 +19,4 @@ export {
   type UavLink,
 } from './model/fleet.status'
 export { createRestFleetRepository } from './api/fleet.repository'
-export type { FleetFilter } from './model/useFleetPanel'
+export type { FleetFilter } from './composables/useFleetPanel'

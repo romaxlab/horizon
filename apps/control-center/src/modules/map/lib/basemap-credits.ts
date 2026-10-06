@@ -1,4 +1,4 @@
-import type { MapBasemap } from '../model/map.store'
+import type { MapBasemap } from '../store/map.store'
 
 /*
  * Basemap attribution exactly as the Esri services publish it (`copyrightText` in their

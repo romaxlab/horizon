@@ -2,7 +2,7 @@ import type { UavTelemetry } from '@horizon/domain'
 import { createLatestStateBuffer, type RealtimeTransport } from '@horizon/realtime'
 import type { PageVisibility } from '@/shared/lib/page-visibility'
 import { parseTelemetryMessage } from '../api/fleet.parsers'
-import type { ConnectionStatus, FleetSnapshot } from './fleet.types'
+import type { ConnectionStatus, FleetSnapshot } from '../model/fleet.types'
 
 export interface FleetSyncTarget {
   hydrate(snapshot: FleetSnapshot, receivedAt: number): void

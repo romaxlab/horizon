@@ -1,9 +1,9 @@
 import type { UavState, UavStatus, UavTelemetry } from '@horizon/domain'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, triggerRef } from 'vue'
-import { deriveMissionState, deriveUavStatus } from './fleet.status'
-import type { ConnectionStatus, FleetChange, FleetSnapshot } from './fleet.types'
-import { createTelemetryHistory } from './telemetry-history'
+import { deriveMissionState, deriveUavStatus } from '../model/fleet.status'
+import type { ConnectionStatus, FleetChange, FleetSnapshot } from '../model/fleet.types'
+import { createTelemetryHistory } from '../model/telemetry-history'
 
 function withTelemetry(
   state: UavState,

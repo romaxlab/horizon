@@ -9,7 +9,7 @@ import {
   type Cesium3DTileset,
   type Viewer,
 } from 'cesium'
-import type { MapBasemap, MapPerspective } from '../../model/map.store'
+import type { MapBasemap, MapPerspective } from '../../store/map.store'
 import { OPERATING_SITE } from './camera-controller'
 import { afterTilesLoaded } from './scene-tiles'
 

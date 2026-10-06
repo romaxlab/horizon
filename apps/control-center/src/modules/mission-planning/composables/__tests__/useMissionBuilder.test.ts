@@ -2,8 +2,8 @@ import type { Mission } from '@horizon/domain'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, ref } from 'vue'
-import { missionPlannerSlot } from '../mission.types'
-import { MissionPlanningError, type MissionPlanner } from '../mission.types'
+import { missionPlannerSlot } from '../../model/mission.types'
+import { MissionPlanningError, type MissionPlanner } from '../../model/mission.types'
 import { useMissionBuilder } from '../useMissionBuilder'
 
 const plannedMission: Mission = {

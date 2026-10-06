@@ -6,7 +6,7 @@ export {
   type UavMissionPhase,
   type UavMissionStatus,
 } from './model/mission-progress'
-export { useMissionStore } from './model/mission.store'
+export { useMissionStore } from './store/mission.store'
 export {
   MissionPlanningError,
   missionPlannerSlot,
@@ -18,14 +18,14 @@ export {
   type MissionPhaseCount,
   type MissionStatus,
   type MissionUavRow,
-} from './model/useMissionStatus'
-export { useMissionSync } from './model/useMissionSync'
+} from './composables/useMissionStatus'
+export { useMissionSync } from './composables/useMissionSync'
 export {
   MISSION_TYPES,
   provideMissionBuilder,
   useMissionBuilder,
   type BuilderStep,
   type MissionBuilder,
-} from './model/useMissionBuilder'
+} from './composables/useMissionBuilder'
 export { default as MissionBuilderPanel } from './ui/MissionBuilderPanel.vue'
 export { createRemoteMissionPlanner } from './api/mission.repository'

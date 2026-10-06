@@ -3,7 +3,7 @@ import { Maximize2, X } from '@lucide/vue'
 import { BaseButton, BaseIconButton, useDismissLayer } from '@horizon/ui'
 import { computed, onBeforeUnmount, ref, shallowRef, toRef, watch } from 'vue'
 import { createSyntheticFeed, type SyntheticFeed } from '../lib/synthetic-feed'
-import { useVideoFeed } from '../model/useVideoFeed'
+import { useVideoFeed } from '../composables/useVideoFeed'
 import type { FeedPose, LinkState } from '../model/video.types'
 
 const props = defineProps<{

@@ -5,7 +5,7 @@ import {
   createWorldImageryAsync,
   type Scene,
 } from 'cesium'
-import type { MapBasemap } from '../../model/map.store'
+import type { MapBasemap } from '../../store/map.store'
 import { afterTilesLoaded } from './scene-tiles'
 
 export type MapTheme = 'light' | 'dark'

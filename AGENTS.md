@@ -59,13 +59,17 @@ Default feature structure:
 
 ```text
 module/
-├── ui/
-├── model/
-├── api/        # only when needed
+├── ui/            # Vue components
+├── composables/   # use*.ts — the view models components consume
+├── store/         # *.store.ts — Pinia, when state is shared
+├── services/      # long-lived non-Vue processes (e.g. a realtime sync pipeline)
+├── model/         # types and pure domain logic, no Vue
+├── api/           # repositories, schemas, mappers, queries
 └── index.ts
 ```
 
-Do not pre-create empty architectural folders.
+One role per folder, one responsibility per file. Do not pre-create empty architectural folders:
+a module has only the folders it needs.
 
 ## Naming
 
@@ -209,7 +213,7 @@ Prioritize behavior and boundaries.
 Unit tests live in a `__tests__/` folder next to the code they cover:
 
 ```text
-model/
+services/
 ├── fleet-sync.ts
 └── __tests__/
     └── fleet-sync.test.ts

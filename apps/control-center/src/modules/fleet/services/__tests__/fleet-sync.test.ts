@@ -4,7 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseFleetSnapshot } from '../../api/fleet.parsers'
 import { createFleetSync, type FleetSyncTarget } from '../fleet-sync'
-import { useFleetStore } from '../fleet.store'
+import { useFleetStore } from '../../store/fleet.store'
 
 const START = Date.UTC(2026, 0, 1)
 

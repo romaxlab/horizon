@@ -1,4 +1,4 @@
-export { useMapStore, type ViewportInsets } from './model/map.store'
+export { useMapStore, type ViewportInsets } from './store/map.store'
 export { default as MapCanvas } from './ui/MapCanvas.vue'
 export { default as MapControls } from './ui/MapControls.vue'
 export { MAP_ATTRIBUTION_TARGET_ID } from './lib/basemap-credits'
